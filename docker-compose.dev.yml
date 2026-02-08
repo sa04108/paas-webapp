@@ -1,0 +1,5 @@
+services:
+  portal:
+    command: sh -c "npm ci && npm run dev"
+    environment:
+      - NODE_ENV=development
