@@ -3,7 +3,7 @@ services:
     image: nginx:alpine
     container_name: web
     volumes:
-      - ./:/usr/share/nginx/html:ro
+      - ./portal/public/index.html:/usr/share/nginx/html:ro
     networks:
       - proxy
     restart: unless-stopped
