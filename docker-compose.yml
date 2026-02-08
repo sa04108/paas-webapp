@@ -1,0 +1,13 @@
+services:
+  web:
+    image: nginx:alpine
+    container_name: web
+    volumes:
+      - ./:/usr/share/nginx/html:ro
+    networks:
+      - proxy
+    restart: unless-stopped
+
+networks:
+  proxy:
+    external: true
