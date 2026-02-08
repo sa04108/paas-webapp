@@ -16,32 +16,81 @@
     <span class="orb orb-c"></span>
   </div>
 
-  <div class="page">
-    <header class="topbar panel">
-      <div class="topbar-copy">
-        <p class="eyebrow">Mini PaaS Control Plane</p>
-        <h1>Portal Dashboard</h1>
-        <p class="subtitle">템플릿 선택부터 운영까지 한 화면에서 끝내는 초보 친화형 배포 콘솔</p>
-      </div>
-      <div class="topbar-actions">
-        <p id="auth-state" class="auth-state">로그아웃 상태</p>
-        <button id="settings-btn" class="icon-btn" type="button" aria-label="설정" hidden>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M19.14 12.94a7.8 7.8 0 0 0 .05-.94 7.8 7.8 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.2 7.2 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54a7.2 7.2 0 0 0-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.8 7.8 0 0 0-.05.94 7.8 7.8 0 0 0 .05.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.39 1.04.7 1.62.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54c.58-.24 1.12-.55 1.62-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.2a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4Z"/>
-          </svg>
+  <header id="gnb" class="gnb" aria-label="메인 네비게이션">
+    <div class="gnb-left">
+      <a class="gnb-brand" href="/" aria-label="Mini PaaS Portal">
+        <span class="gnb-logo" aria-hidden="true">P</span>
+        <span class="gnb-brand-text">
+          <span class="eyebrow">Mini PaaS</span>
+          <strong>Portal</strong>
+        </span>
+      </a>
+      <nav class="gnb-nav">
+        <button class="gnb-item active" type="button" data-view="dashboard">
+          <svg class="gnb-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+          <span>대시보드</span>
         </button>
-        <button id="logout-btn" class="ghost-btn" type="button" hidden>로그아웃</button>
-      </div>
-    </header>
+        <button class="gnb-item" type="button" data-view="create">
+          <svg class="gnb-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          <span>앱 생성</span>
+        </button>
+        <button class="gnb-item" type="button" data-view="ops">
+          <svg class="gnb-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.8 7.8 0 0 0 .05-.94 7.8 7.8 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.2 7.2 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54a7.2 7.2 0 0 0-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.8 7.8 0 0 0-.05.94 7.8 7.8 0 0 0 .05.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.39 1.04.7 1.62.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54c.58-.24 1.12-.55 1.62-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58Z"/></svg>
+          <span>운영 센터</span>
+        </button>
+      </nav>
+      <button id="mobile-menu-btn" class="icon-btn gnb-hamburger" type="button" aria-label="메뉴">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+      </button>
+    </div>
+    <div class="gnb-right">
+      <p id="auth-state" class="auth-state">로그아웃 상태</p>
+      <button id="settings-btn" class="icon-btn" type="button" aria-label="설정" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.8 7.8 0 0 0 .05-.94 7.8 7.8 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.2 7.2 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54a7.2 7.2 0 0 0-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.8 7.8 0 0 0-.05.94 7.8 7.8 0 0 0 .05.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.39 1.04.7 1.62.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54c.58-.24 1.12-.55 1.62-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58Z"/></svg>
+      </button>
+      <button id="logout-btn" class="ghost-btn gnb-logout-btn" type="button" hidden>로그아웃</button>
+    </div>
+  </header>
 
-    <p id="status-banner" class="status-banner info">세션 확인 중...</p>
+  <div class="app-layout">
+    <main class="main-content">
+      <p id="status-banner" class="status-banner info">세션 확인 중...</p>
 
-    <section id="dashboard-view" class="dashboard-view">
-      <section class="layout-grid">
-        <article class="panel create-panel">
-          <div class="panel-head">
-            <h2>앱 생성</h2>
+      <section id="view-dashboard" class="view-section">
+        <header class="view-header">
+          <h2>대시보드</h2>
+          <p class="view-subtitle">배포된 앱 현황을 확인합니다.</p>
+        </header>
+        <div class="dashboard-stats">
+          <div class="chip">
+            <span class="chip-label">PAAS_DOMAIN</span>
+            <strong id="domain-chip">-</strong>
           </div>
+          <div class="chip">
+            <span class="chip-label">Limit</span>
+            <strong id="limit-chip">-</strong>
+          </div>
+          <div class="chip">
+            <span class="chip-label">Apps</span>
+            <strong id="app-count-chip">0</strong>
+          </div>
+        </div>
+        <section class="panel app-panel">
+          <div class="panel-head">
+            <h3>배포된 앱</h3>
+            <button id="refresh-btn" class="ghost-btn" type="button">새로고침</button>
+          </div>
+          <p id="empty-state" class="empty-state">앱이 없습니다. 먼저 앱을 생성하세요.</p>
+          <div id="apps-container" class="apps-container"></div>
+        </section>
+      </section>
+
+      <section id="view-create" class="view-section" hidden>
+        <header class="view-header">
+          <h2>앱 생성</h2>
+          <p class="view-subtitle">새 앱을 생성하고 배포합니다.</p>
+        </header>
+        <article class="panel create-panel">
           <form id="create-form" novalidate>
             <label for="userid-input">User ID</label>
             <input id="userid-input" name="userid" type="text" placeholder="alice" required>
@@ -65,33 +114,20 @@
             <button class="primary-btn" type="submit">Create App</button>
           </form>
         </article>
+      </section>
 
-        <article class="panel middle-panel">
-          <div class="panel-head">
-            <h2>운영 센터</h2>
-          </div>
-
+      <section id="view-ops" class="view-section" hidden>
+        <header class="view-header">
+          <h2>운영 센터</h2>
+          <p class="view-subtitle">앱 운영 설정 및 로그를 확인합니다.</p>
+        </header>
+        <article class="panel ops-panel">
           <div class="tab-row" role="tablist" aria-label="운영 센터 탭">
             <button id="tab-btn-ops" class="tab-btn active" type="button" data-tab-target="ops" role="tab" aria-selected="true" aria-controls="tab-ops">운영 설정</button>
             <button id="tab-btn-logs" class="tab-btn" type="button" data-tab-target="logs" role="tab" aria-selected="false" aria-controls="tab-logs">로그</button>
           </div>
 
           <section id="tab-ops" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-ops">
-            <div class="chip-grid">
-              <div class="chip">
-                <span class="chip-label">PAAS_DOMAIN</span>
-                <strong id="domain-chip">-</strong>
-              </div>
-              <div class="chip">
-                <span class="chip-label">Limit</span>
-                <strong id="limit-chip">-</strong>
-              </div>
-              <div class="chip">
-                <span class="chip-label">Apps</span>
-                <strong id="app-count-chip">0</strong>
-              </div>
-            </div>
-
             <label class="field-label" for="log-lines-input">로그 조회 라인 수</label>
             <input id="log-lines-input" type="number" min="1" max="1000" value="120">
 
@@ -99,8 +135,6 @@
               <input id="keep-data-input" type="checkbox" checked>
               <span>삭제 시 data 폴더 보존</span>
             </label>
-
-            <button id="refresh-btn" class="ghost-btn" type="button">목록 새로고침</button>
 
             <section id="password-required-note" class="control-section warning-section" hidden>
               <h3>비밀번호 변경 필요</h3>
@@ -132,16 +166,10 @@
           </section>
         </article>
       </section>
-
-      <section class="panel app-panel">
-        <div class="panel-head">
-          <h2>배포된 앱</h2>
-        </div>
-        <p id="empty-state" class="empty-state">앱이 없습니다. 먼저 앱을 생성하세요.</p>
-        <div id="apps-container" class="apps-container"></div>
-      </section>
-    </section>
+    </main>
   </div>
+
+  <div id="gnb-mobile-overlay" class="gnb-mobile-overlay" aria-hidden="true"></div>
 
   <div id="settings-modal" class="modal-backdrop" hidden>
     <section class="modal-card panel-inset" role="dialog" aria-modal="true" aria-labelledby="settings-title">
