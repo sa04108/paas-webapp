@@ -14,14 +14,11 @@ const state = {
     hostSplitEnabled: false,
     publicHost: null,
     adminHost: null,
-    currentHost: null,
-    currentHostType: "unknown",
     adminAccessAllowedForRequest: true,
   },
 };
 
 const el = {
-  gnb: document.getElementById("gnb"),
   gnbNav: document.querySelector(".gnb-nav"),
   gnbOverlay: document.getElementById("gnb-mobile-overlay"),
   gnbItems: Array.from(document.querySelectorAll(".gnb-item")),
@@ -93,9 +90,11 @@ const el = {
   deleteUserPasswordInput: document.getElementById("delete-user-password-input"),
 };
 
-let settingsBackdropPointerDown = false;
-let createUserBackdropPointerDown = false;
-let deleteUserBackdropPointerDown = false;
+const modalBackdropState = {
+  settings: false,
+  createUser: false,
+  deleteUser: false,
+};
 
 function setBanner(message, type = "info") {
   el.statusBanner.className = `status-banner ${type}`;
@@ -113,37 +112,22 @@ function normalizeErrorMessage(
   return raw.replace(/^AppError:\s*/i, "");
 }
 
-function setSettingsError(message = "") {
+function setInlineError(targetEl, message = "") {
   const normalized = String(message || "").trim();
-  if (!normalized) {
-    el.settingsError.hidden = true;
-    el.settingsError.textContent = "";
-    return;
-  }
-  el.settingsError.hidden = false;
-  el.settingsError.textContent = normalized;
+  targetEl.hidden = !normalized;
+  targetEl.textContent = normalized;
+}
+
+function setSettingsError(message = "") {
+  setInlineError(el.settingsError, message);
 }
 
 function setCreateUserError(message = "") {
-  const normalized = String(message || "").trim();
-  if (!normalized) {
-    el.createUserError.hidden = true;
-    el.createUserError.textContent = "";
-    return;
-  }
-  el.createUserError.hidden = false;
-  el.createUserError.textContent = normalized;
+  setInlineError(el.createUserError, message);
 }
 
 function setDeleteUserError(message = "") {
-  const normalized = String(message || "").trim();
-  if (!normalized) {
-    el.deleteUserError.hidden = true;
-    el.deleteUserError.textContent = "";
-    return;
-  }
-  el.deleteUserError.hidden = false;
-  el.deleteUserError.textContent = normalized;
+  setInlineError(el.deleteUserError, message);
 }
 
 function escapeHtml(value) {
@@ -214,11 +198,6 @@ function switchView(viewName) {
   closeMobileMenu();
 }
 
-function openMobileMenu() {
-  el.gnbNav.classList.add("open");
-  el.gnbOverlay.classList.add("open");
-}
-
 function closeMobileMenu() {
   el.gnbNav.classList.remove("open");
   el.gnbOverlay.classList.remove("open");
@@ -250,11 +229,24 @@ function switchTab(tabName) {
   el.tabLogs.hidden = opsSelected;
 }
 
+function bindBackdropClose(modalElement, stateKey, onClose) {
+  modalElement.addEventListener("mousedown", (event) => {
+    modalBackdropState[stateKey] = event.target === modalElement;
+  });
+
+  modalElement.addEventListener("click", (event) => {
+    if (event.target === modalElement && modalBackdropState[stateKey]) {
+      onClose();
+    }
+    modalBackdropState[stateKey] = false;
+  });
+}
+
 function openSettingsModal() {
   if (!isLoggedIn()) {
     return;
   }
-  settingsBackdropPointerDown = false;
+  modalBackdropState.settings = false;
   setSettingsError("");
   el.settingsModal.hidden = false;
   syncModalOpenState();
@@ -262,7 +254,7 @@ function openSettingsModal() {
 }
 
 function closeSettingsModal() {
-  settingsBackdropPointerDown = false;
+  modalBackdropState.settings = false;
   el.settingsModal.hidden = true;
   syncModalOpenState();
   setSettingsError("");
@@ -272,7 +264,7 @@ function openCreateUserModal() {
   if (!canManageUsers()) {
     return;
   }
-  createUserBackdropPointerDown = false;
+  modalBackdropState.createUser = false;
   setCreateUserError("");
   el.createUserModal.hidden = false;
   syncModalOpenState();
@@ -280,7 +272,7 @@ function openCreateUserModal() {
 }
 
 function closeCreateUserModal({ resetForm = false } = {}) {
-  createUserBackdropPointerDown = false;
+  modalBackdropState.createUser = false;
   el.createUserModal.hidden = true;
   setCreateUserError("");
   if (resetForm) {
@@ -298,7 +290,7 @@ function openDeleteUserModal(targetUser) {
   if (!state.pendingDeleteUser) {
     return;
   }
-  deleteUserBackdropPointerDown = false;
+  modalBackdropState.deleteUser = false;
   setDeleteUserError("");
   el.deleteUserPasswordInput.value = "";
   el.deleteUserTarget.textContent = `'${state.pendingDeleteUser.username}' 사용자를 제거합니다.`;
@@ -308,7 +300,7 @@ function openDeleteUserModal(targetUser) {
 }
 
 function closeDeleteUserModal({ resetForm = false } = {}) {
-  deleteUserBackdropPointerDown = false;
+  modalBackdropState.deleteUser = false;
   el.deleteUserModal.hidden = true;
   setDeleteUserError("");
   if (resetForm) {
@@ -363,6 +355,14 @@ function formatDate(value) {
   ).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(
     date.getMinutes(),
   ).padStart(2, "0")}`;
+}
+
+function parsePositiveInt(value) {
+  const parsed = Number.parseInt(String(value || ""), 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
 }
 
 function resetLogs() {
@@ -621,8 +621,6 @@ async function loadConfig() {
     hostSplitEnabled: Boolean(data.security?.hostSplitEnabled),
     publicHost: data.security?.publicHost || null,
     adminHost: data.security?.adminHost || null,
-    currentHost: data.security?.currentHost || null,
-    currentHostType: data.security?.currentHostType || "unknown",
     adminAccessAllowedForRequest: Boolean(
       data.security?.adminAccessAllowedForRequest,
     ),
@@ -875,46 +873,12 @@ el.cancelDeleteUserBtn.addEventListener("click", (event) => {
   closeDeleteUserModal({ resetForm: true });
 });
 
-el.settingsModal.addEventListener("mousedown", (event) => {
-  settingsBackdropPointerDown = event.target === el.settingsModal;
+bindBackdropClose(el.settingsModal, "settings", closeSettingsModal);
+bindBackdropClose(el.createUserModal, "createUser", () => {
+  closeCreateUserModal({ resetForm: true });
 });
-
-el.settingsModal.addEventListener("click", (event) => {
-  if (
-    event.target === el.settingsModal &&
-    settingsBackdropPointerDown
-  ) {
-    closeSettingsModal();
-  }
-  settingsBackdropPointerDown = false;
-});
-
-el.createUserModal.addEventListener("mousedown", (event) => {
-  createUserBackdropPointerDown = event.target === el.createUserModal;
-});
-
-el.createUserModal.addEventListener("click", (event) => {
-  if (
-    event.target === el.createUserModal &&
-    createUserBackdropPointerDown
-  ) {
-    closeCreateUserModal({ resetForm: true });
-  }
-  createUserBackdropPointerDown = false;
-});
-
-el.deleteUserModal.addEventListener("mousedown", (event) => {
-  deleteUserBackdropPointerDown = event.target === el.deleteUserModal;
-});
-
-el.deleteUserModal.addEventListener("click", (event) => {
-  if (
-    event.target === el.deleteUserModal &&
-    deleteUserBackdropPointerDown
-  ) {
-    closeDeleteUserModal({ resetForm: true });
-  }
-  deleteUserBackdropPointerDown = false;
+bindBackdropClose(el.deleteUserModal, "deleteUser", () => {
+  closeDeleteUserModal({ resetForm: true });
 });
 
 document.addEventListener("keydown", (event) => {
@@ -941,8 +905,8 @@ el.usersTableBody.addEventListener("click", (event) => {
   if (!canManageUsers()) {
     return;
   }
-  const id = Number.parseInt(button.dataset.id || "", 10);
-  if (!Number.isInteger(id) || id <= 0) {
+  const id = parsePositiveInt(button.dataset.id);
+  if (!id) {
     return;
   }
   const username = String(button.dataset.username || "").trim() || `user-${id}`;
@@ -1098,8 +1062,8 @@ el.apiKeyList.addEventListener("click", async (event) => {
   if (!card) {
     return;
   }
-  const id = Number.parseInt(card.dataset.id || "", 10);
-  if (!Number.isInteger(id) || id <= 0) {
+  const id = parsePositiveInt(card.dataset.id);
+  if (!id) {
     return;
   }
 

@@ -575,10 +575,7 @@ async function listDockerStatuses() {
       }
     }
     return statusMap;
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      return statusMap;
-    }
+  } catch {
     return statusMap;
   }
 }
@@ -644,6 +641,14 @@ async function ensureAppExists(userid, appname) {
     throw new AppError(404, "App not found");
   }
   return appDir;
+}
+
+async function resolveAppRequestContext(req) {
+  const userid = String(req.params?.userid || "").trim();
+  const appname = String(req.params?.appname || "").trim();
+  validateAppParams(userid, appname);
+  const appDir = await ensureAppExists(userid, appname);
+  return { userid, appname, appDir };
 }
 
 const app = express();
@@ -818,9 +823,7 @@ app.get("/apps", async (_req, res, next) => {
 
 app.get("/apps/:userid/:appname", async (req, res, next) => {
   try {
-    const { userid, appname } = req.params;
-    validateAppParams(userid, appname);
-    await ensureAppExists(userid, appname);
+    const { userid, appname } = await resolveAppRequestContext(req);
 
     const appInfo = await buildAppInfo(userid, appname, null);
     return sendOk(res, { app: appInfo });
@@ -831,9 +834,7 @@ app.get("/apps/:userid/:appname", async (req, res, next) => {
 
 app.post("/apps/:userid/:appname/start", async (req, res, next) => {
   try {
-    const { userid, appname } = req.params;
-    validateAppParams(userid, appname);
-    const appDir = await ensureAppExists(userid, appname);
+    const { userid, appname, appDir } = await resolveAppRequestContext(req);
 
     const result = await runDockerCompose(appDir, ["up", "-d"]);
     const status = await getDockerContainerStatus(userid, appname);
@@ -848,9 +849,7 @@ app.post("/apps/:userid/:appname/start", async (req, res, next) => {
 
 app.post("/apps/:userid/:appname/stop", async (req, res, next) => {
   try {
-    const { userid, appname } = req.params;
-    validateAppParams(userid, appname);
-    const appDir = await ensureAppExists(userid, appname);
+    const { appDir } = await resolveAppRequestContext(req);
 
     const result = await runDockerCompose(appDir, ["stop"]);
     return sendOk(res, {
@@ -864,9 +863,7 @@ app.post("/apps/:userid/:appname/stop", async (req, res, next) => {
 
 app.post("/apps/:userid/:appname/deploy", async (req, res, next) => {
   try {
-    const { userid, appname } = req.params;
-    validateAppParams(userid, appname);
-    await ensureAppExists(userid, appname);
+    const { userid, appname } = await resolveAppRequestContext(req);
 
     const result = await runRunnerScript("deploy.sh", [userid, appname]);
     return sendOk(res, {
@@ -879,9 +876,7 @@ app.post("/apps/:userid/:appname/deploy", async (req, res, next) => {
 
 app.delete("/apps/:userid/:appname", async (req, res, next) => {
   try {
-    const { userid, appname } = req.params;
-    validateAppParams(userid, appname);
-    await ensureAppExists(userid, appname);
+    const { userid, appname } = await resolveAppRequestContext(req);
 
     const keepData = normalizeBoolean(req.body?.keepData, true);
     const args = [userid, appname];
@@ -902,9 +897,7 @@ app.delete("/apps/:userid/:appname", async (req, res, next) => {
 
 app.get("/apps/:userid/:appname/logs", async (req, res, next) => {
   try {
-    const { userid, appname } = req.params;
-    validateAppParams(userid, appname);
-    const appDir = await ensureAppExists(userid, appname);
+    const { appDir } = await resolveAppRequestContext(req);
 
     const requestedLines = Number.parseInt(String(req.query.lines || "100"), 10);
     const lines = Number.isFinite(requestedLines)

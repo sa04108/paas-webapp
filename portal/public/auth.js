@@ -2,7 +2,6 @@ const state = {
   security: {
     hostSplitEnabled: false,
     adminHost: null,
-    currentHostType: "unknown",
     adminAccessAllowedForRequest: true
   }
 };
@@ -57,7 +56,6 @@ async function loadConfig() {
   state.security = {
     hostSplitEnabled: Boolean(data.security?.hostSplitEnabled),
     adminHost: data.security?.adminHost || null,
-    currentHostType: data.security?.currentHostType || "unknown",
     adminAccessAllowedForRequest: Boolean(data.security?.adminAccessAllowedForRequest)
   };
   renderHostHint();
