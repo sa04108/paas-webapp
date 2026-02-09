@@ -224,7 +224,7 @@ body::before {
   padding: 7px 12px;
 }
 
-.gnb-hamburger {
+.gnb .gnb-hamburger {
   display: none;
 }
 
@@ -1068,7 +1068,7 @@ code {
     display: inline;
   }
 
-  .gnb-hamburger {
+  .gnb .gnb-hamburger {
     display: inline-flex;
   }
 
@@ -1078,7 +1078,7 @@ code {
     inset: 0;
     top: 54px;
     background: rgba(11, 24, 36, 0.35);
-    z-index: 99;
+    z-index: 49;
   }
 
   .gnb-right .auth-state {
