@@ -1,3 +1,19 @@
+// =============================================================================
+// server.js - PaaS 포털 메인 API 서버
+// =============================================================================
+// 역할:
+//   미니 PaaS 플랫폼의 중심 서버. 아래 기능을 제공한다.
+//   - 사용자 인증 및 세션 관리 (authService 연동)
+//   - 앱 생성/배포/시작/중지/삭제 등 라이프사이클 관리
+//   - 앱별 client key 발급 및 bridge API 제공 (appAccessService 연동)
+//   - 대시보드 프론트엔드 정적 파일 서빙
+//   - 사용자/API 키 관리
+//
+//   셸 스크립트(create.sh, deploy.sh, delete.sh)를 호출하여
+//   Docker Compose 기반으로 앱 컨테이너를 제어한다.
+//   GitHub Workflow와 유사하게, 유저가 작성한 Node.js 코드를
+//   격리된 컨테이너 환경에서 실행할 수 있게 해준다.
+// =============================================================================
 "use strict";
 
 const path = require("node:path");
@@ -23,6 +39,7 @@ const config = {
   PAAS_APPS_DIR: process.env.PAAS_APPS_DIR || path.join(paasRoot, "apps"),
   PAAS_TEMPLATES_DIR: process.env.PAAS_TEMPLATES_DIR || path.join(paasRoot, "templates"),
   PAAS_SCRIPTS_DIR: process.env.PAAS_SCRIPTS_DIR || path.join(paasRoot, "scripts"),
+  PAAS_SHARED_DIR: process.env.PAAS_SHARED_DIR || path.join(paasRoot, "shared"),
   DEFAULT_TEMPLATE_ID:
     process.env.DEFAULT_TEMPLATE_ID || process.env.DEFAULT_STARTER_ID || "node-lite-v1",
   PORTAL_PORT: toPositiveInt(process.env.PORTAL_PORT, 3000),
@@ -430,6 +447,7 @@ async function ensureBaseDirectories() {
   await fs.mkdir(config.PAAS_APPS_DIR, { recursive: true });
   await fs.mkdir(config.PAAS_TEMPLATES_DIR, { recursive: true });
   await fs.mkdir(config.PAAS_SCRIPTS_DIR, { recursive: true });
+  await fs.mkdir(config.PAAS_SHARED_DIR, { recursive: true });
 }
 
 async function safeReadDir(targetDir) {
