@@ -1,4 +1,5 @@
 const AUTO_REFRESH_MS = 15000;
+const EMPTY_NEW_API_KEY_TEXT = "(없음)";
 
 const state = {
   domain: "my.domain.com",
@@ -65,6 +66,8 @@ const el = {
   createApiKeyForm: document.getElementById("create-api-key-form"),
   apiKeyNameInput: document.getElementById("api-key-name-input"),
   newApiKey: document.getElementById("new-api-key"),
+  copyNewApiKeyBtn: document.getElementById("copy-new-api-key-btn"),
+  newApiKeyWarning: document.getElementById("new-api-key-warning"),
   apiKeyList: document.getElementById("api-key-list"),
   usersCount: document.getElementById("users-count"),
   usersEmptyState: document.getElementById("users-empty-state"),
@@ -178,6 +181,56 @@ function syncDomainPreview() {
   const userid = el.useridInput.value.trim() || "userid";
   const appname = el.appnameInput.value.trim() || "appname";
   el.domainPreview.textContent = `${userid}-${appname}.${state.domain}`;
+}
+
+function getVisibleNewApiKey() {
+  const raw = String(el.newApiKey.textContent || "").trim();
+  if (!raw || raw === EMPTY_NEW_API_KEY_TEXT) {
+    return "";
+  }
+  return raw;
+}
+
+function updateNewApiKeyControls() {
+  const hasVisibleKey = Boolean(getVisibleNewApiKey());
+  if (el.copyNewApiKeyBtn) {
+    el.copyNewApiKeyBtn.disabled = !hasVisibleKey || !canManageApps();
+  }
+  if (el.newApiKeyWarning) {
+    el.newApiKeyWarning.hidden = !hasVisibleKey;
+  }
+}
+
+function setNewApiKeyValue(rawApiKey) {
+  const normalized = String(rawApiKey || "").trim();
+  el.newApiKey.textContent = normalized || EMPTY_NEW_API_KEY_TEXT;
+  updateNewApiKeyControls();
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fallback to legacy copy below.
+    }
+  }
+
+  const temp = document.createElement("textarea");
+  temp.value = text;
+  temp.setAttribute("readonly", "true");
+  temp.style.position = "fixed";
+  temp.style.opacity = "0";
+  temp.style.left = "-9999px";
+  document.body.append(temp);
+  temp.focus();
+  temp.select();
+  const copied = document.execCommand("copy");
+  temp.remove();
+  if (!copied) {
+    throw new Error("Failed to copy API key");
+  }
 }
 
 function switchView(viewName) {
@@ -383,6 +436,7 @@ function applyAccessState() {
   el.refreshBtn.disabled = !enabled;
   el.keepDataInput.disabled = !enabled;
   el.logLinesInput.disabled = !enabled;
+  updateNewApiKeyControls();
 }
 
 function renderApps(apps) {
@@ -528,6 +582,7 @@ function updateAuthUi() {
     el.apiKeysPanel.hidden = true;
     state.users = [];
     renderUsers([]);
+    setNewApiKeyValue("");
     if (state.activeView === "users") {
       switchView("dashboard");
     }
@@ -545,6 +600,9 @@ function updateAuthUi() {
   el.gnbUsersBtn.hidden = !canManageUsers();
   el.passwordRequiredNote.hidden = !isPasswordLocked();
   el.apiKeysPanel.hidden = isPasswordLocked();
+  if (isPasswordLocked()) {
+    setNewApiKeyValue("");
+  }
   if (el.gnbUsersBtn.hidden && state.activeView === "users") {
     switchView("dashboard");
   }
@@ -795,6 +853,7 @@ async function performAction(target) {
 async function bootstrap() {
   switchTab("ops");
   updateAuthUi();
+  setNewApiKeyValue("");
   await loadConfig();
   syncDomainPreview();
 
@@ -1044,12 +1103,26 @@ el.createApiKeyForm.addEventListener("submit", async (event) => {
       method: "POST",
       body: JSON.stringify({ name }),
     });
-    el.newApiKey.textContent = data.apiKey || "(없음)";
+    setNewApiKeyValue(data.apiKey || "");
     el.apiKeyNameInput.value = "";
     await loadApiKeys();
     setBanner("새 API Key가 발급되었습니다. 지금 복사해 두세요.", "success");
   } catch (error) {
     await handleRequestError(error);
+  }
+});
+
+el.copyNewApiKeyBtn.addEventListener("click", async () => {
+  const apiKey = getVisibleNewApiKey();
+  if (!apiKey) {
+    setBanner("복사할 새 API Key가 없습니다.", "error");
+    return;
+  }
+  try {
+    await copyTextToClipboard(apiKey);
+    setBanner("새 API Key를 클립보드에 복사했습니다.", "success");
+  } catch {
+    setBanner("클립보드 복사에 실패했습니다. 키를 직접 복사하세요.", "error");
   }
 });
 

@@ -584,6 +584,27 @@ form label,
   margin: 14px 0 0;
   font-size: 0.86rem;
   color: var(--ink-subtle);
+  line-height: 1.45;
+  min-width: 0;
+}
+
+.preview-row {
+  display: grid;
+  align-items: start;
+  gap: 8px 10px;
+}
+
+.preview-row-domain {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.preview-row-key {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.preview-label {
+  padding-top: 6px;
+  white-space: nowrap;
 }
 
 code {
@@ -593,6 +614,36 @@ code {
   border-radius: 8px;
   padding: 3px 7px;
   color: #0e4a8b;
+}
+
+.preview-code {
+  display: block;
+  margin: 0;
+  width: 100%;
+  min-width: 0;
+  border-radius: 10px;
+  padding: 6px 9px;
+  line-height: 1.45;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.copy-key-btn {
+  margin: 0;
+  min-width: 88px;
+  white-space: nowrap;
+}
+
+.api-key-onetime-warning {
+  margin: 8px 0 0;
+  border: 1px solid rgba(var(--danger-rgb), 0.28);
+  border-radius: 10px;
+  background: rgba(var(--danger-rgb), 0.08);
+  color: #8a3a3a;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  line-height: 1.45;
 }
 
 .chip {
@@ -677,19 +728,33 @@ code {
   padding: 10px;
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .api-key-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  column-gap: 10px;
+  row-gap: 4px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .api-key-name {
   margin: 0;
   font-weight: 700;
   font-size: 0.86rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.api-key-row .action-btn {
+  flex: 0 0 auto;
+  align-self: flex-start;
 }
 
 .api-key-meta {
@@ -697,6 +762,8 @@ code {
   color: var(--ink-soft);
   font-size: 0.76rem;
   line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .logs-head {
@@ -831,6 +898,8 @@ code {
   font-family: "Space Grotesk", "Noto Sans KR", sans-serif;
   font-size: 1.02rem;
   letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .app-domain,
@@ -838,6 +907,8 @@ code {
   margin: 0;
   color: var(--ink-subtle);
   font-size: 0.86rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .app-domain {
@@ -1145,6 +1216,29 @@ code {
   }
 
   #create-api-key-btn {
+    width: 100%;
+  }
+
+  .preview-row-domain,
+  .preview-row-key {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .preview-label {
+    padding-top: 0;
+  }
+
+  .copy-key-btn {
+    width: 100%;
+  }
+
+  .api-key-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .api-key-row .action-btn {
     width: 100%;
   }
 

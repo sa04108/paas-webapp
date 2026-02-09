@@ -10,7 +10,7 @@
             href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
             rel="stylesheet"
         />
-        <link rel="stylesheet" href="./styles.css?v=20260209-01" />
+        <link rel="stylesheet" href="./styles.css?v=20260209-02" />
     </head>
     <body>
         <div class="mesh-layer" aria-hidden="true">
@@ -216,12 +216,14 @@
                                 <span>SQLite API 활성화</span>
                             </label>
 
-                            <p class="preview-text">
-                                예상 주소:
-                                <code id="domain-preview"
+                            <div class="preview-text preview-row preview-row-domain">
+                                <span class="preview-label">예상 주소:</span>
+                                <code
+                                    id="domain-preview"
+                                    class="preview-code"
                                     >userid-appname.my.domain.com</code
                                 >
-                            </p>
+                            </div>
 
                             <button class="primary-btn" type="submit">
                                 Create App
@@ -336,9 +338,27 @@
                                         새 키 발급
                                     </button>
                                 </form>
-                                <p class="preview-text">
-                                    새 키:
-                                    <code id="new-api-key">(없음)</code>
+                                <div class="preview-text preview-row preview-row-key">
+                                    <span class="preview-label">새 키:</span>
+                                    <code id="new-api-key" class="preview-code"
+                                        >(없음)</code
+                                    >
+                                    <button
+                                        id="copy-new-api-key-btn"
+                                        class="ghost-btn copy-key-btn"
+                                        type="button"
+                                        disabled
+                                    >
+                                        Copy
+                                    </button>
+                                </div>
+                                <p
+                                    id="new-api-key-warning"
+                                    class="api-key-onetime-warning"
+                                    hidden
+                                >
+                                    보안 안내: 이 페이지를 벗어나면 새 키 원문은 다시 조회할 수 없습니다.
+                                    지금 복사해 두세요.
                                 </p>
                                 <div
                                     id="api-key-list"
@@ -611,6 +631,6 @@
             </section>
         </div>
 
-        <script src="./app.js?v=20260209-01"></script>
+        <script src="./app.js?v=20260209-02"></script>
     </body>
 </html>

@@ -533,11 +533,11 @@ function createAuthService(options) {
         if (!Number.isInteger(apiKeyId) || apiKeyId <= 0) {
           throw new AppError(400, "Invalid api key id");
         }
-        const result = statements.revokeApiKeyByIdForUser.run(nowIso(), apiKeyId, req.auth.user.id);
+        const result = statements.deleteApiKeyByIdForUser.run(apiKeyId, req.auth.user.id);
         if (!result.changes) {
           throw new AppError(404, "API key not found");
         }
-        return sendOk(res, { revoked: true, id: apiKeyId });
+        return sendOk(res, { deleted: true, revoked: true, id: apiKeyId });
       } catch (error) {
         return next(error);
       }
@@ -702,13 +702,12 @@ function createAuthService(options) {
         last_used_at AS lastUsedAt,
         revoked_at AS revokedAt
       FROM api_keys
-      WHERE user_id = ?
+      WHERE user_id = ? AND revoked_at IS NULL
       ORDER BY id DESC
     `);
-    statements.revokeApiKeyByIdForUser = db.prepare(`
-      UPDATE api_keys
-      SET revoked_at = ?
-      WHERE id = ? AND user_id = ? AND revoked_at IS NULL
+    statements.deleteApiKeyByIdForUser = db.prepare(`
+      DELETE FROM api_keys
+      WHERE id = ? AND user_id = ?
     `);
     statements.listUsersWithLastAccess = db.prepare(`
       SELECT
