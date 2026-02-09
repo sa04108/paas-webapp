@@ -39,11 +39,11 @@ ensure_base_directories() {
 require_node() {
   if ! command -v node >/dev/null 2>&1; then
     echo "node command is required" >&2
-    exit 1
+    return 1
   fi
   if [[ ! -f "${TEMPLATE_RUNTIME_TOOL}" ]]; then
     echo "template runtime tool not found: ${TEMPLATE_RUNTIME_TOOL}" >&2
-    exit 1
+    return 1
   fi
 }
 
@@ -116,13 +116,13 @@ run_template_hook() {
 
   if [[ "${hook_rel_path}" == /* ]] || [[ "${hook_rel_path}" == *".."* ]]; then
     echo "Invalid hook path in template ${template_id}: ${hook_rel_path}" >&2
-    exit 1
+    return 1
   fi
 
   hook_path="${template_dir}/${hook_rel_path}"
   if [[ ! -f "${hook_path}" ]]; then
     echo "Template hook not found: ${hook_path}" >&2
-    exit 1
+    return 1
   fi
 
   PAAS_ROOT="${PAAS_ROOT}" \

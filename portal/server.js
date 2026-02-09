@@ -811,7 +811,7 @@ app.delete("/apps/:userid/:appname", async (req, res, next) => {
   try {
     const { userid, appname } = await resolveAppRequestContext(req);
 
-    const keepData = normalizeBoolean(req.body?.keepData, true);
+    const keepData = normalizeBoolean(req.body?.keepData, false);
     const args = [userid, appname];
     if (keepData) {
       args.push("--keep-data");

@@ -22,6 +22,10 @@ usage() {
   echo "Usage: delete.sh <userid> <appname> [--keep-data]" >&2
 }
 
+warn() {
+  echo "[delete] WARN: $*" >&2
+}
+
 if [[ $# -lt 2 || $# -gt 3 ]]; then
   usage
   exit 1
@@ -39,22 +43,31 @@ validate_app_name "${APP_NAME}"
 
 APP_DIR="$(app_dir_for "${USER_ID}" "${APP_NAME}")"
 COMPOSE_FILE="${APP_DIR}/docker-compose.yml"
+TARGET_CONTAINER="paas-app-${USER_ID}-${APP_NAME}"
 
 if [[ ! -d "${APP_DIR}" ]]; then
-  echo "App not found: ${USER_ID}/${APP_NAME}" >&2
-  exit 1
+  echo "deleted: ${USER_ID}/${APP_NAME} keepData=${KEEP_DATA} alreadyMissing=true"
+  exit 0
 fi
 
-TEMPLATE_ID="$(resolve_app_template_id "${APP_DIR}")"
+TEMPLATE_ID="$(resolve_app_template_id "${APP_DIR}" 2>/dev/null || true)"
 if [[ -n "${TEMPLATE_ID}" ]]; then
   TEMPLATE_DIR="$(template_dir_for "${TEMPLATE_ID}")"
   if [[ -f "${TEMPLATE_DIR}/template.json" ]]; then
-    run_template_hook "${TEMPLATE_ID}" "preDelete" "${USER_ID}" "${APP_NAME}" "${APP_DIR}"
+    if ! (run_template_hook "${TEMPLATE_ID}" "preDelete" "${USER_ID}" "${APP_NAME}" "${APP_DIR}"); then
+      warn "preDelete hook failed, continue cleanup: ${TEMPLATE_ID} ${USER_ID}/${APP_NAME}"
+    fi
   fi
 fi
 
 if [[ -f "${COMPOSE_FILE}" ]]; then
-  docker compose -f "${COMPOSE_FILE}" down --remove-orphans || true
+  if ! docker compose -f "${COMPOSE_FILE}" down --remove-orphans; then
+    warn "docker compose down failed, continue cleanup: ${USER_ID}/${APP_NAME}"
+  fi
+fi
+
+if command -v docker >/dev/null 2>&1; then
+  docker rm -f "${TARGET_CONTAINER}" >/dev/null 2>&1 || true
 fi
 
 if [[ "${KEEP_DATA}" == "true" ]]; then
