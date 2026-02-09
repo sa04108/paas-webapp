@@ -1,5 +1,10 @@
 const AUTO_REFRESH_MS = 15000;
 const EMPTY_NEW_API_KEY_TEXT = "(없음)";
+const UI_STATE_STORAGE_KEY = "paas.portal.uiState";
+const AVAILABLE_VIEWS = ["dashboard", "create", "ops", "users"];
+const AVAILABLE_OPS_TABS = ["ops", "logs"];
+const DEFAULT_VIEW = AVAILABLE_VIEWS[0] || "dashboard";
+const DEFAULT_OPS_TAB = AVAILABLE_OPS_TABS[0] || "ops";
 
 const state = {
   domain: "my.domain.com",
@@ -9,8 +14,8 @@ const state = {
   pendingDeleteUser: null,
   user: null,
   refreshTimer: null,
-  activeView: "dashboard",
-  activeTab: "ops",
+  activeView: DEFAULT_VIEW,
+  activeTab: DEFAULT_OPS_TAB,
   security: {
     hostSplitEnabled: false,
     publicHost: null,
@@ -20,6 +25,7 @@ const state = {
 };
 
 const el = {
+  gnbBrand: document.querySelector(".gnb-brand"),
   gnbNav: document.querySelector(".gnb-nav"),
   gnbOverlay: document.getElementById("gnb-mobile-overlay"),
   gnbItems: Array.from(document.querySelectorAll(".gnb-item")),
@@ -133,6 +139,35 @@ function setDeleteUserError(message = "") {
   setInlineError(el.deleteUserError, message);
 }
 
+function readPersistedUiState() {
+  try {
+    const raw = window.sessionStorage.getItem(UI_STATE_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw);
+    const view = AVAILABLE_VIEWS.includes(parsed?.view) ? parsed.view : undefined;
+    const tab = AVAILABLE_OPS_TABS.includes(parsed?.tab) ? parsed.tab : undefined;
+    return { view, tab };
+  } catch {
+    return {};
+  }
+}
+
+function persistUiState() {
+  try {
+    window.sessionStorage.setItem(
+      UI_STATE_STORAGE_KEY,
+      JSON.stringify({
+        view: state.activeView,
+        tab: state.activeTab,
+      }),
+    );
+  } catch {
+    // Ignore storage write errors.
+  }
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -233,9 +268,8 @@ async function copyTextToClipboard(text) {
   }
 }
 
-function switchView(viewName) {
-  const views = ["dashboard", "create", "ops", "users"];
-  const nextView = views.includes(viewName) ? viewName : "dashboard";
+function switchView(viewName, { persist = true } = {}) {
+  const nextView = AVAILABLE_VIEWS.includes(viewName) ? viewName : DEFAULT_VIEW;
   state.activeView = nextView;
 
   el.viewDashboard.hidden = nextView !== "dashboard";
@@ -248,6 +282,9 @@ function switchView(viewName) {
     item.classList.toggle("active", isActive);
   });
 
+  if (persist) {
+    persistUiState();
+  }
   closeMobileMenu();
 }
 
@@ -269,8 +306,10 @@ function syncModalOpenState() {
   document.body.classList.toggle("modal-open", hasOpenModal);
 }
 
-function switchTab(tabName) {
-  const nextTab = tabName === "logs" ? "logs" : "ops";
+function switchTab(tabName, { persist = true } = {}) {
+  const nextTab = AVAILABLE_OPS_TABS.includes(tabName)
+    ? tabName
+    : DEFAULT_OPS_TAB;
   state.activeTab = nextTab;
 
   const opsSelected = nextTab === "ops";
@@ -280,6 +319,9 @@ function switchTab(tabName) {
   el.tabBtnLogs.setAttribute("aria-selected", String(!opsSelected));
   el.tabOps.hidden = !opsSelected;
   el.tabLogs.hidden = opsSelected;
+  if (persist) {
+    persistUiState();
+  }
 }
 
 function bindBackdropClose(modalElement, stateKey, onClose) {
@@ -583,8 +625,8 @@ function updateAuthUi() {
     state.users = [];
     renderUsers([]);
     setNewApiKeyValue("");
-    if (state.activeView === "users") {
-      switchView("dashboard");
+    if (state.activeView === "users" && DEFAULT_VIEW !== "users") {
+      switchView(DEFAULT_VIEW);
     }
     applyAccessState();
     closeSettingsModal();
@@ -603,8 +645,8 @@ function updateAuthUi() {
   if (isPasswordLocked()) {
     setNewApiKeyValue("");
   }
-  if (el.gnbUsersBtn.hidden && state.activeView === "users") {
-    switchView("dashboard");
+  if (el.gnbUsersBtn.hidden && state.activeView === "users" && DEFAULT_VIEW !== "users") {
+    switchView(DEFAULT_VIEW);
   }
   if (!canManageUsers()) {
     closeCreateUserModal({ resetForm: true });
@@ -851,7 +893,9 @@ async function performAction(target) {
 }
 
 async function bootstrap() {
-  switchTab("ops");
+  const persistedUiState = readPersistedUiState();
+  switchView(DEFAULT_VIEW, { persist: false });
+  switchTab(persistedUiState.tab || DEFAULT_OPS_TAB, { persist: false });
   updateAuthUi();
   setNewApiKeyValue("");
   await loadConfig();
@@ -862,6 +906,11 @@ async function bootstrap() {
     redirectToAuth();
     return;
   }
+
+  switchView(persistedUiState.view || DEFAULT_VIEW, { persist: false });
+  switchTab(persistedUiState.tab || DEFAULT_OPS_TAB, { persist: false });
+  updateAuthUi();
+  persistUiState();
 
   await refreshDashboardData();
   const hint = getAdminAccessHint();
@@ -880,6 +929,22 @@ el.gnbItems.forEach((item) => {
     switchView(item.dataset.view);
   });
 });
+
+if (el.gnbBrand) {
+  el.gnbBrand.addEventListener("click", (event) => {
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    event.preventDefault();
+    switchView(DEFAULT_VIEW);
+  });
+}
 
 el.mobileMenuBtn.addEventListener("click", toggleMobileMenu);
 el.gnbOverlay.addEventListener("click", closeMobileMenu);
