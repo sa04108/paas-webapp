@@ -32,6 +32,18 @@ if [[ ! -f "${TEMPLATE_RUNTIME_TOOL}" ]]; then
   TEMPLATE_RUNTIME_TOOL="${SCRIPTS_DIR}/template-runtime.js"
 fi
 
+# 컨테이너 경로(/paas/...)를 호스트 경로로 변환
+# PAAS_HOST_ROOT가 설정되어 있으면 PAAS_ROOT 접두사를 PAAS_HOST_ROOT로 치환
+# 설정되지 않은 경우(직접 실행 시) 경로를 그대로 반환하여 호환성 유지
+to_host_path() {
+  local container_path="$1"
+  if [[ -n "${PAAS_HOST_ROOT:-}" ]]; then
+    echo "${container_path/#${PAAS_ROOT}/${PAAS_HOST_ROOT}}"
+  else
+    echo "${container_path}"
+  fi
+}
+
 ensure_base_directories() {
   mkdir -p "${PAAS_APPS_DIR}" "${PAAS_TEMPLATES_DIR}" "${PAAS_SHARED_DIR}"
 }
@@ -126,6 +138,7 @@ run_template_hook() {
   fi
 
   PAAS_ROOT="${PAAS_ROOT}" \
+  PAAS_HOST_ROOT="${PAAS_HOST_ROOT:-}" \
   PAAS_SHARED_DIR="${PAAS_SHARED_DIR}" \
   PAAS_TEMPLATE_ID="${template_id}" \
   PAAS_TEMPLATE_DIR="${template_dir}" \

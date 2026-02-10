@@ -11,6 +11,8 @@ services:
     init: true
     ports:
       - "3000:3000"
+    environment:
+      - PAAS_HOST_ROOT=${PWD}
     volumes:
       - ./:/paas
       - portal_node_modules:/paas/portal/node_modules

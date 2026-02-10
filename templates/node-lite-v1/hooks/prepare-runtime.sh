@@ -22,6 +22,16 @@ fi
 
 SHARED_TEMPLATE_DIR="${PAAS_SHARED_DIR}/${PAAS_TEMPLATE_ID}"
 SHARED_MODULES_DIR="${SHARED_TEMPLATE_DIR}/node_modules"
+
+# 컨테이너 경로를 호스트 경로로 변환 (DooD 환경에서 docker run -v 에 필요)
+to_host_path() {
+  local container_path="$1"
+  if [[ -n "${PAAS_HOST_ROOT:-}" ]]; then
+    echo "${container_path/#${PAAS_ROOT}/${PAAS_HOST_ROOT}}"
+  else
+    echo "${container_path}"
+  fi
+}
 TEMPLATE_PACKAGE_JSON="${PAAS_TEMPLATE_DIR}/app/package.json"
 TEMPLATE_PACKAGE_LOCK_JSON="${PAAS_TEMPLATE_DIR}/app/package-lock.json"
 
@@ -52,9 +62,11 @@ if [[ -f "${TEMPLATE_PACKAGE_LOCK_JSON}" ]]; then
   cp "${TEMPLATE_PACKAGE_LOCK_JSON}" "${SHARED_TEMPLATE_DIR}/package-lock.json"
 fi
 
+HOST_SHARED_TEMPLATE_DIR="$(to_host_path "${SHARED_TEMPLATE_DIR}")"
+
 echo "[node-lite] Installing shared node_modules for ${PAAS_TEMPLATE_ID} with image=${TEMPLATE_IMAGE}"
 docker run --rm \
-  -v "${SHARED_TEMPLATE_DIR}:/work" \
+  -v "${HOST_SHARED_TEMPLATE_DIR}:/work" \
   -w /work \
   "${TEMPLATE_IMAGE}" \
   sh -c "if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi"

@@ -63,15 +63,18 @@ cp "${TEMPLATE_DIR}/template.json" "${APP_DIR}/template.json"
 run_template_hook "${TEMPLATE_ID}" "preCreate" "${USER_ID}" "${APP_NAME}" "${APP_DIR}"
 
 require_node
+HOST_APP_DIR="$(to_host_path "${APP_DIR}")"
+HOST_SHARED_DIR="$(to_host_path "${PAAS_SHARED_DIR}")"
+
 node "${TEMPLATE_RUNTIME_TOOL}" compose \
   --template-dir "${TEMPLATE_DIR}" \
   --template-id "${TEMPLATE_ID}" \
-  --app-dir "${APP_DIR}" \
+  --app-dir "${HOST_APP_DIR}" \
   --userid "${USER_ID}" \
   --appname "${APP_NAME}" \
   --domain "${PAAS_DOMAIN}" \
   --network "${PAAS_NETWORK}" \
-  --shared-dir "${PAAS_SHARED_DIR}" \
+  --shared-dir "${HOST_SHARED_DIR}" \
   --mem-limit "${DEFAULT_MEM_LIMIT}" \
   --cpu-limit "${DEFAULT_CPU_LIMIT}" \
   --restart-policy "${DEFAULT_RESTART_POLICY}" \
