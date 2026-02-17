@@ -1,4 +1,4 @@
-# Mini PaaS Portal
+# Hyunbbai Portal
 
 Express 기반 Portal API + 관리 대시보드입니다.
 

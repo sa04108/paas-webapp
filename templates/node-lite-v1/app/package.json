@@ -2,7 +2,7 @@
   "name": "node-lite-app",
   "version": "1.0.0",
   "private": true,
-  "description": "Node.js single-app starter for mini PaaS",
+  "description": "Node.js single-app starter for Hyunbbai",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
