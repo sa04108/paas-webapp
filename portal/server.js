@@ -595,7 +595,7 @@ app.use(express.json({ limit: "1mb" }));
 
 app.get("/health", (_req, res) => {
   return sendOk(res, {
-    service: "paas-portal",
+    service: "portal",
     status: "ok",
     now: new Date().toISOString()
   });

@@ -1,5 +1,5 @@
 // =============================================================================
-// app.js - PaaS 포털 대시보드 프론트엔드 컨트롤러
+// app.js - 포털 대시보드 프론트엔드 컨트롤러
 // =============================================================================
 // 역할:
 //   포털 웹 UI의 메인 로직을 담당한다.
@@ -12,7 +12,7 @@
 // =============================================================================
 const AUTO_REFRESH_MS = 30000;
 const EMPTY_NEW_API_KEY_TEXT = "(없음)";
-const UI_STATE_STORAGE_KEY = "paas.portal.uiState";
+const UI_STATE_STORAGE_KEY = "portal.uiState";
 const AVAILABLE_VIEWS = ["dashboard", "create", "ops", "users"];
 const AVAILABLE_OPS_TABS = ["ops", "logs"];
 const DEFAULT_VIEW = AVAILABLE_VIEWS[0] || "dashboard";
