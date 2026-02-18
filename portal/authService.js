@@ -6,8 +6,7 @@
 //   - 사용자 계정(admin / user) CRUD
 //   - bcrypt 기반 비밀번호 해싱 및 검증
 //   - 세션 토큰 발급/검증/만료 관리 (httpOnly 쿠키)
-//   - 포털 API 키 발급/검증/폐기
-//   - SQLite(better-sqlite3)로 users, sessions, api_keys 테이블 관리
+//   - SQLite(better-sqlite3)로 users, sessions 테이블 관리
 //   - 최초 실행 시 bootstrap admin 계정 자동 생성 (admin/admin)
 // =============================================================================
 "use strict";
@@ -23,7 +22,6 @@ const ROLE_ADMIN = "admin";
 const ROLE_USER = "user";
 const USERNAME_REGEX = /^[a-z][a-z0-9]{2,19}$/;
 const SESSION_TOKEN_PREFIX = "sess";
-const API_KEY_TOKEN_PREFIX = "paas";
 
 function normalizeBoolean(value, fallbackValue = false) {
   if (typeof value === "boolean") {
@@ -137,17 +135,6 @@ function createAuthService(options) {
     };
   }
 
-  function normalizeApiKeyRow(row) {
-    return {
-      id: Number(row.id),
-      name: String(row.name || ""),
-      keyPreview: `${API_KEY_TOKEN_PREFIX}.${row.id}.${row.keyPrefix}...`,
-      createdAt: row.createdAt || null,
-      lastUsedAt: row.lastUsedAt || null,
-      revokedAt: row.revokedAt || null
-    };
-  }
-
   function normalizeUserRow(row) {
     const role = String(row.role || "");
     return {
@@ -235,58 +222,12 @@ function createAuthService(options) {
     };
   }
 
-  function authenticateApiKey(rawApiKey) {
-    const parsed = parseStructuredToken(rawApiKey, API_KEY_TOKEN_PREFIX);
-    if (!parsed) {
-      return null;
-    }
-    const row = statements.selectApiKeyWithUserById.get(parsed.id);
-    if (!row || row.revokedAt) {
-      return null;
-    }
-    if (!safeEqual(hashSecret(parsed.secret), row.secretHash)) {
-      return null;
-    }
-    throttledTouch("apikey", parsed.id, statements.touchApiKeyLastUsed);
-    return {
-      method: "api-key",
-      apiKeyId: parsed.id,
-      user: toPublicUser(row)
-    };
-  }
-
-
-  function resolveAnyAuth(req) {
-    const sessionToken = parseCookieValue(req, config.sessionCookieName);
-    if (sessionToken) {
-      const sessionAuth = authenticateSession(sessionToken);
-      if (sessionAuth) {
-        return sessionAuth;
-      }
-    }
-
-    const apiKey = String(req.get("X-API-Key") || "").trim();
-    if (apiKey) {
-      return authenticateApiKey(apiKey);
-    }
-    return null;
-  }
-
   function resolveSessionAuth(req) {
     const sessionToken = parseCookieValue(req, config.sessionCookieName);
     if (!sessionToken) {
       return null;
     }
     return authenticateSession(sessionToken);
-  }
-
-  function requireAnyAuth(req, res, next) {
-    const auth = resolveAnyAuth(req);
-    if (!auth) {
-      return sendError(res, 401, "Unauthorized");
-    }
-    req.auth = auth;
-    return next();
   }
 
   function requireSessionAuth(req, res, next) {
@@ -485,71 +426,6 @@ function createAuthService(options) {
         return next(error);
       }
     });
-
-    app.use("/api-keys", requireSessionAuth, requirePaasAdmin, requirePasswordUpdated);
-
-    app.get("/api-keys", (req, res) => {
-      const rows = statements.listApiKeysByUserId.all(req.auth.user.id);
-      return sendOk(res, { apiKeys: rows.map(normalizeApiKeyRow) });
-    });
-
-    app.post("/api-keys", (req, res, next) => {
-      try {
-        const rawName = String(req.body?.name || "").trim();
-        const name = rawName || `key-${Date.now()}`;
-        if (name.length < 1 || name.length > 60) {
-          throw new AppError(400, "name must be 1-60 characters");
-        }
-
-        const secret = crypto.randomBytes(32).toString("base64url");
-        const secretHash = hashSecret(secret);
-        const keyPrefix = secret.slice(0, 8);
-        const createdAt = nowIso();
-        const result = statements.insertApiKey.run(
-          req.auth.user.id,
-          name,
-          secretHash,
-          keyPrefix,
-          createdAt
-        );
-        const id = Number(result.lastInsertRowid);
-        const apiKey = `${API_KEY_TOKEN_PREFIX}.${id}.${secret}`;
-
-        return sendOk(
-          res,
-          {
-            apiKey,
-            item: normalizeApiKeyRow({
-              id,
-              name,
-              keyPrefix,
-              createdAt,
-              lastUsedAt: null,
-              revokedAt: null
-            })
-          },
-          201
-        );
-      } catch (error) {
-        return next(error);
-      }
-    });
-
-    app.delete("/api-keys/:id", (req, res, next) => {
-      try {
-        const apiKeyId = Number.parseInt(String(req.params.id || ""), 10);
-        if (!Number.isInteger(apiKeyId) || apiKeyId <= 0) {
-          throw new AppError(400, "Invalid api key id");
-        }
-        const result = statements.deleteApiKeyByIdForUser.run(apiKeyId, req.auth.user.id);
-        if (!result.changes) {
-          throw new AppError(404, "API key not found");
-        }
-        return sendOk(res, { deleted: true, revoked: true, id: apiKeyId });
-      } catch (error) {
-        return next(error);
-      }
-    });
   }
 
   async function init() {
@@ -580,18 +456,6 @@ function createAuthService(options) {
         FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
       );
       CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);
-      CREATE TABLE IF NOT EXISTS api_keys (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        name TEXT NOT NULL,
-        secret_hash TEXT NOT NULL,
-        key_prefix TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        last_used_at TEXT,
-        revoked_at TEXT,
-        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-      );
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_secret_hash ON api_keys(secret_hash);
     `);
 
     statements.selectUserById = db.prepare(`
@@ -673,50 +537,6 @@ function createAuthService(options) {
       SET revoked_at = ?
       WHERE revoked_at IS NULL AND expires_at <= ?
     `);
-    statements.insertApiKey = db.prepare(`
-      INSERT INTO api_keys (
-        user_id,
-        name,
-        secret_hash,
-        key_prefix,
-        created_at
-      )
-      VALUES (?, ?, ?, ?, ?)
-    `);
-    statements.selectApiKeyWithUserById = db.prepare(`
-      SELECT
-        ak.id,
-        ak.secret_hash AS secretHash,
-        ak.revoked_at AS revokedAt,
-        u.id AS id,
-        u.username,
-        u.role,
-        u.must_change_password AS mustChangePassword
-      FROM api_keys ak
-      INNER JOIN users u ON u.id = ak.user_id
-      WHERE ak.id = ?
-    `);
-    statements.touchApiKeyLastUsed = db.prepare(`
-      UPDATE api_keys
-      SET last_used_at = ?
-      WHERE id = ?
-    `);
-    statements.listApiKeysByUserId = db.prepare(`
-      SELECT
-        id,
-        name,
-        key_prefix AS keyPrefix,
-        created_at AS createdAt,
-        last_used_at AS lastUsedAt,
-        revoked_at AS revokedAt
-      FROM api_keys
-      WHERE user_id = ? AND revoked_at IS NULL
-      ORDER BY id DESC
-    `);
-    statements.deleteApiKeyByIdForUser = db.prepare(`
-      DELETE FROM api_keys
-      WHERE id = ? AND user_id = ?
-    `);
     statements.listUsersWithLastAccess = db.prepare(`
       SELECT
         u.id,
@@ -755,15 +575,13 @@ function createAuthService(options) {
 
   function getPublicConfig() {
     return {
-      sessionCookieName: config.sessionCookieName,
-      apiKeyPrefix: `${API_KEY_TOKEN_PREFIX}.<id>.<secret>`
+      sessionCookieName: config.sessionCookieName
     };
   }
 
   return {
     init,
     attachRoutes,
-    requireAnyAuth,
     requireSessionAuth,
     requirePaasAdmin,
     requirePasswordUpdated,

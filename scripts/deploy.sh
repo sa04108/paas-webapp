@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # =============================================================================
-# deploy.sh - 템플릿 기반 앱 재배포 스크립트 (공통 오케스트레이터)
+# deploy.sh - repo 기반 앱 재배포 스크립트
 # =============================================================================
 # 역할:
-#   기존 앱 컨테이너를 내린 뒤 다시 올려 코드 변경사항을 반영한다.
-#   템플릿 preDeploy hook을 먼저 호출해 템플릿별 준비 로직을 수행한다.
-#   1) docker compose down 으로 기존 컨테이너 종료
-#   2) docker compose up -d 로 새 컨테이너 기동
-#   3) 최대 30초간 running 상태 도달 여부 확인
-#   4) 배포 과정을 logs/deploy.log 에 기록
+#   1) git pull 로 최신 코드 반영
+#   2) 런타임 재감지 (package.json 변경 대응)
+#   3) Dockerfile 재생성
+#   4) docker compose down → up -d --build 로 이미지 재빌드 및 재기동
+#   5) 최대 30초간 running 상태 도달 여부 확인
+#   6) 배포 과정을 logs/deploy.log 에 기록
 #
 # 사용법:
 #   deploy.sh <userid> <appname>
@@ -48,27 +48,30 @@ if [[ ! -f "${COMPOSE_FILE}" ]]; then
   exit 1
 fi
 
-TEMPLATE_ID="$(resolve_app_template_id "${APP_DIR}")"
-if [[ -z "${TEMPLATE_ID}" ]]; then
-  echo "template id not found in app metadata: ${APP_DIR}" >&2
-  exit 1
-fi
-
-validate_template_id "${TEMPLATE_ID}"
-TEMPLATE_DIR="$(template_dir_for "${TEMPLATE_ID}")"
-if [[ ! -f "$(template_meta_path_for "${TEMPLATE_DIR}")" ]]; then
-  echo "Template not found: ${TEMPLATE_ID}" >&2
-  exit 1
-fi
-
-run_template_hook "${TEMPLATE_ID}" "preDeploy" "${USER_ID}" "${APP_NAME}" "${APP_DIR}"
-
 mkdir -p "${LOG_DIR}"
 exec > >(tee -a "${LOG_FILE}") 2>&1
 
-echo "[deploy] app=${USER_ID}/${APP_NAME} template=${TEMPLATE_ID} started_at=$(date -Is)"
+echo "[deploy] app=${USER_ID}/${APP_NAME} started_at=$(date -Is)"
+
+require_node
+
+echo "[deploy] 최신 코드 반영 중 (git pull)..."
+git -C "${APP_DIR}/${APP_SOURCE_SUBDIR}" pull
+
+echo "[deploy] 런타임 재감지 중..."
+RUNTIME_JSON="$(node "${DETECT_RUNTIME_TOOL}" "${APP_DIR}/${APP_SOURCE_SUBDIR}")"
+DISPLAY_NAME="$(node -e "console.log(JSON.parse(process.argv[1]).displayName)" "${RUNTIME_JSON}")"
+echo "[deploy] 감지된 런타임: ${DISPLAY_NAME}"
+
+echo "[deploy] Dockerfile 재생성 중..."
+node "${GENERATE_DOCKERFILE_TOOL}" "${RUNTIME_JSON}" "${APP_DIR}/${APP_SOURCE_SUBDIR}"
+
+echo "[deploy] 컨테이너 재빌드 및 재기동 중..."
 docker compose -f "${COMPOSE_FILE}" down
-docker compose -f "${COMPOSE_FILE}" up -d
+docker compose -f "${COMPOSE_FILE}" up -d --build
+
+echo "[deploy] 빌드 후 dangling 이미지 정리..."
+docker image prune -f || true
 
 TARGET_CONTAINER="$(app_container_name "${USER_ID}" "${APP_NAME}")"
 DEADLINE=$((SECONDS + DEPLOY_TIMEOUT_SECS))

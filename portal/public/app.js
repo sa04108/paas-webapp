@@ -3,15 +3,13 @@
 // =============================================================================
 // 역할:
 //   포털 웹 UI의 메인 로직을 담당한다.
-//   - 대시보드: 앱 목록 조회 및 상태 표시 (15초 자동 갱신)
-//   - 앱 생성: 템플릿 선택 후 앱 생성 요청
+//   - 대시보드: 앱 목록 조회 및 상태 표시 (30초 자동 갱신)
+//   - 앱 생성: GitHub repo URL 입력 후 앱 생성 요청
 //   - 운영 센터: 앱 시작/중지/재배포/삭제, 로그 조회
-//   - API 키 관리: 포털 API 키 및 앱 client key 발급/조회/폐기
 //   - 사용자 관리: 계정 생성/삭제 (admin 전용)
 //   - 세션 상태(현재 뷰, 탭)를 sessionStorage에 유지
 // =============================================================================
 const AUTO_REFRESH_MS = 30000;
-const EMPTY_NEW_API_KEY_TEXT = "(없음)";
 const UI_STATE_STORAGE_KEY = "portal.uiState";
 const AVAILABLE_VIEWS = ["dashboard", "create", "ops", "users"];
 const AVAILABLE_OPS_TABS = ["ops", "logs"];
@@ -24,9 +22,7 @@ const CREATE_FIELD_SHAKE_DURATION_MS = 320;
 
 const state = {
   domain: "my.domain.com",
-  templates: [],
   apps: [],
-  apiKeys: [],
   users: [],
   pendingDeleteUser: null,
   user: null,
@@ -56,7 +52,8 @@ const el = {
   settingsError: document.getElementById("settings-error"),
   createForm: document.getElementById("create-form"),
   appnameInput: document.getElementById("appname-input"),
-  templateSelect: document.getElementById("template-select"),
+  repoUrlInput: document.getElementById("repo-url-input"),
+  repoBranchInput: document.getElementById("repo-branch-input"),
   domainPreview: document.getElementById("domain-preview"),
   domainChip: document.getElementById("domain-chip"),
   limitChip: document.getElementById("limit-chip"),
@@ -77,13 +74,6 @@ const el = {
   passwordForm: document.getElementById("password-form"),
   currentPasswordInput: document.getElementById("current-password-input"),
   newPasswordInput: document.getElementById("new-password-input"),
-  apiKeysPanel: document.getElementById("api-keys-panel"),
-  createApiKeyForm: document.getElementById("create-api-key-form"),
-  apiKeyNameInput: document.getElementById("api-key-name-input"),
-  newApiKey: document.getElementById("new-api-key"),
-  copyNewApiKeyBtn: document.getElementById("copy-new-api-key-btn"),
-  newApiKeyWarning: document.getElementById("new-api-key-warning"),
-  apiKeyList: document.getElementById("api-key-list"),
   usersCount: document.getElementById("users-count"),
   usersEmptyState: document.getElementById("users-empty-state"),
   usersTableBody: document.getElementById("users-table-body"),
@@ -192,8 +182,8 @@ function validateCreateForm() {
       isMissing: () => !el.appnameInput.value.trim(),
     },
     {
-      field: el.templateSelect,
-      isMissing: () => !el.templateSelect.value.trim(),
+      field: el.repoUrlInput,
+      isMissing: () => !el.repoUrlInput.value.trim(),
     },
   ];
 
@@ -290,92 +280,13 @@ function syncDomainPreview() {
   el.domainPreview.textContent = `${userid}-${appname}.${state.domain}`;
 }
 
-function renderTemplateOptions(selectedTemplateId) {
-  if (!el.templateSelect) {
-    return;
-  }
-
-  const templates = Array.isArray(state.templates) ? state.templates : [];
-  const preferredTemplateId = String(selectedTemplateId || "")
-    .trim()
-    .toLowerCase();
-
-  if (!templates.length) {
-    el.templateSelect.innerHTML =
-      '<option value="" disabled selected>사용 가능한 템플릿이 없습니다.</option>';
-    el.templateSelect.value = "";
-    return;
-  }
-
-  const options = templates
-    .map((item) => {
-      const id = escapeHtml(item.id || "");
-      const name = escapeHtml(item.name || item.id || "");
-      const description = String(item.description || "").trim();
-      const label = description ? `${name} - ${escapeHtml(description)}` : name;
-      return `<option value="${id}">${label}</option>`;
-    })
-    .join("");
-
-  el.templateSelect.innerHTML = `
-    <option value="" disabled>템플릿을 선택하세요.</option>
-    ${options}
-  `;
-
-  const hasPreferredTemplate = templates.some(
-    (item) => String(item.id || "").toLowerCase() === preferredTemplateId,
-  );
-  el.templateSelect.value = hasPreferredTemplate ? preferredTemplateId : "";
-}
-
-function getVisibleNewApiKey() {
-  const raw = String(el.newApiKey.textContent || "").trim();
-  if (!raw || raw === EMPTY_NEW_API_KEY_TEXT) {
+function runtimeBadgeHtml(detectedRuntime) {
+  if (!detectedRuntime?.name) {
     return "";
   }
-  return raw;
-}
-
-function updateNewApiKeyControls() {
-  const hasVisibleKey = Boolean(getVisibleNewApiKey());
-  if (el.copyNewApiKeyBtn) {
-    el.copyNewApiKeyBtn.disabled = !hasVisibleKey || !canManageApps();
-  }
-  if (el.newApiKeyWarning) {
-    el.newApiKeyWarning.hidden = !hasVisibleKey;
-  }
-}
-
-function setNewApiKeyValue(rawApiKey) {
-  const normalized = String(rawApiKey || "").trim();
-  el.newApiKey.textContent = normalized || EMPTY_NEW_API_KEY_TEXT;
-  updateNewApiKeyControls();
-}
-
-async function copyTextToClipboard(text) {
-  if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-    try {
-      await navigator.clipboard.writeText(text);
-      return;
-    } catch {
-      // Fallback to legacy copy below.
-    }
-  }
-
-  const temp = document.createElement("textarea");
-  temp.value = text;
-  temp.setAttribute("readonly", "true");
-  temp.style.position = "fixed";
-  temp.style.opacity = "0";
-  temp.style.left = "-9999px";
-  document.body.append(temp);
-  temp.focus();
-  temp.select();
-  const copied = document.execCommand("copy");
-  temp.remove();
-  if (!copied) {
-    throw new Error("Failed to copy API key");
-  }
+  const safeIcon = escapeHtml(detectedRuntime.name);
+  const safeName = escapeHtml(detectedRuntime.displayName || detectedRuntime.name);
+  return `<span class="runtime-badge ${safeIcon}">${safeName}</span>`;
 }
 
 function switchView(viewName, { persist = true } = {}) {
@@ -581,14 +492,10 @@ function applyAccessState() {
   Array.from(el.createForm.elements).forEach((node) => {
     node.disabled = !enabled;
   });
-  Array.from(el.createApiKeyForm.elements).forEach((node) => {
-    node.disabled = !enabled;
-  });
 
   el.refreshBtn.disabled = !enabled;
   el.keepDataInput.disabled = !enabled;
   el.logLinesInput.disabled = !enabled;
-  updateNewApiKeyControls();
 }
 
 function renderApps(apps) {
@@ -614,19 +521,24 @@ function renderApps(apps) {
       const safeUser = escapeHtml(appItem.userid);
       const safeApp = escapeHtml(appItem.appname);
       const safeDomain = escapeHtml(appItem.domain || "-");
-      const safeTemplate = escapeHtml(appItem.templateId || "-");
+      const safeRepoUrl = escapeHtml(appItem.repoUrl || "-");
+      const safeBranch = escapeHtml(appItem.branch || "main");
       const rawStatus = appItem.status || "unknown";
       const safeStatus = escapeHtml(rawStatus);
       const safeCreatedAt = escapeHtml(formatDate(appItem.createdAt));
+      const badgeHtml = runtimeBadgeHtml(appItem.detectedRuntime);
 
       return `
         <article class="app-card" data-userid="${safeUser}" data-appname="${safeApp}">
           <div class="app-card-head">
             <h3 class="app-name">${safeUser} / ${safeApp}</h3>
-            <span class="status-pill ${statusClass(rawStatus)}">${safeStatus}</span>
+            <div class="app-card-badges">
+              ${badgeHtml}
+              <span class="status-pill ${statusClass(rawStatus)}">${safeStatus}</span>
+            </div>
           </div>
           <p class="app-domain">${safeDomain}</p>
-          <p class="app-meta">template: ${safeTemplate} | created: ${safeCreatedAt}</p>
+          <p class="app-meta">repo: ${safeRepoUrl} | branch: ${safeBranch} | created: ${safeCreatedAt}</p>
           <div class="app-actions">
             <button class="action-btn" data-action="logs" type="button" ${actionsDisabled}>Logs</button>
             <button class="action-btn" data-action="start" type="button" ${actionsDisabled}>Start</button>
@@ -634,38 +546,6 @@ function renderApps(apps) {
             <button class="action-btn" data-action="deploy" type="button" ${actionsDisabled}>Deploy</button>
             <button class="action-btn danger" data-action="delete" type="button" ${actionsDisabled}>Delete</button>
           </div>
-        </article>
-      `;
-    })
-    .join("");
-}
-
-function renderApiKeys() {
-  if (!canManageApps()) {
-    el.apiKeyList.innerHTML = "";
-    return;
-  }
-  if (!state.apiKeys.length) {
-    el.apiKeyList.innerHTML =
-      '<p class="empty-state">발급된 API Key가 없습니다.</p>';
-    return;
-  }
-
-  el.apiKeyList.innerHTML = state.apiKeys
-    .map((item) => {
-      const id = Number(item.id);
-      const safeName = escapeHtml(item.name || `key-${id}`);
-      const safePreview = escapeHtml(item.keyPreview || "-");
-      const safeCreatedAt = escapeHtml(formatDate(item.createdAt));
-      const safeLastUsed = escapeHtml(formatDate(item.lastUsedAt));
-      return `
-        <article class="api-key-item" data-id="${id}">
-          <div class="api-key-row">
-            <p class="api-key-name">${safeName}</p>
-            <button class="action-btn danger" data-action="revoke-api-key" type="button">폐기</button>
-          </div>
-          <p class="api-key-meta">${safePreview}</p>
-          <p class="api-key-meta">created: ${safeCreatedAt} | last used: ${safeLastUsed}</p>
         </article>
       `;
     })
@@ -730,10 +610,8 @@ function updateAuthUi() {
     el.settingsBtn.hidden = true;
     el.gnbUsersBtn.hidden = true;
     el.passwordRequiredNote.hidden = true;
-    el.apiKeysPanel.hidden = true;
     state.users = [];
     renderUsers([]);
-    setNewApiKeyValue("");
     if (state.activeView === "users" && DEFAULT_VIEW !== "users") {
       switchView(DEFAULT_VIEW);
     }
@@ -750,10 +628,6 @@ function updateAuthUi() {
   el.settingsBtn.hidden = false;
   el.gnbUsersBtn.hidden = !canManageUsers();
   el.passwordRequiredNote.hidden = !isPasswordLocked();
-  el.apiKeysPanel.hidden = isPasswordLocked();
-  if (isPasswordLocked()) {
-    setNewApiKeyValue("");
-  }
   if (el.gnbUsersBtn.hidden && state.activeView === "users" && DEFAULT_VIEW !== "users") {
     switchView(DEFAULT_VIEW);
   }
@@ -790,10 +664,8 @@ async function handleRequestError(error) {
   if (error?.status === 401) {
     state.user = null;
     state.apps = [];
-    state.apiKeys = [];
     state.users = [];
     renderApps([]);
-    renderApiKeys();
     renderUsers([]);
     updateAuthUi();
     stopAutoRefresh();
@@ -826,10 +698,8 @@ async function handleSettingsModalError(error) {
 async function loadConfig() {
   const data = await apiFetch("/config");
   state.domain = data.domain || "my.domain.com";
-  state.templates = Array.isArray(data.templates) ? data.templates : [];
   el.domainChip.textContent = state.domain;
   el.limitChip.textContent = `${data.limits.maxAppsPerUser}/${data.limits.maxTotalApps}`;
-  renderTemplateOptions(data.defaults?.templateId || "");
   syncDomainPreview();
 }
 
@@ -862,17 +732,6 @@ async function loadApps() {
   renderApps(state.apps);
 }
 
-async function loadApiKeys() {
-  if (!canManageApps()) {
-    state.apiKeys = [];
-    renderApiKeys();
-    return;
-  }
-  const data = await apiFetch("/api-keys");
-  state.apiKeys = data.apiKeys || [];
-  renderApiKeys();
-}
-
 async function loadUsers() {
   if (!canManageUsers()) {
     state.users = [];
@@ -886,7 +745,6 @@ async function loadUsers() {
 
 async function refreshDashboardData() {
   await loadApps();
-  await loadApiKeys();
   await loadUsers();
   if (canManageApps()) {
     startAutoRefresh();
@@ -903,21 +761,28 @@ async function handleCreate(event) {
     );
   }
 
+  const repoUrl = el.repoUrlInput.value.trim();
+  const branch = el.repoBranchInput.value.trim() || "main";
+
   const body = {
     appname: el.appnameInput.value.trim(),
-    templateId: el.templateSelect.value.trim(),
+    repoUrl,
+    branch,
   };
 
   if (!validateCreateForm()) {
-    throw new Error("appname, template를 입력하세요.");
+    throw new Error("appname, repo URL을 입력하세요.");
   }
 
-  setBanner("앱 생성 요청 중...", "info");
+  setBanner("앱 생성 중 (repo clone 및 빌드 포함, 시간이 걸릴 수 있습니다)...", "info");
   const data = await apiFetch("/apps", {
     method: "POST",
     body: JSON.stringify(body),
   });
   setBanner(`앱 생성 완료: ${data.app.domain}`, "success");
+  el.createForm.reset();
+  el.repoBranchInput.value = "main";
+  syncDomainPreview();
   await loadApps();
 }
 
@@ -986,7 +851,11 @@ async function performAction(target) {
     return;
   }
 
-  setBanner(`${action} 요청 중: ${appLabel}`, "info");
+  if (action === "deploy") {
+    setBanner(`${appLabel} 재배포 중 (git pull + 이미지 재빌드, 시간이 걸릴 수 있습니다)...`, "info");
+  } else {
+    setBanner(`${action} 요청 중: ${appLabel}`, "info");
+  }
   await apiFetch(`/apps/${userid}/${appname}/${action}`, { method: "POST" });
   setBanner(`${action} 완료: ${appLabel}`, "success");
   await loadApps();
@@ -996,7 +865,6 @@ async function bootstrap() {
   const persistedUiState = readPersistedUiState();
   switchView(DEFAULT_VIEW, { persist: false });
   updateAuthUi();
-  setNewApiKeyValue("");
   await loadConfig();
   syncDomainPreview();
 
@@ -1024,8 +892,8 @@ el.appnameInput.addEventListener("input", () => {
   syncDomainPreview();
 });
 
-el.templateSelect.addEventListener("change", () => {
-  clearCreateFieldFeedback(el.templateSelect);
+el.repoUrlInput.addEventListener("input", () => {
+  clearCreateFieldFeedback(el.repoUrlInput);
 });
 
 el.gnbItems.forEach((item) => {
@@ -1261,65 +1129,6 @@ el.passwordForm.addEventListener("submit", async (event) => {
     setBanner("비밀번호 변경이 완료되었습니다.", "success");
   } catch (error) {
     await handleSettingsModalError(error);
-  }
-});
-
-el.createApiKeyForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    const name = el.apiKeyNameInput.value.trim();
-    const data = await apiFetch("/api-keys", {
-      method: "POST",
-      body: JSON.stringify({ name }),
-    });
-    setNewApiKeyValue(data.apiKey || "");
-    el.apiKeyNameInput.value = "";
-    await loadApiKeys();
-    setBanner("새 API Key가 발급되었습니다. 지금 복사해 두세요.", "success");
-  } catch (error) {
-    await handleRequestError(error);
-  }
-});
-
-el.copyNewApiKeyBtn.addEventListener("click", async () => {
-  const apiKey = getVisibleNewApiKey();
-  if (!apiKey) {
-    setBanner("복사할 새 API Key가 없습니다.", "error");
-    return;
-  }
-  try {
-    await copyTextToClipboard(apiKey);
-    setBanner("새 API Key를 클립보드에 복사했습니다.", "success");
-  } catch {
-    setBanner("클립보드 복사에 실패했습니다. 키를 직접 복사하세요.", "error");
-  }
-});
-
-el.apiKeyList.addEventListener("click", async (event) => {
-  const button = event.target.closest("button[data-action='revoke-api-key']");
-  if (!button) {
-    return;
-  }
-  const card = button.closest(".api-key-item");
-  if (!card) {
-    return;
-  }
-  const id = parsePositiveInt(card.dataset.id);
-  if (!id) {
-    return;
-  }
-
-  const shouldRevoke = window.confirm(`API Key #${id}를 폐기합니다.`);
-  if (!shouldRevoke) {
-    return;
-  }
-
-  try {
-    await apiFetch(`/api-keys/${id}`, { method: "DELETE" });
-    await loadApiKeys();
-    setBanner(`API Key #${id} 폐기 완료`, "success");
-  } catch (error) {
-    await handleRequestError(error);
   }
 });
 

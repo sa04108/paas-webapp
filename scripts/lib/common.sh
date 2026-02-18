@@ -19,12 +19,9 @@ fi
 
 PAAS_ROOT="${PAAS_ROOT:-${PAAS_ROOT_DEFAULT}}"
 PAAS_APPS_DIR="${PAAS_APPS_DIR:-${PAAS_ROOT}/apps}"
-PAAS_TEMPLATES_DIR="${PAAS_TEMPLATES_DIR:-${PAAS_ROOT}/templates}"
-PAAS_SHARED_DIR="${PAAS_SHARED_DIR:-${PAAS_ROOT}/shared}"
 APP_NETWORK="${APP_NETWORK:-paas-proxy}"
 APP_CONTAINER_PREFIX="${APP_CONTAINER_PREFIX:-paas-app}"
 APP_COMPOSE_FILE="${APP_COMPOSE_FILE:-docker-compose.yml}"
-TEMPLATE_META_FILE="${TEMPLATE_META_FILE:-template.json}"
 APP_SOURCE_SUBDIR="${APP_SOURCE_SUBDIR:-app}"
 APP_DATA_SUBDIR="${APP_DATA_SUBDIR:-data}"
 APP_LOGS_SUBDIR="${APP_LOGS_SUBDIR:-logs}"
@@ -34,11 +31,10 @@ DEFAULT_CPU_LIMIT="${DEFAULT_CPU_LIMIT:-0.5}"
 DEFAULT_RESTART_POLICY="${DEFAULT_RESTART_POLICY:-unless-stopped}"
 DEPLOY_TIMEOUT_SECS="${DEPLOY_TIMEOUT_SECS:-30}"
 DEPLOY_LOG_TAIL_LINES="${DEPLOY_LOG_TAIL_LINES:-120}"
-TEMPLATE_RUNTIME_TOOL="${PAAS_ROOT}/scripts/template-runtime.js"
 
-if [[ ! -f "${TEMPLATE_RUNTIME_TOOL}" ]]; then
-  TEMPLATE_RUNTIME_TOOL="${SCRIPTS_DIR}/template-runtime.js"
-fi
+DETECT_RUNTIME_TOOL="${PAAS_ROOT}/scripts/detect-runtime.js"
+GENERATE_DOCKERFILE_TOOL="${PAAS_ROOT}/scripts/generate-dockerfile.js"
+GENERATE_COMPOSE_TOOL="${PAAS_ROOT}/scripts/generate-compose.js"
 
 # 컨테이너 경로(/paas/...)를 호스트 경로로 변환
 # PAAS_HOST_ROOT가 설정되어 있으면 PAAS_ROOT 접두사를 PAAS_HOST_ROOT로 치환
@@ -53,7 +49,7 @@ to_host_path() {
 }
 
 ensure_base_directories() {
-  mkdir -p "${PAAS_APPS_DIR}" "${PAAS_TEMPLATES_DIR}" "${PAAS_SHARED_DIR}"
+  mkdir -p "${PAAS_APPS_DIR}"
 }
 
 require_node() {
@@ -61,8 +57,8 @@ require_node() {
     echo "node command is required" >&2
     return 1
   fi
-  if [[ ! -f "${TEMPLATE_RUNTIME_TOOL}" ]]; then
-    echo "template runtime tool not found: ${TEMPLATE_RUNTIME_TOOL}" >&2
+  if [[ ! -f "${DETECT_RUNTIME_TOOL}" ]]; then
+    echo "detect-runtime tool not found: ${DETECT_RUNTIME_TOOL}" >&2
     return 1
   fi
 }
@@ -83,17 +79,12 @@ validate_app_name() {
   fi
 }
 
-validate_template_id() {
-  local template_id="$1"
-  if [[ ! "${template_id}" =~ ^[a-z0-9][a-z0-9-]{1,63}$ ]]; then
-    echo "Invalid templateId. Expected /^[a-z0-9][a-z0-9-]{1,63}$/" >&2
+validate_repo_url() {
+  local repo_url="$1"
+  if [[ ! "${repo_url}" =~ ^https?:// ]]; then
+    echo "Invalid repoUrl. Must start with http:// or https://" >&2
     exit 1
   fi
-}
-
-template_dir_for() {
-  local template_id="$1"
-  echo "${PAAS_TEMPLATES_DIR}/${template_id}"
 }
 
 app_dir_for() {
@@ -112,67 +103,8 @@ app_log_dir_for() {
   echo "${app_dir}/${APP_LOGS_SUBDIR}"
 }
 
-template_meta_path_for() {
-  local template_dir="$1"
-  echo "${template_dir}/${TEMPLATE_META_FILE}"
-}
-
 app_container_name() {
   local user_id="$1"
   local app_name="$2"
   echo "${APP_CONTAINER_PREFIX}-${user_id}-${app_name}"
-}
-
-resolve_template_hook() {
-  local template_dir="$1"
-  local hook_name="$2"
-  require_node
-  node "${TEMPLATE_RUNTIME_TOOL}" hook \
-    --template-dir "${template_dir}" \
-    --name "${hook_name}"
-}
-
-resolve_app_template_id() {
-  local app_dir="$1"
-  require_node
-  node "${TEMPLATE_RUNTIME_TOOL}" resolve-template-id \
-    --app-dir "${app_dir}"
-}
-
-run_template_hook() {
-  local template_id="$1"
-  local hook_name="$2"
-  local user_id="$3"
-  local app_name="$4"
-  local app_dir="$5"
-  local template_dir
-  local hook_rel_path
-  local hook_path
-
-  template_dir="$(template_dir_for "${template_id}")"
-  hook_rel_path="$(resolve_template_hook "${template_dir}" "${hook_name}")"
-  if [[ -z "${hook_rel_path}" ]]; then
-    return 0
-  fi
-
-  if [[ "${hook_rel_path}" == /* ]] || [[ "${hook_rel_path}" == *".."* ]]; then
-    echo "Invalid hook path in template ${template_id}: ${hook_rel_path}" >&2
-    return 1
-  fi
-
-  hook_path="${template_dir}/${hook_rel_path}"
-  if [[ ! -f "${hook_path}" ]]; then
-    echo "Template hook not found: ${hook_path}" >&2
-    return 1
-  fi
-
-  PAAS_ROOT="${PAAS_ROOT}" \
-  PAAS_HOST_ROOT="${PAAS_HOST_ROOT:-}" \
-  PAAS_SHARED_DIR="${PAAS_SHARED_DIR}" \
-  PAAS_TEMPLATE_ID="${template_id}" \
-  PAAS_TEMPLATE_DIR="${template_dir}" \
-  PAAS_APP_DIR="${app_dir}" \
-  PAAS_USER_ID="${user_id}" \
-  PAAS_APP_NAME="${app_name}" \
-  bash "${hook_path}"
 }

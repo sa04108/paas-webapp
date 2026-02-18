@@ -10,7 +10,7 @@
             href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
             rel="stylesheet"
         />
-        <link rel="stylesheet" href="./styles.css?v=20260209-02" />
+        <link rel="stylesheet" href="./styles.css?v=20260219-01" />
     </head>
     <body>
         <div class="mesh-layer" aria-hidden="true">
@@ -188,12 +188,23 @@
                                 required
                             />
 
-                            <label for="template-select">Template</label>
-                            <select id="template-select" name="templateId" required>
-                                <option value="" disabled selected>
-                                    Loading templates...
-                                </option>
-                            </select>
+                            <label for="repo-url-input">GitHub Repository URL</label>
+                            <input
+                                id="repo-url-input"
+                                name="repoUrl"
+                                type="url"
+                                placeholder="https://github.com/user/repo"
+                                required
+                            />
+
+                            <label for="repo-branch-input">Branch</label>
+                            <input
+                                id="repo-branch-input"
+                                name="branch"
+                                type="text"
+                                placeholder="main"
+                                value="main"
+                            />
 
                             <div class="preview-text preview-row preview-row-domain">
                                 <span class="preview-label">예상 주소:</span>
@@ -292,57 +303,6 @@
                                 </button>
                             </section>
 
-                            <section
-                                id="api-keys-panel"
-                                class="control-section"
-                                hidden
-                            >
-                                <h3>API Key 관리</h3>
-                                <form id="create-api-key-form" novalidate>
-                                    <label for="api-key-name-input"
-                                        >키 이름</label
-                                    >
-                                    <input
-                                        id="api-key-name-input"
-                                        type="text"
-                                        placeholder="deploy-bot"
-                                        maxlength="60"
-                                    />
-                                    <button
-                                        id="create-api-key-btn"
-                                        class="ghost-btn"
-                                        type="submit"
-                                    >
-                                        새 키 발급
-                                    </button>
-                                </form>
-                                <div class="preview-text preview-row preview-row-key">
-                                    <span class="preview-label">새 키:</span>
-                                    <code id="new-api-key" class="preview-code"
-                                        >(없음)</code
-                                    >
-                                    <button
-                                        id="copy-new-api-key-btn"
-                                        class="ghost-btn copy-key-btn"
-                                        type="button"
-                                        disabled
-                                    >
-                                        Copy
-                                    </button>
-                                </div>
-                                <p
-                                    id="new-api-key-warning"
-                                    class="api-key-onetime-warning"
-                                    hidden
-                                >
-                                    보안 안내: 이 페이지를 벗어나면 새 키 원문은 다시 조회할 수 없습니다.
-                                    지금 복사해 두세요.
-                                </p>
-                                <div
-                                    id="api-key-list"
-                                    class="api-key-list"
-                                ></div>
-                            </section>
                         </section>
 
                         <section
@@ -609,6 +569,6 @@
             </section>
         </div>
 
-        <script src="./app.js?v=20260218-01"></script>
+        <script src="./app.js?v=20260219-01"></script>
     </body>
 </html>

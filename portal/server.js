@@ -4,15 +4,12 @@
 // 역할:
 //   미니 PaaS 플랫폼의 중심 서버. 아래 기능을 제공한다.
 //   - 사용자 인증 및 세션 관리 (authService 연동)
-//   - 앱 생성/배포/시작/중지/삭제 등 라이프사이클 관리
-//   - 앱별 client key 발급 및 bridge API 제공 (appAccessService 연동)
+//   - GitHub repo 기반 앱 생성/배포/시작/중지/삭제 등 라이프사이클 관리
 //   - 대시보드 프론트엔드 정적 파일 서빙
-//   - 사용자/API 키 관리
+//   - 사용자 관리
 //
 //   셸 스크립트(create.sh, deploy.sh, delete.sh)를 호출하여
 //   Docker Compose 기반으로 앱 컨테이너를 제어한다.
-//   GitHub Workflow와 유사하게, 유저가 작성한 템플릿 기반 앱 코드를
-//   격리된 컨테이너 환경에서 실행할 수 있게 해준다.
 // =============================================================================
 "use strict";
 
@@ -25,7 +22,6 @@ const { promisify } = require("node:util");
 const express = require("express");
 const dotenv = require("dotenv");
 const { createAuthService } = require("./authService");
-const { createAppAccessService } = require("./appAccessService");
 
 const execFileAsync = promisify(execFile);
 const repoRoot = path.resolve(__dirname, "..");
@@ -37,9 +33,7 @@ const paasRoot = process.env.PAAS_ROOT || repoRoot;
 const config = {
   PAAS_DOMAIN: process.env.PAAS_DOMAIN || "my.domain.com",
   PAAS_APPS_DIR: process.env.PAAS_APPS_DIR || path.join(paasRoot, "apps"),
-  PAAS_TEMPLATES_DIR: process.env.PAAS_TEMPLATES_DIR || path.join(paasRoot, "templates"),
   PAAS_SCRIPTS_DIR: process.env.PAAS_SCRIPTS_DIR || path.join(paasRoot, "scripts"),
-  PAAS_SHARED_DIR: process.env.PAAS_SHARED_DIR || path.join(paasRoot, "shared"),
   PORTAL_PORT: toPositiveInt(process.env.PORTAL_PORT, 3000),
   PORTAL_DB_PATH: process.env.PORTAL_DB_PATH || path.join(paasRoot, "portal-data", "portal.sqlite3"),
   SESSION_COOKIE_NAME: process.env.SESSION_COOKIE_NAME || "portal_session",
@@ -53,11 +47,8 @@ const config = {
 
 const USER_ID_REGEX = /^[a-z][a-z0-9]{2,19}$/;
 const APP_NAME_REGEX = /^[a-z][a-z0-9-]{2,29}$/;
-const TEMPLATE_ID_REGEX = /^[a-z0-9][a-z0-9-]{1,63}$/;
 const APP_META_FILE = ".paas-meta.json";
 const APP_COMPOSE_FILE = "docker-compose.yml";
-const TEMPLATE_META_FILE = "template.json";
-const TEMPLATE_APP_SUBDIR = "app";
 
 class AppError extends Error {
   constructor(statusCode, message) {
@@ -121,15 +112,6 @@ const authService = createAuthService({
   AppError
 });
 
-const appAccessService = createAppAccessService({
-  dbPath: config.PORTAL_DB_PATH,
-  sendOk,
-  sendError,
-  AppError,
-  userIdRegex: USER_ID_REGEX,
-  appNameRegex: APP_NAME_REGEX
-});
-
 async function readContainerName(appDir) {
   const composePath = path.join(appDir, APP_COMPOSE_FILE);
   try {
@@ -147,10 +129,6 @@ function domainName(userid, appname) {
 
 function getAppDir(userid, appname) {
   return path.join(config.PAAS_APPS_DIR, userid, appname);
-}
-
-function getTemplateDir(templateId) {
-  return path.join(config.PAAS_TEMPLATES_DIR, templateId);
 }
 
 function getRunnerPath(scriptName) {
@@ -181,14 +159,6 @@ function assertAppName(appname) {
   }
 }
 
-function normalizeTemplateId(value) {
-  const normalized = String(value || "").trim().toLowerCase();
-  if (!TEMPLATE_ID_REGEX.test(normalized)) {
-    return "";
-  }
-  return normalized;
-}
-
 function validateAppParams(userid, appname) {
   assertUserId(userid);
   assertAppName(appname);
@@ -199,21 +169,19 @@ function validateCreateBody(body) {
     throw new AppError(400, "Request body is required");
   }
   const appname = String(body.appname || "").trim();
-  const rawTemplateId = String(body.templateId || "").trim().toLowerCase();
-  const templateId = normalizeTemplateId(rawTemplateId);
+  const repoUrl = String(body.repoUrl || "").trim();
+  const branch = String(body.branch || "main").trim() || "main";
 
   assertAppName(appname);
-  if (!rawTemplateId) {
-    throw new AppError(400, "templateId is required");
+
+  if (!repoUrl) {
+    throw new AppError(400, "repoUrl is required");
   }
-  if (!templateId) {
-    throw new AppError(400, "Invalid templateId. Expected /^[a-z0-9][a-z0-9-]{1,63}$/");
+  if (!/^https?:\/\//.test(repoUrl)) {
+    throw new AppError(400, "repoUrl must start with http:// or https://");
   }
 
-  return {
-    appname,
-    templateId
-  };
+  return { appname, repoUrl, branch };
 }
 
 function resolveRequestUserId(req) {
@@ -236,9 +204,7 @@ async function pathExists(targetPath) {
 
 async function ensureBaseDirectories() {
   await fs.mkdir(config.PAAS_APPS_DIR, { recursive: true });
-  await fs.mkdir(config.PAAS_TEMPLATES_DIR, { recursive: true });
   await fs.mkdir(config.PAAS_SCRIPTS_DIR, { recursive: true });
-  await fs.mkdir(config.PAAS_SHARED_DIR, { recursive: true });
 }
 
 async function safeReadDir(targetDir) {
@@ -301,92 +267,6 @@ async function readAppMeta(appDir) {
     }
     return null;
   }
-}
-
-async function readAppTemplateId(appDir, metadata = null) {
-  const fromMeta = normalizeTemplateId(metadata?.templateId);
-  if (fromMeta) {
-    return fromMeta;
-  }
-
-  const templateMetaPath = path.join(appDir, TEMPLATE_META_FILE);
-  try {
-    const raw = await fs.readFile(templateMetaPath, "utf8");
-    const parsed = JSON.parse(raw);
-    return normalizeTemplateId(parsed?.id) || null;
-  } catch {
-    return null;
-  }
-}
-
-async function readTemplateMeta(templateId) {
-  const templateDir = getTemplateDir(templateId);
-  const templateMetaPath = path.join(templateDir, TEMPLATE_META_FILE);
-  const fallback = {
-    id: templateId,
-    name: templateId,
-    description: "",
-    version: null,
-    internalPort: 3000
-  };
-
-  try {
-    const raw = await fs.readFile(templateMetaPath, "utf8");
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") {
-      return fallback;
-    }
-
-    const id = String(parsed.id || templateId).trim().toLowerCase();
-    if (!TEMPLATE_ID_REGEX.test(id)) {
-      return fallback;
-    }
-
-    return {
-      id,
-      name: String(parsed.name || id).trim() || id,
-      description: String(parsed.description || "").trim(),
-      version: parsed.version ? String(parsed.version) : null,
-      internalPort: Number.parseInt(String(parsed.internalPort || "3000"), 10) || 3000
-    };
-  } catch {
-    return fallback;
-  }
-}
-
-async function listAvailableTemplates() {
-  const templateEntries = await safeReadDir(config.PAAS_TEMPLATES_DIR);
-  const templates = [];
-
-  for (const entry of templateEntries) {
-    if (!entry.isDirectory()) {
-      continue;
-    }
-    const templateId = String(entry.name || "").trim().toLowerCase();
-    if (!TEMPLATE_ID_REGEX.test(templateId)) {
-      continue;
-    }
-
-    const templateDir = getTemplateDir(templateId);
-    if (
-      !(await pathExists(path.join(templateDir, TEMPLATE_APP_SUBDIR))) ||
-      !(await pathExists(path.join(templateDir, TEMPLATE_META_FILE)))
-    ) {
-      continue;
-    }
-
-    const meta = await readTemplateMeta(templateId);
-    templates.push(meta);
-  }
-
-  templates.sort((a, b) => a.id.localeCompare(b.id));
-  return templates;
-}
-
-async function writeAppMeta(appDir, metaPayload) {
-  const metaPath = path.join(appDir, APP_META_FILE);
-  const content = JSON.stringify(metaPayload, null, 2);
-  await fs.writeFile(metaPath, content, "utf8");
 }
 
 async function runCommand(command, args, options = {}) {
@@ -549,7 +429,6 @@ async function buildAppInfo(userid, appname, statusMap) {
   }
 
   const metadata = await readAppMeta(appDir);
-  const templateId = await readAppTemplateId(appDir, metadata);
   const appContainerName = await readContainerName(appDir);
   const rawStatus =
     appContainerName && statusMap instanceof Map && statusMap.has(appContainerName)
@@ -563,22 +442,11 @@ async function buildAppInfo(userid, appname, statusMap) {
     containerName: appContainerName,
     status: normalizeStatus(rawStatus),
     rawStatus,
-    templateId,
+    repoUrl: metadata?.repoUrl || null,
+    branch: metadata?.branch || null,
+    detectedRuntime: metadata?.detectedRuntime || null,
     createdAt: metadata?.createdAt || null,
     appDir
-  };
-}
-
-function toClientAppView(appInfo) {
-  if (!appInfo) {
-    return null;
-  }
-  return {
-    userid: appInfo.userid,
-    appname: appInfo.appname,
-    domain: appInfo.domain,
-    status: appInfo.status,
-    containerName: appInfo.containerName
   };
 }
 
@@ -614,30 +482,15 @@ app.get("/health", (_req, res) => {
   });
 });
 
-app.get("/config", async (_req, res, next) => {
-  try {
-    const templates = await listAvailableTemplates();
-
-    return sendOk(res, {
-      domain: config.PAAS_DOMAIN,
-      limits: {
-        maxAppsPerUser: config.MAX_APPS_PER_USER,
-        maxTotalApps: config.MAX_TOTAL_APPS
-      },
-      templates,
-      defaults: {
-        templateId: null
-      },
-      auth: authService.getPublicConfig(),
-      appAccess: {
-        headerName: "X-App-Key",
-        infoPath: "/bridge/apps/{userid}/{appname}",
-        activatePath: "/bridge/apps/{userid}/{appname}/activate"
-      }
-    });
-  } catch (error) {
-    return next(error);
-  }
+app.get("/config", (_req, res) => {
+  return sendOk(res, {
+    domain: config.PAAS_DOMAIN,
+    limits: {
+      maxAppsPerUser: config.MAX_APPS_PER_USER,
+      maxTotalApps: config.MAX_TOTAL_APPS
+    },
+    auth: authService.getPublicConfig()
+  });
 });
 
 app.get("/", (req, res) => {
@@ -666,7 +519,7 @@ app.use(express.static(publicDir, { index: false }));
 authService.attachRoutes(app);
 app.use(
   "/apps",
-  authService.requireAnyAuth,
+  authService.requireSessionAuth,
   authService.requirePaasAdmin,
   authService.requirePasswordUpdated
 );
@@ -680,16 +533,7 @@ app.use(
 app.post("/apps", async (req, res, next) => {
   try {
     const userid = resolveRequestUserId(req);
-    const { appname, templateId } = validateCreateBody(req.body);
-
-    const templateDir = getTemplateDir(templateId);
-    if (
-      !(await pathExists(templateDir)) ||
-      !(await pathExists(path.join(templateDir, TEMPLATE_APP_SUBDIR))) ||
-      !(await pathExists(path.join(templateDir, TEMPLATE_META_FILE)))
-    ) {
-      throw new AppError(400, `Template not found: ${templateId}`);
-    }
+    const { appname, repoUrl, branch } = validateCreateBody(req.body);
 
     const existingApps = await listFilesystemApps();
     if (existingApps.length >= config.MAX_TOTAL_APPS) {
@@ -705,32 +549,20 @@ app.post("/apps", async (req, res, next) => {
       throw new AppError(409, "App already exists");
     }
 
+    // create.sh이 내부에서 .paas-meta.json을 작성하므로 별도 writeAppMeta 불필요
     const scriptResult = await runRunnerScript("create.sh", [
       userid,
       appname,
-      templateId
+      repoUrl,
+      branch
     ]);
-
-    const createdAt = new Date().toISOString();
-    let metadataWarning = null;
-    try {
-      await writeAppMeta(targetAppDir, {
-        userid,
-        appname,
-        templateId,
-        createdAt
-      });
-    } catch (error) {
-      metadataWarning = `metadata write skipped: ${error.message}`;
-    }
 
     const appInfo = await buildAppInfo(userid, appname, null);
     return sendOk(
       res,
       {
         app: appInfo,
-        output: scriptResult.stdout || "created",
-        warning: metadataWarning
+        output: scriptResult.stdout || "created"
       },
       201
     );
@@ -866,100 +698,9 @@ app.get("/apps/:userid/:appname/logs", async (req, res, next) => {
   }
 });
 
-app.get("/apps/:userid/:appname/client-keys", async (req, res, next) => {
-  try {
-    const { userid, appname } = await resolveAppRequestContext(req);
-    const keys = appAccessService.listKeys({ userid, appname });
-    return sendOk(res, {
-      keys,
-      total: keys.length
-    });
-  } catch (error) {
-    return next(error);
-  }
-});
-
-app.post("/apps/:userid/:appname/client-keys", async (req, res, next) => {
-  try {
-    const { userid, appname } = await resolveAppRequestContext(req);
-    const name = String(req.body?.name || "").trim();
-    const issued = appAccessService.issueKey({
-      userid,
-      appname,
-      name
-    });
-
-    return sendOk(
-      res,
-      {
-        clientKey: issued.clientKey,
-        item: issued.item
-      },
-      201
-    );
-  } catch (error) {
-    return next(error);
-  }
-});
-
-app.delete("/apps/:userid/:appname/client-keys/:id", async (req, res, next) => {
-  try {
-    const { userid, appname } = await resolveAppRequestContext(req);
-    const keyId = Number.parseInt(String(req.params.id || ""), 10);
-    if (!Number.isInteger(keyId) || keyId <= 0) {
-      throw new AppError(400, "Invalid key id");
-    }
-    appAccessService.revokeKey({
-      userid,
-      appname,
-      keyId
-    });
-    return sendOk(res, {
-      deleted: true,
-      id: keyId
-    });
-  } catch (error) {
-    return next(error);
-  }
-});
-
 app.use("/apps", (_req, res) => {
   return sendError(res, 404, "Not found");
 });
-
-app.get(
-  "/bridge/apps/:userid/:appname",
-  appAccessService.requireAppClientKey,
-  async (req, res, next) => {
-    try {
-      const { userid, appname } = await resolveAppRequestContext(req);
-      const appInfo = await buildAppInfo(userid, appname, null);
-      return sendOk(res, {
-        app: toClientAppView(appInfo)
-      });
-    } catch (error) {
-      return next(error);
-    }
-  }
-);
-
-app.post(
-  "/bridge/apps/:userid/:appname/activate",
-  appAccessService.requireAppClientKey,
-  async (req, res, next) => {
-    try {
-      const { userid, appname, appDir } = await resolveAppRequestContext(req);
-      const result = await runDockerCompose(appDir, ["up", "-d"]);
-      const appInfo = await buildAppInfo(userid, appname, null);
-      return sendOk(res, {
-        app: toClientAppView(appInfo),
-        output: result.stdout || "activated"
-      });
-    } catch (error) {
-      return next(error);
-    }
-  }
-);
 
 app.get("/users", (_req, res, next) => {
   try {
@@ -1028,7 +769,6 @@ app.use((err, _req, res, _next) => {
 async function start() {
   await ensureBaseDirectories();
   await authService.init();
-  await appAccessService.init();
   app.listen(config.PORTAL_PORT, () => {
     console.log(`[portal] listening on http://localhost:${config.PORTAL_PORT}`);
     console.log(`[portal] env: ${envFilePath}`);
