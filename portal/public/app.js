@@ -74,6 +74,7 @@ const el = {
   passwordForm: document.getElementById("password-form"),
   currentPasswordInput: document.getElementById("current-password-input"),
   newPasswordInput: document.getElementById("new-password-input"),
+  newPasswordConfirmInput: document.getElementById("new-password-confirm-input"),
   usersCount: document.getElementById("users-count"),
   usersEmptyState: document.getElementById("users-empty-state"),
   usersTableBody: document.getElementById("users-table-body"),
@@ -374,6 +375,7 @@ function closeSettingsModal() {
   el.settingsModal.hidden = true;
   syncModalOpenState();
   setSettingsError("");
+  el.passwordForm.reset();
 }
 
 function openCreateUserModal() {
@@ -1115,6 +1117,14 @@ el.passwordForm.addEventListener("submit", async (event) => {
   try {
     const currentPassword = el.currentPasswordInput.value;
     const newPassword = el.newPasswordInput.value;
+    const newPasswordConfirm = el.newPasswordConfirmInput.value;
+
+    if (newPassword !== newPasswordConfirm) {
+      setSettingsError("새 비밀번호와 비밀번호 확인이 일치하지 않습니다.");
+      el.newPasswordConfirmInput.focus();
+      return;
+    }
+
     const data = await apiFetch("/auth/change-password", {
       method: "POST",
       body: JSON.stringify({ currentPassword, newPassword }),
@@ -1123,6 +1133,7 @@ el.passwordForm.addEventListener("submit", async (event) => {
     state.user = data.user || null;
     el.currentPasswordInput.value = "";
     el.newPasswordInput.value = "";
+    el.newPasswordConfirmInput.value = "";
     updateAuthUi();
     closeSettingsModal();
     await refreshDashboardData();
