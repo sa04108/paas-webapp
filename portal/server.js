@@ -136,15 +136,20 @@ function getRunnerPath(scriptName) {
 }
 
 function summarizeCommandError(error) {
-  const stderr = String(error.stderr || "").trim();
-  const stdout = String(error.stdout || "").trim();
-  if (stderr) {
-    return stderr;
-  }
-  if (stdout) {
-    return stdout;
-  }
-  return error.message || "Unknown command failure";
+  const combined = [String(error.stderr || ""), String(error.stdout || "")]
+    .join("\n")
+    .trim();
+
+  const text = combined || error.message || "Unknown command failure";
+
+  // git·docker 진행 메시지(remote: ..., Receiving objects: ...)는 앞쪽에 쌓이고
+  // 실제 에러(fatal: ...)는 뒤에 위치한다. 마지막 5줄만 추려 실제 원인을 노출한다.
+  const meaningfulLines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  return meaningfulLines.slice(-5).join("\n");
 }
 
 function assertUserId(userid) {
