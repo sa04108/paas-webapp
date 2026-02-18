@@ -56,6 +56,8 @@ const APP_NAME_REGEX = /^[a-z][a-z0-9-]{2,29}$/;
 const TEMPLATE_ID_REGEX = /^[a-z0-9][a-z0-9-]{1,63}$/;
 const APP_META_FILE = ".paas-meta.json";
 const APP_COMPOSE_FILE = "docker-compose.yml";
+const TEMPLATE_META_FILE = "template.json";
+const TEMPLATE_APP_SUBDIR = "app";
 
 class AppError extends Error {
   constructor(statusCode, message) {
@@ -294,8 +296,8 @@ async function readAppMeta(appDir) {
     }
     return parsed;
   } catch (error) {
-    if (error.code === "ENOENT") {
-      return null;
+    if (error.code !== "ENOENT") {
+      console.error("[portal] readAppMeta failed:", metaPath, error.message);
     }
     return null;
   }
@@ -307,7 +309,7 @@ async function readAppTemplateId(appDir, metadata = null) {
     return fromMeta;
   }
 
-  const templateMetaPath = path.join(appDir, "template.json");
+  const templateMetaPath = path.join(appDir, TEMPLATE_META_FILE);
   try {
     const raw = await fs.readFile(templateMetaPath, "utf8");
     const parsed = JSON.parse(raw);
@@ -319,7 +321,7 @@ async function readAppTemplateId(appDir, metadata = null) {
 
 async function readTemplateMeta(templateId) {
   const templateDir = getTemplateDir(templateId);
-  const templateMetaPath = path.join(templateDir, "template.json");
+  const templateMetaPath = path.join(templateDir, TEMPLATE_META_FILE);
   const fallback = {
     id: templateId,
     name: templateId,
@@ -367,8 +369,8 @@ async function listAvailableTemplates() {
 
     const templateDir = getTemplateDir(templateId);
     if (
-      !(await pathExists(path.join(templateDir, "app"))) ||
-      !(await pathExists(path.join(templateDir, "template.json")))
+      !(await pathExists(path.join(templateDir, TEMPLATE_APP_SUBDIR))) ||
+      !(await pathExists(path.join(templateDir, TEMPLATE_META_FILE)))
     ) {
       continue;
     }
@@ -448,8 +450,8 @@ async function runDockerCompose(appDir, args) {
   }
 }
 
-async function getDockerContainerStatus(appDir) {
-  const targetContainer = await readContainerName(appDir);
+async function getDockerContainerStatus(appDir, containerName = null) {
+  const targetContainer = containerName ?? await readContainerName(appDir);
   if (!targetContainer) {
     return "not-found";
   }
@@ -552,7 +554,7 @@ async function buildAppInfo(userid, appname, statusMap) {
   const rawStatus =
     appContainerName && statusMap instanceof Map && statusMap.has(appContainerName)
       ? statusMap.get(appContainerName)
-      : await getDockerContainerStatus(appDir);
+      : await getDockerContainerStatus(appDir, appContainerName);
 
   return {
     userid,
@@ -683,8 +685,8 @@ app.post("/apps", async (req, res, next) => {
     const templateDir = getTemplateDir(templateId);
     if (
       !(await pathExists(templateDir)) ||
-      !(await pathExists(path.join(templateDir, "app"))) ||
-      !(await pathExists(path.join(templateDir, "template.json")))
+      !(await pathExists(path.join(templateDir, TEMPLATE_APP_SUBDIR))) ||
+      !(await pathExists(path.join(templateDir, TEMPLATE_META_FILE)))
     ) {
       throw new AppError(400, `Template not found: ${templateId}`);
     }
@@ -843,10 +845,10 @@ app.get("/apps/:userid/:appname/logs", async (req, res, next) => {
   try {
     const { appDir } = await resolveAppRequestContext(req);
 
-    const requestedLines = Number.parseInt(String(req.query.lines || "100"), 10);
+    const requestedLines = Number.parseInt(String(req.query.lines || "120"), 10);
     const lines = Number.isFinite(requestedLines)
       ? Math.max(1, Math.min(1000, requestedLines))
-      : 100;
+      : 120;
 
     const result = await runDockerCompose(appDir, [
       "logs",
@@ -948,13 +950,9 @@ app.post(
     try {
       const { userid, appname, appDir } = await resolveAppRequestContext(req);
       const result = await runDockerCompose(appDir, ["up", "-d"]);
-      const status = await getDockerContainerStatus(appDir);
       const appInfo = await buildAppInfo(userid, appname, null);
       return sendOk(res, {
-        app: toClientAppView({
-          ...appInfo,
-          status: normalizeStatus(status)
-        }),
+        app: toClientAppView(appInfo),
         output: result.stdout || "activated"
       });
     } catch (error) {

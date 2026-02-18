@@ -237,6 +237,7 @@ function buildCompose({
   cpuLimit,
   restartPolicy
 }) {
+  const networkAlias = "paas-proxy";
   const env = buildEnvironment({ templatePayload, runtime, userid, appname, templateId });
   const renderedCommand = renderCommand(runtime.command);
   const volumes = runtime.mounts.map((mount, index) => {
@@ -278,7 +279,7 @@ function buildCompose({
   lines.push(`    mem_limit: ${JSON.stringify(memLimit)}`);
   lines.push(`    cpus: ${JSON.stringify(cpuLimit)}`);
   lines.push("    networks:");
-  lines.push("      - paas-proxy");
+  lines.push(`      - ${networkAlias}`);
   lines.push("    labels:");
   lines.push(`      - ${JSON.stringify("paas.type=user-app")}`);
   lines.push(`      - ${JSON.stringify(`paas.userid=${userid}`)}`);
@@ -291,7 +292,7 @@ function buildCompose({
   lines.push('        max-file: "3"');
   lines.push("");
   lines.push("networks:");
-  lines.push("  paas-proxy:");
+  lines.push(`  ${networkAlias}:`);
   lines.push("    external: true");
   lines.push(`    name: ${JSON.stringify(network)}`);
   lines.push("");

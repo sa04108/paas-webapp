@@ -995,7 +995,6 @@ async function performAction(target) {
 async function bootstrap() {
   const persistedUiState = readPersistedUiState();
   switchView(DEFAULT_VIEW, { persist: false });
-  switchTab(persistedUiState.tab || DEFAULT_OPS_TAB, { persist: false });
   updateAuthUi();
   setNewApiKeyValue("");
   await loadConfig();
