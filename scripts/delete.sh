@@ -42,8 +42,8 @@ validate_user_id "${USER_ID}"
 validate_app_name "${APP_NAME}"
 
 APP_DIR="$(app_dir_for "${USER_ID}" "${APP_NAME}")"
-COMPOSE_FILE="${APP_DIR}/docker-compose.yml"
-TARGET_CONTAINER="paas-app-${USER_ID}-${APP_NAME}"
+COMPOSE_FILE="$(app_compose_file_path "${APP_DIR}")"
+TARGET_CONTAINER="$(app_container_name "${USER_ID}" "${APP_NAME}")"
 
 if [[ ! -d "${APP_DIR}" ]]; then
   echo "deleted: ${USER_ID}/${APP_NAME} keepData=${KEEP_DATA} alreadyMissing=true"
@@ -53,7 +53,7 @@ fi
 TEMPLATE_ID="$(resolve_app_template_id "${APP_DIR}" 2>/dev/null || true)"
 if [[ -n "${TEMPLATE_ID}" ]]; then
   TEMPLATE_DIR="$(template_dir_for "${TEMPLATE_ID}")"
-  if [[ -f "${TEMPLATE_DIR}/template.json" ]]; then
+  if [[ -f "$(template_meta_path_for "${TEMPLATE_DIR}")" ]]; then
     if ! (run_template_hook "${TEMPLATE_ID}" "preDelete" "${USER_ID}" "${APP_NAME}" "${APP_DIR}"); then
       warn "preDelete hook failed, continue cleanup: ${TEMPLATE_ID} ${USER_ID}/${APP_NAME}"
     fi
@@ -72,15 +72,15 @@ fi
 
 if [[ "${KEEP_DATA}" == "true" ]]; then
   TEMP_DATA_DIR="${APP_DIR}.data.keep.$$"
-  if [[ -d "${APP_DIR}/data" ]]; then
-    mv "${APP_DIR}/data" "${TEMP_DATA_DIR}"
+  if [[ -d "${APP_DIR}/${APP_DATA_SUBDIR}" ]]; then
+    mv "${APP_DIR}/${APP_DATA_SUBDIR}" "${TEMP_DATA_DIR}"
   fi
   rm -rf "${APP_DIR}"
   mkdir -p "${APP_DIR}"
   if [[ -d "${TEMP_DATA_DIR}" ]]; then
-    mv "${TEMP_DATA_DIR}" "${APP_DIR}/data"
+    mv "${TEMP_DATA_DIR}" "${APP_DIR}/${APP_DATA_SUBDIR}"
   else
-    mkdir -p "${APP_DIR}/data"
+    mkdir -p "${APP_DIR}/${APP_DATA_SUBDIR}"
   fi
 else
   rm -rf "${APP_DIR}"

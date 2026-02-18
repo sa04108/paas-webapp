@@ -35,8 +35,8 @@ validate_user_id "${USER_ID}"
 validate_app_name "${APP_NAME}"
 
 APP_DIR="$(app_dir_for "${USER_ID}" "${APP_NAME}")"
-COMPOSE_FILE="${APP_DIR}/docker-compose.yml"
-LOG_DIR="${APP_DIR}/logs"
+COMPOSE_FILE="$(app_compose_file_path "${APP_DIR}")"
+LOG_DIR="$(app_log_dir_for "${APP_DIR}")"
 LOG_FILE="${LOG_DIR}/deploy.log"
 
 if [[ ! -d "${APP_DIR}" ]]; then
@@ -44,7 +44,7 @@ if [[ ! -d "${APP_DIR}" ]]; then
   exit 1
 fi
 if [[ ! -f "${COMPOSE_FILE}" ]]; then
-  echo "docker-compose.yml not found: ${COMPOSE_FILE}" >&2
+  echo "${APP_COMPOSE_FILE} not found: ${COMPOSE_FILE}" >&2
   exit 1
 fi
 
@@ -56,7 +56,7 @@ fi
 
 validate_template_id "${TEMPLATE_ID}"
 TEMPLATE_DIR="$(template_dir_for "${TEMPLATE_ID}")"
-if [[ ! -f "${TEMPLATE_DIR}/template.json" ]]; then
+if [[ ! -f "$(template_meta_path_for "${TEMPLATE_DIR}")" ]]; then
   echo "Template not found: ${TEMPLATE_ID}" >&2
   exit 1
 fi
@@ -70,8 +70,8 @@ echo "[deploy] app=${USER_ID}/${APP_NAME} template=${TEMPLATE_ID} started_at=$(d
 docker compose -f "${COMPOSE_FILE}" down
 docker compose -f "${COMPOSE_FILE}" up -d
 
-TARGET_CONTAINER="paas-app-${USER_ID}-${APP_NAME}"
-DEADLINE=$((SECONDS + 30))
+TARGET_CONTAINER="$(app_container_name "${USER_ID}" "${APP_NAME}")"
+DEADLINE=$((SECONDS + DEPLOY_TIMEOUT_SECS))
 
 while (( SECONDS < DEADLINE )); do
   STATUS="$(docker inspect -f '{{.State.Status}}' "${TARGET_CONTAINER}" 2>/dev/null || true)"
@@ -82,6 +82,6 @@ while (( SECONDS < DEADLINE )); do
   sleep 1
 done
 
-echo "[deploy] failed to reach running state within 30s"
-docker compose -f "${COMPOSE_FILE}" logs --no-color --tail 120 app || true
+echo "[deploy] failed to reach running state within ${DEPLOY_TIMEOUT_SECS}s"
+docker compose -f "${COMPOSE_FILE}" logs --no-color --tail "${DEPLOY_LOG_TAIL_LINES}" app || true
 exit 1

@@ -22,10 +22,18 @@ PAAS_APPS_DIR="${PAAS_APPS_DIR:-${PAAS_ROOT}/apps}"
 PAAS_TEMPLATES_DIR="${PAAS_TEMPLATES_DIR:-${PAAS_ROOT}/templates}"
 PAAS_SHARED_DIR="${PAAS_SHARED_DIR:-${PAAS_ROOT}/shared}"
 APP_NETWORK="${APP_NETWORK:-paas-proxy}"
+APP_CONTAINER_PREFIX="${APP_CONTAINER_PREFIX:-paas-app}"
+APP_COMPOSE_FILE="${APP_COMPOSE_FILE:-docker-compose.yml}"
+TEMPLATE_META_FILE="${TEMPLATE_META_FILE:-template.json}"
+APP_SOURCE_SUBDIR="${APP_SOURCE_SUBDIR:-app}"
+APP_DATA_SUBDIR="${APP_DATA_SUBDIR:-data}"
+APP_LOGS_SUBDIR="${APP_LOGS_SUBDIR:-logs}"
 PAAS_DOMAIN="${PAAS_DOMAIN:-my.domain.com}"
 DEFAULT_MEM_LIMIT="${DEFAULT_MEM_LIMIT:-256m}"
 DEFAULT_CPU_LIMIT="${DEFAULT_CPU_LIMIT:-0.5}"
 DEFAULT_RESTART_POLICY="${DEFAULT_RESTART_POLICY:-unless-stopped}"
+DEPLOY_TIMEOUT_SECS="${DEPLOY_TIMEOUT_SECS:-30}"
+DEPLOY_LOG_TAIL_LINES="${DEPLOY_LOG_TAIL_LINES:-120}"
 TEMPLATE_RUNTIME_TOOL="${PAAS_ROOT}/scripts/template-runtime.js"
 
 if [[ ! -f "${TEMPLATE_RUNTIME_TOOL}" ]]; then
@@ -92,6 +100,27 @@ app_dir_for() {
   local user_id="$1"
   local app_name="$2"
   echo "${PAAS_APPS_DIR}/${user_id}/${app_name}"
+}
+
+app_compose_file_path() {
+  local app_dir="$1"
+  echo "${app_dir}/${APP_COMPOSE_FILE}"
+}
+
+app_log_dir_for() {
+  local app_dir="$1"
+  echo "${app_dir}/${APP_LOGS_SUBDIR}"
+}
+
+template_meta_path_for() {
+  local template_dir="$1"
+  echo "${template_dir}/${TEMPLATE_META_FILE}"
+}
+
+app_container_name() {
+  local user_id="$1"
+  local app_name="$2"
+  echo "${APP_CONTAINER_PREFIX}-${user_id}-${app_name}"
 }
 
 resolve_template_hook() {

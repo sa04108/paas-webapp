@@ -229,6 +229,7 @@ function buildCompose({
   appDir,
   userid,
   appname,
+  containerName,
   domain,
   network,
   sharedDir,
@@ -255,7 +256,7 @@ function buildCompose({
     "services:",
     "  app:",
     `    image: ${JSON.stringify(runtime.image)}`,
-    `    container_name: ${JSON.stringify(`paas-app-${userid}-${appname}`)}`,
+    `    container_name: ${JSON.stringify(containerName)}`,
     `    restart: ${JSON.stringify(restartPolicy)}`,
     `    working_dir: ${JSON.stringify(runtime.workdir)}`
   ];
@@ -342,6 +343,7 @@ function commandCompose(options) {
   const appDir = requireOption(options, "app-dir");
   const userid = requireOption(options, "userid");
   const appname = requireOption(options, "appname");
+  const containerName = requireOption(options, "container-name");
   const domain = requireOption(options, "domain");
   const network = requireOption(options, "network");
   const sharedDir = requireOption(options, "shared-dir");
@@ -361,6 +363,7 @@ function commandCompose(options) {
     appDir,
     userid,
     appname,
+    containerName,
     domain,
     network,
     sharedDir,

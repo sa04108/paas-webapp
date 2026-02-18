@@ -78,7 +78,7 @@
 - `scripts/template-runtime.js`: 템플릿 메타(`template.json`) 파싱, hook 조회, compose 렌더링
 
 ## 8. 컨테이너 네이밍
-- 앱 컨테이너: `paas-app-{userid}-{appname}` (suffix로 서버의 다른 컨테이너와 구분)
+- 앱 컨테이너: `{prefix}-{userid}-{appname}` (prefix로 서버의 다른 컨테이너와 구분)
 - Docker labels: `paas.type=user-app`, `paas.userid`, `paas.appname`, `paas.domain`
 
 ## 9. 저사양 서버 최적화 (Intel Celeron N3150 / DDR3 8GB / SSD 256GB)

@@ -55,6 +55,7 @@ const USER_ID_REGEX = /^[a-z][a-z0-9]{2,19}$/;
 const APP_NAME_REGEX = /^[a-z][a-z0-9-]{2,29}$/;
 const TEMPLATE_ID_REGEX = /^[a-z0-9][a-z0-9-]{1,63}$/;
 const APP_META_FILE = ".paas-meta.json";
+const APP_COMPOSE_FILE = "docker-compose.yml";
 
 class AppError extends Error {
   constructor(statusCode, message) {
@@ -127,8 +128,15 @@ const appAccessService = createAppAccessService({
   appNameRegex: APP_NAME_REGEX
 });
 
-function containerName(userid, appname) {
-  return `paas-app-${userid}-${appname}`;
+async function readContainerName(appDir) {
+  const composePath = path.join(appDir, APP_COMPOSE_FILE);
+  try {
+    const content = await fs.readFile(composePath, "utf8");
+    const match = content.match(/^\s+container_name:\s+"(.+)"\s*$/m);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function domainName(userid, appname) {
@@ -420,13 +428,13 @@ async function runRunnerScript(scriptName, args) {
 }
 
 async function runDockerCompose(appDir, args) {
-  const composePath = path.join(appDir, "docker-compose.yml");
+  const composePath = path.join(appDir, APP_COMPOSE_FILE);
   if (!(await pathExists(composePath))) {
-    throw new AppError(404, "docker-compose.yml not found for this app");
+    throw new AppError(404, `${APP_COMPOSE_FILE} not found for this app`);
   }
 
   try {
-    const result = await runCommand("docker", ["compose", "-f", "docker-compose.yml", ...args], {
+    const result = await runCommand("docker", ["compose", "-f", APP_COMPOSE_FILE, ...args], {
       cwd: appDir
     });
     dockerStatusCache.ts = 0;
@@ -440,8 +448,11 @@ async function runDockerCompose(appDir, args) {
   }
 }
 
-async function getDockerContainerStatus(userid, appname) {
-  const targetContainer = containerName(userid, appname);
+async function getDockerContainerStatus(appDir) {
+  const targetContainer = await readContainerName(appDir);
+  if (!targetContainer) {
+    return "not-found";
+  }
   try {
     const { stdout } = await runCommand("docker", [
       "ps",
@@ -537,11 +548,11 @@ async function buildAppInfo(userid, appname, statusMap) {
 
   const metadata = await readAppMeta(appDir);
   const templateId = await readAppTemplateId(appDir, metadata);
-  const appContainerName = containerName(userid, appname);
+  const appContainerName = await readContainerName(appDir);
   const rawStatus =
-    statusMap instanceof Map && statusMap.has(appContainerName)
+    appContainerName && statusMap instanceof Map && statusMap.has(appContainerName)
       ? statusMap.get(appContainerName)
-      : await getDockerContainerStatus(userid, appname);
+      : await getDockerContainerStatus(appDir);
 
   return {
     userid,
@@ -767,10 +778,10 @@ app.get("/apps/:userid/:appname", async (req, res, next) => {
 
 app.post("/apps/:userid/:appname/start", async (req, res, next) => {
   try {
-    const { userid, appname, appDir } = await resolveAppRequestContext(req);
+    const { appDir } = await resolveAppRequestContext(req);
 
     const result = await runDockerCompose(appDir, ["up", "-d"]);
-    const status = await getDockerContainerStatus(userid, appname);
+    const status = await getDockerContainerStatus(appDir);
     return sendOk(res, {
       status: normalizeStatus(status),
       output: result.stdout || "started"
@@ -937,7 +948,7 @@ app.post(
     try {
       const { userid, appname, appDir } = await resolveAppRequestContext(req);
       const result = await runDockerCompose(appDir, ["up", "-d"]);
-      const status = await getDockerContainerStatus(userid, appname);
+      const status = await getDockerContainerStatus(appDir);
       const appInfo = await buildAppInfo(userid, appname, null);
       return sendOk(res, {
         app: toClientAppView({
