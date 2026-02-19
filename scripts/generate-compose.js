@@ -67,7 +67,9 @@ function buildCompose({ userid, appname, runtime, appDir }) {
   const containerName = `${APP_CONTAINER_PREFIX}-${userid}-${appname}`;
   const domain = `${userid}-${appname}.${PAAS_DOMAIN}`;
 
-  const hostAppDir = normalizeSlash(toHostPath(path.join(appDir, APP_SOURCE_SUBDIR)));
+  // build context: Docker 클라이언트(포털 컨테이너)가 직접 읽어 tar로 전송 → 컨테이너 내부 경로 사용
+  const buildContextDir = normalizeSlash(path.join(appDir, APP_SOURCE_SUBDIR));
+  // data volume: Docker 데몬(호스트)이 마운트 → 호스트 경로 필요
   const hostDataDir = normalizeSlash(toHostPath(path.join(appDir, APP_DATA_SUBDIR)));
 
   const hasUserDockerfile = fs.existsSync(path.join(appDir, APP_SOURCE_SUBDIR, 'Dockerfile'));
@@ -81,7 +83,7 @@ function buildCompose({ userid, appname, runtime, appDir }) {
     'services:',
     '  app:',
     '    build:',
-    `      context: ${JSON.stringify(hostAppDir)}`,
+    `      context: ${JSON.stringify(buildContextDir)}`,
     `      dockerfile: ${JSON.stringify(dockerfileRef)}`,
     `    container_name: ${JSON.stringify(containerName)}`,
     `    restart: ${JSON.stringify(DEFAULT_RESTART_POLICY)}`,
