@@ -9,7 +9,9 @@ services:
     image: paas-portal:local
     container_name: paas-portal
     working_dir: /paas/portal
-    command: sh -c "npm ci && npm start"
+    # If .env is missing, copy .env.example to bootstrap local runtime config.
+    # start/dev is selected by RUN_MODE (development -> dev, otherwise start).
+    command: sh -c "if [ ! -f /paas/.env ] && [ -f /paas/.env.example ]; then cp /paas/.env.example /paas/.env; fi; npm ci && if [ \"$$RUN_MODE\" = \"development\" ]; then npm run dev; else npm run start; fi"
     restart: unless-stopped
     init: true
     ports:

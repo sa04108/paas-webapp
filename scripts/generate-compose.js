@@ -5,40 +5,57 @@
  * generate-compose.js <userid> <appname> <runtimeJson>
  *
  * detect-runtime.js의 출력(JSON)을 받아 {APP_DIR}/docker-compose.yml을 생성한다.
- * - 앱 코드는 이미지에 번들됨 (volumes에 app 디렉토리 미포함)
- * - data 디렉토리만 볼륨으로 마운트
- * - 사용자 repo에 Dockerfile이 있으면 그것을 사용, 없으면 .paas.Dockerfile 사용
+ *
+ * 환경 분기:
+ *   RUN_MODE=development  → 호스트 포트 직접 노출 (20000-29999, djb2 해시 결정)
+ *                               네트워크는 Compose가 자동 생성하는 로컬 브릿지
+ *   RUN_MODE=production   → 포트 노출 없음, external 네트워크 사용 (리버스 프록시 라우팅)
  */
 
 const fs = require('node:fs');
 const path = require('node:path');
 
-// 환경변수 로드 (common.sh와 동일한 기본값)
+// --- 환경변수 ---
 const PAAS_ROOT = process.env.PAAS_ROOT || '/paas';
 const PAAS_HOST_ROOT = process.env.PAAS_HOST_ROOT || PAAS_ROOT;
 const PAAS_APPS_DIR = process.env.PAAS_APPS_DIR || `${PAAS_ROOT}/apps`;
 const PAAS_DOMAIN = process.env.PAAS_DOMAIN || 'my.domain.com';
-const APP_NETWORK = process.env.APP_NETWORK || 'paas-proxy';
+const APP_NETWORK = process.env.APP_NETWORK || 'paas-app';
 const APP_CONTAINER_PREFIX = process.env.APP_CONTAINER_PREFIX || 'paas-app';
 const DEFAULT_MEM_LIMIT = process.env.DEFAULT_MEM_LIMIT || '256m';
 const DEFAULT_CPU_LIMIT = process.env.DEFAULT_CPU_LIMIT || '0.5';
 const DEFAULT_RESTART_POLICY = process.env.DEFAULT_RESTART_POLICY || 'unless-stopped';
 
+const IS_DEV = process.env.RUN_MODE === 'development';
+
+// --- 유틸 ---
+
 /**
  * common.sh의 to_host_path()와 동일한 역할.
  * 포털 컨테이너 내부 경로 → 호스트 경로로 변환한다.
- * Docker-out-of-Docker 환경에서 볼륨/빌드 컨텍스트 경로는 호스트 관점이어야 한다.
  */
 function toHostPath(containerPath) {
-  if (!PAAS_HOST_ROOT || PAAS_HOST_ROOT === PAAS_ROOT) {
-    return containerPath;
-  }
+  if (!PAAS_HOST_ROOT || PAAS_HOST_ROOT === PAAS_ROOT) return containerPath;
   return containerPath.replace(PAAS_ROOT, PAAS_HOST_ROOT);
 }
 
 function normalizeSlash(p) {
   return p.replaceAll('\\', '/');
 }
+
+/**
+ * 앱별 결정적 호스트 포트 산출 (djb2 변형, 20000-29999 범위).
+ * dev 환경에서만 사용.
+ */
+function resolveHostPort(userid, appname) {
+  let hash = 5381;
+  for (const ch of `${userid}/${appname}`) {
+    hash = (((hash << 5) + hash) ^ ch.charCodeAt(0)) >>> 0;
+  }
+  return 20000 + (hash % 10000);
+}
+
+// --- compose 생성 ---
 
 function buildCompose({ userid, appname, runtime, appDir }) {
   const containerName = `${APP_CONTAINER_PREFIX}-${userid}-${appname}`;
@@ -47,9 +64,12 @@ function buildCompose({ userid, appname, runtime, appDir }) {
   const hostAppDir = normalizeSlash(toHostPath(path.join(appDir, 'app')));
   const hostDataDir = normalizeSlash(toHostPath(path.join(appDir, 'data')));
 
-  // 사용자 자체 Dockerfile 여부에 따라 참조할 파일명 결정
   const hasUserDockerfile = fs.existsSync(path.join(appDir, 'app', 'Dockerfile'));
   const dockerfileRef = hasUserDockerfile ? 'Dockerfile' : '.paas.Dockerfile';
+
+  const portsLines = IS_DEV
+    ? ['    ports:', `      - "0.0.0.0:${resolveHostPort(userid, appname)}:${runtime.port}"`]
+    : [];
 
   const lines = [
     'services:',
@@ -59,6 +79,7 @@ function buildCompose({ userid, appname, runtime, appDir }) {
     `      dockerfile: ${JSON.stringify(dockerfileRef)}`,
     `    container_name: ${JSON.stringify(containerName)}`,
     `    restart: ${JSON.stringify(DEFAULT_RESTART_POLICY)}`,
+    ...portsLines,
     '    volumes:',
     `      - ${JSON.stringify(`${hostDataDir}:/data`)}`,
     '    environment:',
@@ -68,7 +89,7 @@ function buildCompose({ userid, appname, runtime, appDir }) {
     `    mem_limit: ${JSON.stringify(DEFAULT_MEM_LIMIT)}`,
     `    cpus: ${DEFAULT_CPU_LIMIT}`,
     '    networks:',
-    '      - paas-proxy',
+    '      - paas-app',
     '    labels:',
     `      - ${JSON.stringify('paas.type=user-app')}`,
     `      - ${JSON.stringify(`paas.userid=${userid}`)}`,
@@ -81,7 +102,7 @@ function buildCompose({ userid, appname, runtime, appDir }) {
     '        max-file: "3"',
     '',
     'networks:',
-    '  paas-proxy:',
+    '  paas-app:',
     '    external: true',
     `    name: ${JSON.stringify(APP_NETWORK)}`,
     '',
@@ -116,6 +137,10 @@ try {
   const content = buildCompose({ userid, appname, runtime, appDir });
   fs.writeFileSync(composePath, content);
   process.stdout.write(`[generate-compose] 생성 완료: ${composePath}\n`);
+  if (IS_DEV) {
+    const hostPort = resolveHostPort(userid, appname);
+    process.stdout.write(`[generate-compose] 호스트 포트: ${hostPort} → 컨테이너 포트: ${runtime.port}\n`);
+  }
 } catch (e) {
   process.stderr.write(`docker-compose.yml 생성 실패: ${e.message}\n`);
   process.exit(1);

@@ -30,10 +30,21 @@ const envFilePath = process.env.PAAS_ENV_FILE || path.join(repoRoot, ".env");
 dotenv.config({ path: envFilePath });
 
 const paasRoot = process.env.PAAS_ROOT || repoRoot;
+
+// =============================================================================
+// 실행 환경 판별 — RUN_MODE 환경변수를 통해 dev/prod를 구분한다.
+// =============================================================================
+// RUN_MODE=development (docker-compose.dev.yml이 주입):
+//   scripts/generate-compose.js → 호스트 포트 직접 노출 (20000-29999 범위)
+//                                  로컬 브릿지 네트워크 (external 없음)
+// RUN_MODE=production (기본값):
+//   scripts/generate-compose.js → 포트 노출 없음, external 네트워크 사용
+// .sh 스크립트(create, deploy, delete)는 dev/prod 공통이다.
 const config = {
   PAAS_DOMAIN: process.env.PAAS_DOMAIN || "my.domain.com",
   PAAS_APPS_DIR: process.env.PAAS_APPS_DIR || path.join(paasRoot, "apps"),
-  PAAS_SCRIPTS_DIR: process.env.PAAS_SCRIPTS_DIR || path.join(paasRoot, "scripts"),
+  PAAS_SCRIPTS_DIR: process.env.PAAS_SCRIPTS_DIR ||
+    path.join(paasRoot, "scripts"),
   PORTAL_PORT: toPositiveInt(process.env.PORTAL_PORT, 3000),
   PORTAL_DB_PATH: process.env.PORTAL_DB_PATH || path.join(paasRoot, "portal-data", "portal.sqlite3"),
   SESSION_COOKIE_NAME: process.env.SESSION_COOKIE_NAME || "portal_session",
@@ -49,6 +60,14 @@ const USER_ID_REGEX = /^[a-z][a-z0-9]{2,19}$/;
 const APP_NAME_REGEX = /^[a-z][a-z0-9-]{2,29}$/;
 const APP_META_FILE = ".paas-meta.json";
 const APP_COMPOSE_FILE = "docker-compose.yml";
+
+// dev/prod 환경 분기는 scripts/generate-compose.js가 RUN_MODE 환경변수로 처리한다.
+// .sh 스크립트는 환경에 무관하게 동일한 scripts/ 루트에 위치한다.
+const RUNNER_SCRIPTS = {
+  create: 'create.sh',
+  deploy: 'deploy.sh',
+  delete: 'delete.sh',
+};
 
 class AppError extends Error {
   constructor(statusCode, message) {
@@ -555,7 +574,7 @@ app.post("/apps", async (req, res, next) => {
     }
 
     // create.sh이 내부에서 .paas-meta.json을 작성하므로 별도 writeAppMeta 불필요
-    const scriptResult = await runRunnerScript("create.sh", [
+    const scriptResult = await runRunnerScript(RUNNER_SCRIPTS.create, [
       userid,
       appname,
       repoUrl,
@@ -648,7 +667,7 @@ app.post("/apps/:userid/:appname/deploy", async (req, res, next) => {
   try {
     const { userid, appname } = await resolveAppRequestContext(req);
 
-    const result = await runRunnerScript("deploy.sh", [userid, appname]);
+    const result = await runRunnerScript(RUNNER_SCRIPTS.deploy, [userid, appname]);
     return sendOk(res, {
       output: result.stdout || "deployed"
     });
@@ -667,7 +686,7 @@ app.delete("/apps/:userid/:appname", async (req, res, next) => {
       args.push("--keep-data");
     }
 
-    const result = await runRunnerScript("delete.sh", args);
+    const result = await runRunnerScript(RUNNER_SCRIPTS.delete, args);
     return sendOk(res, {
       deleted: true,
       keepData,

@@ -132,7 +132,7 @@
 - 로그 로테이션:
   - `max-size=10m`
   - `max-file=3`
-- 네트워크: external network `APP_NETWORK`(기본 `paas-proxy`)
+- 네트워크: external network `APP_NETWORK`(기본 `paas-app`)
 
 ## 10. 운영 제한과 최적화
 - 앱 개수 제한:
