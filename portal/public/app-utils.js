@@ -6,6 +6,18 @@
 //   app-state.js 이후 로드되어 el, state, createValidationTimers에 접근한다.
 // =============================================================================
 
+import {
+  AVAILABLE_VIEWS,
+  CREATE_FIELD_INVALID_CLASS,
+  CREATE_FIELD_SEQUENCE_GAP_MS,
+  CREATE_FIELD_SHAKE_CLASS,
+  CREATE_FIELD_SHAKE_DURATION_MS,
+  UI_STATE_STORAGE_KEY,
+  createValidationTimers,
+  el,
+  state,
+} from "./app-state.js";
+
 // ── 배너 · 인라인 에러 ───────────────────────────────────────────────────────
 
 function setBanner(message, type = "info") {
@@ -211,3 +223,30 @@ function applyAccessState() {
   if (el.detailExecRunBtn)   el.detailExecRunBtn.disabled   = !enabled;
   if (el.detailExecInput)    el.detailExecInput.disabled    = !enabled;
 }
+
+export {
+  applyAccessState,
+  canManageApps,
+  canManageUsers,
+  clearCreateFieldFeedback,
+  escapeHtml,
+  formatDate,
+  isAdminUser,
+  isLoggedIn,
+  isPasswordLocked,
+  normalizeErrorMessage,
+  parsePositiveInt,
+  persistUiState,
+  readPersistedUiState,
+  redirectToAuth,
+  runtimeBadgeHtml,
+  setBanner,
+  setCreateUserError,
+  setDeleteUserError,
+  setEnvError,
+  setPromoteAdminError,
+  setSettingsError,
+  statusClass,
+  syncDomainPreview,
+  validateCreateForm,
+};

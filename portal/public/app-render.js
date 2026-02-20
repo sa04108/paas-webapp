@@ -6,6 +6,18 @@
 //   app-utils.js(escapeHtml, statusClass 등)에 의존한다.
 // =============================================================================
 
+import { el, state } from "./app-state.js";
+import {
+  canManageApps,
+  canManageUsers,
+  escapeHtml,
+  formatDate,
+  isLoggedIn,
+  isPasswordLocked,
+  runtimeBadgeHtml,
+  statusClass,
+} from "./app-utils.js";
+
 // ── 앱 카드 목록 렌더링 ───────────────────────────────────────────────────────
 
 function renderApps(apps) {
@@ -138,3 +150,8 @@ function renderUsers(users) {
     `;
   }).join("");
 }
+
+export {
+  renderApps,
+  renderUsers,
+};

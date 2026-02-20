@@ -3,14 +3,27 @@
 // =============================================================================
 // 역할:
 //   서버 API 호출과 데이터 로딩/자동갱신, 앱 액션(start/stop/deploy/delete)을 담당한다.
-//   renderApps, renderUsers, updateAuthUi는 app-render.js / app-ui.js에 정의되어 있으며,
-//   이 파일은 그들보다 나중에 로드되므로 직접 참조가 가능하다.
-//   navigateToApp(app-ui.js)은 이 파일보다 먼저 로드되므로 역시 직접 참조 가능하다.
+//   모듈 import를 통해 render/ui/utils/state에 명시적으로 의존한다.
 // =============================================================================
 
 // ── 기본 API 통신 ─────────────────────────────────────────────────────────────
 
 // 모든 API 호출의 기반 함수. 응답이 ok: false이거나 HTTP 오류면 예외를 던진다.
+import { AUTO_REFRESH_MS, el, state } from "./app-state.js";
+import { renderApps, renderUsers } from "./app-render.js";
+import { navigateToApp, switchView, updateAuthUi } from "./app-ui.js";
+import {
+  canManageApps,
+  canManageUsers,
+  normalizeErrorMessage,
+  redirectToAuth,
+  setBanner,
+  setEnvError,
+  setSettingsError,
+  syncDomainPreview,
+  validateCreateForm,
+} from "./app-utils.js";
+
 async function apiFetch(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   if (options.body && !headers["Content-Type"]) {
@@ -285,3 +298,22 @@ async function handleCreate(event) {
   syncDomainPreview();
   await loadApps();
 }
+
+export {
+  apiFetch,
+  getActionTarget,
+  handleCreate,
+  handleRequestError,
+  handleSettingsModalError,
+  loadApps,
+  loadConfig,
+  loadDetailEnv,
+  loadDetailLogs,
+  loadSession,
+  loadUsers,
+  performAction,
+  refreshDashboardData,
+  saveDetailEnv,
+  startAutoRefresh,
+  stopAutoRefresh,
+};

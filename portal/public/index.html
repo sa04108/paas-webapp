@@ -419,13 +419,7 @@
             </section>
         </div>
 
-        <!-- 로드 순서 중요: 각 파일은 앞에 로드된 파일의 전역 변수에 의존한다 -->
-        <script src="./app-state.js?v=20260220-02"></script>
-        <script src="./app-utils.js?v=20260220-02"></script>
-        <script src="./app-render.js?v=20260220-02"></script>
-        <script src="./app-ui.js?v=20260220-02"></script>
-        <script src="./app-exec.js?v=20260220-02"></script>
-        <script src="./app-api.js?v=20260220-02"></script>
-        <script src="./app.js?v=20260220-02"></script>
+        <!-- ES modules: app.js is the single entrypoint -->
+        <script type="module" src="./app.js?v=20260220-03"></script>
     </body>
 </html>

@@ -5,13 +5,43 @@
 //   뷰 전환(switchView), 서브탭 전환(switchDetailTab), 모달 열기/닫기,
 //   인증 상태 반영(updateAuthUi), 앱 관리 화면 진입(navigateToApp)을 담당한다.
 //   app-render.js와 app-utils.js에 의존한다.
-//   navigateToApp은 app-exec.js(execCwd, updateExecPrompt, initExecCwd)와
-//   app-api.js(loadDetailLogs, loadDetailEnv)를 런타임에 참조하므로
-//   이 파일보다 뒤에 로드되는 스크립트의 함수를 호출할 수 있다.
-//   (모든 스크립트 로드가 완료된 후에만 실제로 호출되기 때문이다.)
+//   app-api/app-exec 연동은 configureUiHandlers(...)로 주입받아 순환 의존을 끊는다.
 // =============================================================================
 
 // ── 뷰 전환 ──────────────────────────────────────────────────────────────────
+
+import {
+  AVAILABLE_DETAIL_TABS,
+  AVAILABLE_VIEWS,
+  DEFAULT_DETAIL_TAB,
+  DEFAULT_VIEW,
+  el,
+  modalBackdropState,
+  state,
+} from "./app-state.js";
+import {
+  applyAccessState,
+  canManageUsers,
+  isLoggedIn,
+  isPasswordLocked,
+  persistUiState,
+  setCreateUserError,
+  setDeleteUserError,
+  setPromoteAdminError,
+  setSettingsError,
+} from "./app-utils.js";
+import { renderUsers } from "./app-render.js";
+
+const uiHandlers = {
+  loadDetailEnv: async () => {},
+  loadDetailLogs: async () => {},
+  handleRequestError: async () => {},
+  resetExecForApp: () => {},
+};
+
+function configureUiHandlers(handlers = {}) {
+  Object.assign(uiHandlers, handlers);
+}
 
 function switchView(viewName, { persist = true } = {}) {
   const nextView = AVAILABLE_VIEWS.includes(viewName) ? viewName : DEFAULT_VIEW;
@@ -65,17 +95,16 @@ function switchDetailTab(tabName) {
 //  이 함수는 항상 이벤트 핸들러에서만 호출되므로 실행 시점엔 이미 정의가 완료된다.)
 async function navigateToApp(userid, appname) {
   state.selectedApp = { userid, appname };
-  execCwd = "";
-  updateExecPrompt();
+  uiHandlers.resetExecForApp();
   el.appDetailAppname.textContent = `${userid} / ${appname}`;
   switchDetailTab(DEFAULT_DETAIL_TAB);
   switchView("app-detail");
   try {
-    await loadDetailLogs();
+    await uiHandlers.loadDetailLogs();
   } catch (error) {
-    await handleRequestError(error);
+    await uiHandlers.handleRequestError(error);
   }
-  loadDetailEnv().catch(() => {});
+  uiHandlers.loadDetailEnv().catch(() => {});
 }
 
 // ── 모달 유틸 ─────────────────────────────────────────────────────────────────
@@ -233,3 +262,22 @@ function updateAuthUi() {
   }
   applyAccessState();
 }
+
+export {
+  bindBackdropClose,
+  closeCreateUserModal,
+  closeDeleteUserModal,
+  closeMobileMenu,
+  closePromoteAdminModal,
+  closeSettingsModal,
+  configureUiHandlers,
+  navigateToApp,
+  openCreateUserModal,
+  openDeleteUserModal,
+  openPromoteAdminModal,
+  openSettingsModal,
+  switchDetailTab,
+  switchView,
+  toggleMobileMenu,
+  updateAuthUi,
+};

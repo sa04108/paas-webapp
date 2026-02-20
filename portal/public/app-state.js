@@ -2,41 +2,29 @@
 // app-state.js - 전역 상수 · 상태 · DOM 참조
 // =============================================================================
 // 역할:
-//   app.js 전체에서 공유되는 상수, 상태 객체, DOM 요소 참조를 선언한다.
-//   다른 모든 스크립트보다 먼저 로드되어야 한다.
-//
-// ── 스크립트 로드 순서 (index.html 기준) ─────────────────────────────────────
-//  1. app-state.js   ← 이 파일. 전역 상수·상태·el. 다른 모든 스크립트의 기반.
-//  2. app-utils.js   ← 순수 헬퍼. app-state의 상수·state·el에 의존.
-//  3. app-render.js  ← DOM 생성. app-utils(escapeHtml, statusClass 등)에 의존.
-//  4. app-ui.js      ← 뷰/모달. app-render, app-utils에 의존.
-//                       navigateToApp은 app-exec(execCwd 등)·app-api를 런타임 참조.
-//  5. app-exec.js    ← Exec 터미널. app-api(apiFetch)를 런타임 참조.
-//  6. app-api.js     ← API 통신. app-render·app-ui·app-exec를 런타임 참조.
-//  7. app.js         ← 이벤트 바인딩 + 부트스트랩. 모든 스크립트가 로드된 뒤 실행.
-//
-// "런타임 참조"란 함수 본문 안에서만 호출되므로 선언 시점엔 미정의여도 무방함을 의미한다.
-// 파싱 시점에 즉시 실행되는 최상위 구문(예: IIFE 내부 직접 호출)은 이 규칙의 예외다.
+//   app.js와 다른 모듈 전체에서 공유되는 상수, 상태 객체, DOM 요소 참조를 제공한다.
+//   ES Modules 전환 후 index.html은 app.js(type="module")만 로드한다.
+//   이 파일은 import 없이 shared primitive만 export한다.
 // =============================================================================
 
 // ── 자동 갱신 주기 · 뷰 상수 ────────────────────────────────────────────────
 
-const AUTO_REFRESH_MS = 30000;
-const UI_STATE_STORAGE_KEY = "portal.uiState";
-const AVAILABLE_VIEWS        = ["dashboard", "create", "app-detail", "users"];
-const AVAILABLE_DETAIL_TABS  = ["logs", "exec", "settings"];
-const DEFAULT_VIEW       = "dashboard";
-const DEFAULT_DETAIL_TAB = "logs";
+export const AUTO_REFRESH_MS = 30000;
+export const UI_STATE_STORAGE_KEY = "portal.uiState";
+export const AVAILABLE_VIEWS = ["dashboard", "create", "app-detail", "users"];
+export const AVAILABLE_DETAIL_TABS = ["logs", "exec", "settings"];
+export const DEFAULT_VIEW = "dashboard";
+export const DEFAULT_DETAIL_TAB = "logs";
 
 // 앱 생성 폼 필드 오류 표시용 CSS 클래스
-const CREATE_FIELD_INVALID_CLASS     = "field-invalid";
-const CREATE_FIELD_SHAKE_CLASS       = "field-shake";
-const CREATE_FIELD_SEQUENCE_GAP_MS   = 120;  // 필드 간 shake 시작 딜레이 (ms)
-const CREATE_FIELD_SHAKE_DURATION_MS = 320;  // shake 애니메이션 지속 시간 (ms)
+export const CREATE_FIELD_INVALID_CLASS = "field-invalid";
+export const CREATE_FIELD_SHAKE_CLASS = "field-shake";
+export const CREATE_FIELD_SEQUENCE_GAP_MS = 120; // 필드 간 shake 시작 딜레이 (ms)
+export const CREATE_FIELD_SHAKE_DURATION_MS = 320; // shake 애니메이션 지속 시간 (ms)
 
 // ── 앱 런타임 상태 ────────────────────────────────────────────────────────────
 
-const state = {
+export const state = {
   domain:  "my.domain.com",
   devMode: false,
   apps:    [],
@@ -53,7 +41,7 @@ const state = {
 // ── DOM 요소 참조 캐시 ────────────────────────────────────────────────────────
 // DOMContentLoaded 이후 스크립트가 실행되므로 여기서 바로 참조해도 안전하다.
 
-const el = {
+export const el = {
   // GNB
   devModeBadge:  document.getElementById("dev-mode-badge"),
   gnbBrand:      document.querySelector(".gnb-brand"),
@@ -162,7 +150,7 @@ const el = {
 // 각 모달의 백드롭 클릭 시작 여부를 추적한다.
 // mousedown 이벤트에서 기록하고 click 이벤트에서 확인하여,
 // 모달 내부에서 드래그 후 백드롭에서 버튼을 놓는 오동작을 방지한다.
-const modalBackdropState = {
+export const modalBackdropState = {
   settings:    false,
   createUser:  false,
   deleteUser:  false,
@@ -170,4 +158,4 @@ const modalBackdropState = {
 };
 
 // 앱 생성 폼의 shake 애니메이션 타이머 ID 목록 (clearCreateValidationTimers로 일괄 취소)
-const createValidationTimers = [];
+export const createValidationTimers = [];

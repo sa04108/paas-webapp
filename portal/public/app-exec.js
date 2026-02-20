@@ -7,14 +7,31 @@
 //   - 탭 완성 (서버 측 sh glob 기반)
 //   - cwd 추적 (cd 명령 감지 후 서버 응답에서 새 경로 추출)
 //
-//   apiFetch는 app-api.js에 정의되어 있으며 이 파일보다 뒤에 로드되지만,
-//   모든 함수는 이벤트 핸들러로만 호출되므로 실행 시점엔 이미 정의가 완료된다.
+//   apiFetch는 setExecApiHandlers(...)로 주입받는다.
 // =============================================================================
 
 // ── 명령 히스토리 ─────────────────────────────────────────────────────────────
 
 // IIFE로 히스토리 상태를 캡슐화한다.
 // 외부에서 직접 stack/cursor에 접근하지 못하게 하여 오염을 방지한다.
+import { el, state } from "./app-state.js";
+import { normalizeErrorMessage } from "./app-utils.js";
+
+let execApiFetch = null;
+
+function setExecApiHandlers(handlers = {}) {
+  if (typeof handlers.apiFetch === "function") {
+    execApiFetch = handlers.apiFetch;
+  }
+}
+
+function requireApiFetch() {
+  if (!execApiFetch) {
+    throw new Error("Exec API handlers are not configured.");
+  }
+  return execApiFetch;
+}
+
 const execHistory = (() => {
   const MAX   = 200;  // 최대 보존 개수
   const stack = [];
@@ -101,7 +118,7 @@ async function handleTabCompletion() {
   tabState = { base, partial, matches: [], index: -1, loading: true };
 
   try {
-    const data = await apiFetch(`/apps/${userid}/${appname}/exec/complete`, {
+    const data = await requireApiFetch()(`/apps/${userid}/${appname}/exec/complete`, {
       method: "POST",
       body: JSON.stringify({ partial, cwd: execCwd }),
     });
@@ -153,7 +170,7 @@ async function initExecCwd() {
   if (!state.selectedApp || execCwd !== "") return;
   const { userid, appname } = state.selectedApp;
   try {
-    const data = await apiFetch(`/apps/${userid}/${appname}/exec`, {
+    const data = await requireApiFetch()(`/apps/${userid}/${appname}/exec`, {
       method: "POST",
       body: JSON.stringify({ command: "pwd", cwd: "" }),
     });
@@ -206,7 +223,7 @@ async function runExecCommand() {
   const effectiveCommand = isCd ? `${command} && pwd` : command;
 
   try {
-    const data = await apiFetch(`/apps/${userid}/${appname}/exec`, {
+    const data = await requireApiFetch()(`/apps/${userid}/${appname}/exec`, {
       method: "POST",
       body: JSON.stringify({ command: effectiveCommand, cwd: execCwd }),
     });
@@ -236,3 +253,34 @@ async function runExecCommand() {
     el.detailExecInput.focus();
   }
 }
+
+function resetTabCompletionState() {
+  tabCompletionGen += 1;
+  tabState = { base: "", partial: "", matches: [], index: -1, loading: false };
+}
+
+function resetExecForApp() {
+  execCwd = "";
+  updateExecPrompt();
+  resetTabCompletionState();
+}
+
+function historyBack(current) {
+  return execHistory.back(current);
+}
+
+function historyForward() {
+  return execHistory.forward();
+}
+
+export {
+  handleTabCompletion,
+  historyBack,
+  historyForward,
+  initExecCwd,
+  resetExecForApp,
+  resetTabCompletionState,
+  runExecCommand,
+  setExecApiHandlers,
+  updateExecPrompt,
+};

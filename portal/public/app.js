@@ -5,17 +5,82 @@
 //   모든 DOM 이벤트 리스너를 등록하고 앱을 시작한다.
 //   비즈니스 로직은 각 모듈 파일로 위임되며, 이 파일은 '연결'만 담당한다.
 //
-//   로드 순서 (index.html):
-//     1. app-state.js  — 상수, state, el, modalBackdropState
-//     2. app-utils.js  — 순수 헬퍼 함수
-//     3. app-render.js — renderApps, renderUsers
-//     4. app-ui.js     — 뷰/모달/updateAuthUi/navigateToApp
-//     5. app-exec.js   — exec 터미널
-//     6. app-api.js    — API 통신, 데이터 로딩, 앱 액션
-//     7. app.js        — (이 파일) 이벤트 바인딩 + bootstrap
+//   로드 방식:
+//     - index.html은 app.js(type="module")만 로드한다.
+//     - app.js가 나머지 app-*.js를 import해 의존 관계를 구성한다.
 // =============================================================================
 
-// ── 앱 생성 폼 ────────────────────────────────────────────────────────────────
+// ── 모듈 연결 ─────────────────────────────────────────────────────────────────
+
+import { DEFAULT_VIEW, el, state } from "./app-state.js";
+import {
+  canManageUsers,
+  clearCreateFieldFeedback,
+  isPasswordLocked,
+  normalizeErrorMessage,
+  parsePositiveInt,
+  persistUiState,
+  readPersistedUiState,
+  redirectToAuth,
+  setBanner,
+  setCreateUserError,
+  setDeleteUserError,
+  setPromoteAdminError,
+  setSettingsError,
+  syncDomainPreview,
+} from "./app-utils.js";
+import {
+  bindBackdropClose,
+  closeCreateUserModal,
+  closeDeleteUserModal,
+  closeMobileMenu,
+  closePromoteAdminModal,
+  closeSettingsModal,
+  configureUiHandlers,
+  openCreateUserModal,
+  openDeleteUserModal,
+  openPromoteAdminModal,
+  openSettingsModal,
+  switchDetailTab,
+  switchView,
+  toggleMobileMenu,
+  updateAuthUi,
+} from "./app-ui.js";
+import {
+  handleTabCompletion,
+  historyBack,
+  historyForward,
+  initExecCwd,
+  resetExecForApp,
+  resetTabCompletionState,
+  runExecCommand,
+  setExecApiHandlers,
+} from "./app-exec.js";
+import {
+  apiFetch,
+  getActionTarget,
+  handleCreate,
+  handleRequestError,
+  handleSettingsModalError,
+  loadApps,
+  loadConfig,
+  loadDetailEnv,
+  loadDetailLogs,
+  loadSession,
+  loadUsers,
+  performAction,
+  refreshDashboardData,
+  saveDetailEnv,
+  stopAutoRefresh,
+} from "./app-api.js";
+
+setExecApiHandlers({ apiFetch });
+configureUiHandlers({
+  handleRequestError,
+  loadDetailEnv,
+  loadDetailLogs,
+  resetExecForApp,
+});
 
 el.appnameInput.addEventListener("input", () => {
   clearCreateFieldFeedback(el.appnameInput);
@@ -87,8 +152,7 @@ el.detailExecRunBtn.addEventListener("click", async () => {
 el.detailExecInput.addEventListener("keydown", async (event) => {
   // Tab 외 키 입력 시 탭 완성 상태를 리셋한다.
   if (event.key !== "Tab") {
-    tabCompletionGen++;
-    tabState = { base: "", partial: "", matches: [], index: -1, loading: false };
+    resetTabCompletionState();
   }
 
   switch (event.key) {
@@ -98,11 +162,11 @@ el.detailExecInput.addEventListener("keydown", async (event) => {
       break;
     case "ArrowUp":
       event.preventDefault();
-      el.detailExecInput.value = execHistory.back(el.detailExecInput.value);
+      el.detailExecInput.value = historyBack(el.detailExecInput.value);
       break;
     case "ArrowDown": {
       event.preventDefault();
-      const next = execHistory.forward();
+      const next = historyForward();
       el.detailExecInput.value = next ?? "";
       break;
     }
