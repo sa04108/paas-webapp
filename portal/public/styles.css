@@ -834,7 +834,6 @@ code {
 .users-table th:last-child,
 .users-table td:last-child {
   text-align: right;
-  width: 104px;
 }
 
 .users-table th {
@@ -1190,9 +1189,32 @@ code {
     padding: 16px;
   }
 
-  :is(.create-panel, .ops-panel, .app-panel, .users-panel) {
+  :is(.create-panel, .ops-panel, .app-panel, .users-panel, .detail-panel) {
     padding: var(--panel-padding-mobile);
     border-radius: var(--radius-lg);
+  }
+
+  .app-detail-gnb {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .app-detail-tabs {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .detail-tab-btn {
+    width: 100%;
+    text-align: center;
+  }
+
+  .users-action-group {
+    flex-direction: column;
+    align-items: flex-end;
   }
 
   .modal-backdrop {
@@ -1245,6 +1267,419 @@ code {
   .modal-actions {
     flex-direction: column;
   }
+}
+
+/* ── App name button (clickable title in card) ── */
+
+.app-name-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  border-radius: 0;
+  font-family: "Space Grotesk", "Noto Sans KR", sans-serif;
+  font-size: 1.02rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink-main);
+  cursor: pointer;
+  text-align: left;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  transition: color 0.18s ease, text-decoration-color 0.18s ease;
+}
+
+.app-name-btn:hover {
+  color: var(--accent-blue);
+  text-decoration-color: currentColor;
+  transform: none;
+}
+
+.app-name-btn:disabled {
+  cursor: default;
+  text-decoration: none;
+  opacity: 1;
+}
+
+.app-card-head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.app-manage-btn {
+  padding: 7px 11px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── App detail — sub GNB ── */
+
+.app-detail-gnb {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 18px;
+  margin-bottom: 18px;
+  background: var(--surface-strong);
+  border: 1px solid var(--surface-border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 6px 20px rgba(20, 52, 84, 0.09);
+}
+
+.app-detail-gnb-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.app-detail-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.app-detail-back-icon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
+.app-detail-title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.app-detail-appname {
+  font-family: "Space Grotesk", "Noto Sans KR", sans-serif;
+  font-size: 1.12rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink-main);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.app-detail-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-teal);
+}
+
+.app-detail-tabs {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.detail-tab-btn {
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--ink-subtle);
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(26, 63, 98, 0.18);
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.detail-tab-btn.active {
+  color: #0c3f73;
+  background: rgba(42, 134, 241, 0.17);
+  border-color: rgba(42, 134, 241, 0.36);
+  font-weight: 600;
+}
+
+.detail-panel {
+  padding: var(--panel-padding);
+  animation: fade-in 0.22s ease;
+}
+
+:is(.detail-panel) {
+  padding: var(--panel-padding);
+}
+
+/* ── Logs panel ── */
+
+.logs-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.log-lines-input {
+  width: 72px !important;
+  padding: 7px 10px !important;
+  font-size: 0.82rem;
+}
+
+.detail-logs-title {
+  margin: 0 0 10px;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.logs-output {
+  margin: 0;
+  border: 1px solid rgba(25, 68, 108, 0.22);
+  border-radius: 12px;
+  background: #0f1e2e;
+  padding: 14px;
+  min-height: 260px;
+  max-height: 600px;
+  overflow: auto;
+  color: #d8ecff;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ── Exec terminal ── */
+
+.exec-terminal {
+  background: #0a1622;
+  border: 1px solid rgba(25, 68, 108, 0.28);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 300px;
+}
+
+.exec-output {
+  flex: 1;
+  margin: 0;
+  min-height: 240px;
+  max-height: 560px;
+  overflow-y: auto;
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #d8ecff;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.exec-output .exec-cmd {
+  color: #7dd3fc;
+}
+
+.exec-output .exec-stdout {
+  color: #d8ecff;
+}
+
+.exec-output .exec-stderr {
+  color: #fca5a5;
+}
+
+.exec-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 10px;
+  margin-top: 10px;
+}
+
+.exec-prompt {
+  color: #34d399;
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.exec-input {
+  flex: 1;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  color: #e2f3ff !important;
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace !important;
+  font-size: 0.84rem !important;
+  outline: none !important;
+}
+
+.exec-input::placeholder {
+  color: rgba(180, 210, 235, 0.38) !important;
+}
+
+.exec-input:focus {
+  transform: none !important;
+}
+
+/* ── Settings (env vars) ── */
+
+.env-help {
+  margin: 0 0 12px;
+  color: var(--ink-subtle);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.env-textarea {
+  display: block;
+  width: 100%;
+  min-height: 200px;
+  border: 1px solid rgba(33, 72, 110, 0.22);
+  border-radius: 11px;
+  background: rgba(249, 252, 255, 0.9);
+  color: var(--ink-main);
+  padding: 12px 13px;
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.env-textarea:focus {
+  border-color: rgba(42, 134, 241, 0.54);
+  box-shadow: 0 0 0 4px rgba(42, 134, 241, 0.14);
+}
+
+.env-actions {
+  margin-top: 12px;
+}
+
+.env-save-btn {
+  margin-top: 0;
+  width: auto;
+  min-width: 160px;
+}
+
+.settings-separator {
+  margin: 24px 0;
+  border: none;
+  border-top: 1px dashed rgba(22, 62, 97, 0.2);
+}
+
+.settings-danger-zone {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-danger-title {
+  margin: 0;
+  font-size: 0.86rem;
+  font-family: "Space Grotesk", "Noto Sans KR", sans-serif;
+  color: var(--ink-soft);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* ── Users table — role badge & action group ── */
+
+.role-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.role-badge.role-admin {
+  background: rgba(14, 165, 140, 0.14);
+  border: 1px solid rgba(14, 165, 140, 0.3);
+  color: #0a7d6a;
+}
+
+.role-badge.role-user {
+  background: rgba(42, 134, 241, 0.1);
+  border: 1px solid rgba(42, 134, 241, 0.22);
+  color: #1b5bbf;
+}
+
+.users-action-group {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.users-promote-btn {
+  min-width: 80px;
+  padding: 7px 10px;
+  font-size: 0.78rem;
+  color: #065f46;
+  border-color: rgba(14, 165, 140, 0.34);
+  background: rgba(14, 165, 140, 0.1);
+}
+
+.users-promote-btn:hover {
+  background: rgba(14, 165, 140, 0.18);
+  border-color: rgba(14, 165, 140, 0.42);
+}
+
+/* ── Admin 승격 경고 모달 ── */
+
+.promote-warning-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  margin: 10px 0;
+  border-radius: 10px;
+  background: rgba(206, 77, 77, 0.09);
+  border: 1px solid rgba(206, 77, 77, 0.26);
+}
+
+.promote-warning-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  fill: #ce4d4d;
+  margin-top: 1px;
+}
+
+.promote-target-text {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--ink-main);
+}
+
+.promote-warning-desc {
+  margin: 0 0 14px !important;
+  font-size: 0.88rem !important;
+  line-height: 1.55;
+  color: #8a3a3a !important;
+}
+
+.promote-warning-desc strong {
+  font-weight: 700;
+}
+
+/* ── Users table last column — wider for action group ── */
+
+.users-table th:last-child,
+.users-table td:last-child {
+  width: auto;
+  min-width: 160px;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -342,6 +342,27 @@ function createAuthService(options) {
     };
   }
 
+  function updateUserRole({ actorUserId, targetUserId }) {
+    const actor = statements.selectUserById.get(actorUserId);
+    if (!actor || actor.role !== ROLE_ADMIN) {
+      throw new AppError(403, "Forbidden: only admin can change roles");
+    }
+    const target = statements.selectUserById.get(targetUserId);
+    if (!target) {
+      throw new AppError(404, "User not found");
+    }
+    if (Number(actor.id) === Number(target.id)) {
+      throw new AppError(400, "Cannot modify your own role");
+    }
+    if (target.role === ROLE_ADMIN) {
+      throw new AppError(400, "User is already an admin");
+    }
+    const updatedAt = nowIso();
+    statements.promoteUserToAdmin.run(updatedAt, Number(target.id));
+    const updatedUser = statements.selectUserById.get(Number(target.id));
+    return toPublicUser(updatedUser);
+  }
+
   function attachRoutes(app) {
     app.post("/auth/login", (req, res, next) => {
       try {
@@ -560,6 +581,9 @@ function createAuthService(options) {
       DELETE FROM users
       WHERE id = ?
     `);
+    statements.promoteUserToAdmin = db.prepare(`
+      UPDATE users SET role = '${ROLE_ADMIN}', updated_at = ? WHERE id = ?
+    `);
 
     const admin = statements.selectUserByUsername.get("admin");
     if (!admin) {
@@ -589,6 +613,7 @@ function createAuthService(options) {
     listUsers,
     createUser,
     deleteUser,
+    updateUserRole,
     getPublicConfig,
     getDbPath: () => config.dbPath
   };

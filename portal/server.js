@@ -565,6 +565,10 @@ async function resolveAppRequestContext(req) {
   validateAppParams(userid, appname);
 
   const user = req.auth?.user;
+  // admin은 개별 앱 엔드포인트(start/stop/deploy/delete/logs/exec/env)에
+  // 직접 접근할 수 있다. 단, 대시보드 목록(/apps GET)은 본인 앱만 표시한다.
+  // 이 분리는 시스템 운영 목적의 admin 접근을 허용하면서도
+  // 대시보드 UI 레벨에서 사용자 간 앱 가시성을 격리하기 위한 의도적 설계다.
   if (user?.role !== ROLE_ADMIN && user?.username !== userid) {
     throw new AppError(403, "Forbidden");
   }
@@ -682,9 +686,8 @@ app.get("/apps", async (req, res, next) => {
   try {
     const fsApps = await listFilesystemApps();
     const user = req.auth?.user;
-    const visibleApps = user?.role === ROLE_ADMIN
-      ? fsApps
-      : fsApps.filter((item) => item.userid === user?.username);
+    // 모든 사용자(admin 포함)는 본인이 생성한 앱만 대시보드에서 조회할 수 있다.
+    const visibleApps = fsApps.filter((item) => item.userid === user?.username);
     const dockerStatuses = await listDockerStatuses();
     const appDetails = await Promise.all(
       visibleApps.map((appItem) => buildAppInfo(appItem.userid, appItem.appname, dockerStatuses))
@@ -809,6 +812,119 @@ app.get("/apps/:userid/:appname/logs", async (req, res, next) => {
   }
 });
 
+// ── Exec ──────────────────────────────────────────────────────────────────────
+app.post("/apps/:userid/:appname/exec", async (req, res, next) => {
+  try {
+    const { appDir } = await resolveAppRequestContext(req);
+
+    const command = String(req.body?.command || "").trim();
+    if (!command) {
+      throw new AppError(400, "command is required");
+    }
+    if (command.length > 2048) {
+      throw new AppError(400, "command too long (max 2048 chars)");
+    }
+
+    const containerName = await readContainerName(appDir);
+    if (!containerName) {
+      throw new AppError(404, "Container not found for this app");
+    }
+
+    let stdout = "";
+    let stderr = "";
+    try {
+      const result = await execFileAsync(
+        "docker",
+        ["exec", containerName, "sh", "-c", command],
+        { timeout: 30000, maxBuffer: 1 * 1024 * 1024, windowsHide: true }
+      );
+      stdout = String(result.stdout || "").trimEnd();
+      stderr = String(result.stderr || "").trimEnd();
+    } catch (execError) {
+      stdout = String(execError.stdout || "").trimEnd();
+      stderr = String(execError.stderr || "").trimEnd();
+      if (!stdout && !stderr) {
+        if (execError.code === "ENOENT") {
+          throw new AppError(503, "docker command is not available");
+        }
+        if (execError.signal === "SIGTERM") {
+          stderr = "Command timed out after 30 seconds";
+        } else {
+          stderr = execError.message || "Command failed";
+        }
+      }
+    }
+
+    return sendOk(res, { command, output: stdout, stderr });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// ── Env vars ──────────────────────────────────────────────────────────────────
+const ENV_PAAS_FILE = ".env.paas";
+
+async function patchComposeEnvFile(appDir) {
+  const composePath = path.join(appDir, APP_COMPOSE_FILE);
+  let content;
+  try {
+    content = await fs.readFile(composePath, "utf8");
+  } catch {
+    return;
+  }
+  if (content.includes("env_file:")) return;
+  // generate-compose.js가 생성하는 포맷은 결정적이므로 단순 치환으로 env_file 주입
+  const patched = content.replace(
+    /^(\s+environment:)/m,
+    `    env_file:\n      - ".env.paas"\n$1`
+  );
+  if (patched !== content) {
+    await fs.writeFile(composePath, patched, "utf8");
+  }
+}
+
+app.get("/apps/:userid/:appname/env", async (req, res, next) => {
+  try {
+    const { appDir } = await resolveAppRequestContext(req);
+    const envPath = path.join(appDir, ENV_PAAS_FILE);
+    let content = "";
+    try {
+      content = await fs.readFile(envPath, "utf8");
+    } catch (readError) {
+      if (readError.code !== "ENOENT") throw readError;
+    }
+    return sendOk(res, { env: content });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.put("/apps/:userid/:appname/env", async (req, res, next) => {
+  try {
+    const { appDir } = await resolveAppRequestContext(req);
+    const content = String(req.body?.env || "");
+
+    // env_file 미지원 구형 compose 파일에 자동으로 env_file 항목을 추가한다
+    await patchComposeEnvFile(appDir);
+
+    const envPath = path.join(appDir, ENV_PAAS_FILE);
+    await fs.writeFile(envPath, content, "utf8");
+
+    // 변경된 환경변수를 적용하기 위해 컨테이너를 재생성·재시작한다
+    let restartError = null;
+    try {
+      await runDockerCompose(appDir, ["up", "-d", "--force-recreate"]);
+    } catch (restartErr) {
+      // 재시작 실패는 env 저장 성공과 분리해서 클라이언트에 전달한다
+      restartError = restartErr?.message || "Container restart failed";
+    }
+
+    return sendOk(res, { saved: true, restartError });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 app.use("/apps", (_req, res) => {
   return sendError(res, 404, "Not found");
 });
@@ -836,6 +952,19 @@ app.post("/users", (req, res, next) => {
       isAdmin
     });
     return sendOk(res, { user }, 201);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.patch("/users/:id/role", (req, res, next) => {
+  try {
+    const targetUserId = Number.parseInt(String(req.params.id || ""), 10);
+    const updatedUser = authService.updateUserRole({
+      actorUserId: req.auth?.user?.id,
+      targetUserId
+    });
+    return sendOk(res, { user: updatedUser });
   } catch (error) {
     return next(error);
   }
