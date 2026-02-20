@@ -22,6 +22,7 @@ const CREATE_FIELD_SHAKE_DURATION_MS = 320;
 
 const state = {
   domain: "my.domain.com",
+  devMode: false,
   apps: [],
   users: [],
   pendingDeleteUser: null,
@@ -32,6 +33,7 @@ const state = {
 };
 
 const el = {
+  devModeBadge: document.getElementById("dev-mode-badge"),
   gnbBrand: document.querySelector(".gnb-brand"),
   gnbNav: document.querySelector(".gnb-nav"),
   gnbOverlay: document.getElementById("gnb-mobile-overlay"),
@@ -522,13 +524,21 @@ function renderApps(apps) {
     .map((appItem) => {
       const safeUser = escapeHtml(appItem.userid);
       const safeApp = escapeHtml(appItem.appname);
-      const safeDomain = escapeHtml(appItem.domain || "-");
       const safeRepoUrl = escapeHtml(appItem.repoUrl || "-");
       const safeBranch = escapeHtml(appItem.branch || "main");
       const rawStatus = appItem.status || "unknown";
       const safeStatus = escapeHtml(rawStatus);
       const safeCreatedAt = escapeHtml(formatDate(appItem.createdAt));
       const badgeHtml = runtimeBadgeHtml(appItem.detectedRuntime);
+
+      let domainHtml;
+      if (state.devMode && appItem.devPort) {
+        const url = `http://localhost:${appItem.devPort}`;
+        const safeUrl = escapeHtml(url);
+        domainHtml = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>`;
+      } else {
+        domainHtml = escapeHtml(appItem.domain || "-");
+      }
 
       return `
         <article class="app-card" data-userid="${safeUser}" data-appname="${safeApp}">
@@ -539,7 +549,7 @@ function renderApps(apps) {
               <span class="status-pill ${statusClass(rawStatus)}">${safeStatus}</span>
             </div>
           </div>
-          <p class="app-domain">${safeDomain}</p>
+          <p class="app-domain">${domainHtml}</p>
           <p class="app-meta">repo: ${safeRepoUrl} | branch: ${safeBranch} | created: ${safeCreatedAt}</p>
           <div class="app-actions">
             <button class="action-btn" data-action="logs" type="button" ${actionsDisabled}>Logs</button>
@@ -700,8 +710,10 @@ async function handleSettingsModalError(error) {
 async function loadConfig() {
   const data = await apiFetch("/config");
   state.domain = data.domain || "my.domain.com";
+  state.devMode = Boolean(data.devMode);
   el.domainChip.textContent = state.domain;
   el.limitChip.textContent = `${data.limits.maxAppsPerUser}/${data.limits.maxTotalApps}`;
+  el.devModeBadge.hidden = !state.devMode;
   syncDomainPreview();
 }
 

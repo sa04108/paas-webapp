@@ -61,6 +61,9 @@ const USER_ID_REGEX = /^[a-z][a-z0-9]{2,19}$/;
 const APP_NAME_REGEX = /^[a-z][a-z0-9-]{2,29}$/;
 const APP_META_FILE = ".paas-meta.json";
 const APP_COMPOSE_FILE = "docker-compose.yml";
+const APP_SOURCE_SUBDIR = process.env.APP_SOURCE_SUBDIR || "app";
+
+const IS_DEV = process.env.RUN_MODE === "development";
 
 // dev/prod 환경 분기는 scripts/generate-compose.js가 RUN_MODE 환경변수로 처리한다.
 // .sh 스크립트는 환경에 무관하게 동일한 scripts/ 루트에 위치한다.
@@ -100,6 +103,48 @@ function normalizeBoolean(value, fallbackValue = false) {
     }
   }
   return fallbackValue;
+}
+
+/**
+ * generate-compose.js의 resolveHostPort와 동일한 djb2 해시 (20000-29999 범위).
+ * dev 모드에서 앱의 호스트 포트를 결정한다.
+ */
+function resolveHashPort(userid, appname) {
+  let hash = 5381;
+  for (const ch of `${userid}/${appname}`) {
+    hash = (((hash << 5) + hash) ^ ch.charCodeAt(0)) >>> 0;
+  }
+  return 20000 + (hash % 10000);
+}
+
+/**
+ * 사용자 Dockerfile의 첫 번째 EXPOSE 포트를 비동기로 파싱한다.
+ * 없거나 읽기 실패 시 null 반환.
+ */
+async function parseDockerfileExposePort(dockerfilePath) {
+  try {
+    const content = await fs.readFile(dockerfilePath, "utf8");
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (/^EXPOSE\s+\d+/i.test(trimmed)) {
+        const port = Number.parseInt(trimmed.split(/\s+/)[1], 10);
+        if (port > 0 && port <= 65535) return port;
+      }
+    }
+  } catch {
+    // Dockerfile 없음 또는 읽기 실패
+  }
+  return null;
+}
+
+/**
+ * dev 모드에서 앱의 실제 호스트 포트를 반환한다.
+ * 사용자 Dockerfile에 EXPOSE가 있으면 그 포트, 없으면 djb2 해시 포트.
+ */
+async function resolveDevPort(userid, appname, appDir) {
+  const dockerfilePath = path.join(appDir, APP_SOURCE_SUBDIR, "Dockerfile");
+  const exposePort = await parseDockerfileExposePort(dockerfilePath);
+  return exposePort ?? resolveHashPort(userid, appname);
 }
 
 function sendOk(res, data = {}, statusCode = 200) {
@@ -512,10 +557,13 @@ async function buildAppInfo(userid, appname, statusMap) {
       ? statusMap.get(appContainerName)
       : await getDockerContainerStatus(appDir, appContainerName);
 
+  const devPort = IS_DEV ? await resolveDevPort(userid, appname, appDir) : null;
+
   return {
     userid,
     appname,
     domain: domainName(userid, appname),
+    devPort,
     containerName: appContainerName,
     status: normalizeStatus(rawStatus),
     rawStatus,
@@ -568,6 +616,7 @@ app.get("/health", (_req, res) => {
 app.get("/config", (_req, res) => {
   return sendOk(res, {
     domain: config.PAAS_DOMAIN,
+    devMode: IS_DEV,
     limits: {
       maxAppsPerUser: config.MAX_APPS_PER_USER,
       maxTotalApps: config.MAX_TOTAL_APPS
