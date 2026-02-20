@@ -15,7 +15,12 @@
 - 앱 도메인: `<userid>-<appname>.<PAAS_DOMAIN>`
 
 ## 4. Core Stack
-- Portal API: Node.js + Express (`portal/server.js`)
+- Portal API: Node.js + Express (진입점 `portal/server.js`, 모듈 분리)
+  - `portal/utils.js` — AppError, sendOk/sendError 등 공유 유틸
+  - `portal/config.js` — 환경변수 로드, 상수 (USER_ID_REGEX, APP_NAME_REGEX 등)
+  - `portal/appManager.js` — 앱/Docker/파일시스템 도메인 로직 전체
+  - `portal/routes/apps.js` — `/apps` 라우터 (Express.Router)
+  - `portal/routes/users.js` — `/users` 라우터 (factory: `createUsersRouter(authService)`)
 - 인증/세션/사용자 관리: SQLite + `portal/authService.js`
 - 앱 생명주기: `scripts/create.sh`, `scripts/deploy.sh`, `scripts/delete.sh`
 - 런타임/파일 생성:
@@ -23,6 +28,14 @@
   - `scripts/generate-dockerfile.js`
   - `scripts/generate-compose.js`
   - `scripts/lib/common.sh`
+- 프론트엔드: 번들러 없는 다중 스크립트 (전역 스코프 공유, 순서 의존성 있음)
+  - `portal/public/app-state.js` — 전역 상수·상태·DOM 참조 (최우선 로드)
+  - `portal/public/app-utils.js` — 순수 헬퍼, 폼 검증, 인증 상태 확인
+  - `portal/public/app-render.js` — renderApps, renderUsers
+  - `portal/public/app-ui.js` — 뷰/탭 전환, 모달, updateAuthUi, navigateToApp
+  - `portal/public/app-exec.js` — Exec 터미널 (히스토리, 탭 완성, cwd 추적)
+  - `portal/public/app-api.js` — API 통신, 데이터 로딩, 앱 액션
+  - `portal/public/app.js` — 이벤트 바인딩 + 부트스트랩
 
 ## 5. 인증과 권한
 - 인증은 세션 쿠키(`SESSION_COOKIE_NAME`, 기본 `portal_session`)를 사용한다.
@@ -155,10 +168,10 @@
 
 | 변수 | 기본값 계산 위치 | 기본값 |
 |---|---|---|
-| `PAAS_ROOT` | `common.sh`(스크립트 위치), `server.js`(`repoRoot`), `generate-compose.js`(`/paas`) | 자동 계산 |
-| `PAAS_APPS_DIR` | `common.sh`, `server.js` | `${PAAS_ROOT}/apps` |
-| `PAAS_SCRIPTS_DIR` | `server.js` | `${PAAS_ROOT}/scripts` |
-| `PORTAL_DB_PATH` | `server.js` | `${PAAS_ROOT}/portal-data/portal.sqlite3` |
+| `PAAS_ROOT` | `common.sh`(스크립트 위치), `config.js`(`repoRoot`), `generate-compose.js`(`/paas`) | 자동 계산 |
+| `PAAS_APPS_DIR` | `common.sh`, `config.js` | `${PAAS_ROOT}/apps` |
+| `PAAS_SCRIPTS_DIR` | `config.js` | `${PAAS_ROOT}/scripts` |
+| `PORTAL_DB_PATH` | `config.js` | `${PAAS_ROOT}/portal-data/portal.sqlite3` |
 | `PAAS_HOST_ROOT` | `docker-compose.yml` (`${PWD}`) | 호스트 현재 디렉토리 |
 | `APP_CONTAINER_PREFIX` | `common.sh` | `paas-app` |
 | `APP_COMPOSE_FILE` | `common.sh`, `generate-compose.js` | `docker-compose.yml` |
@@ -172,13 +185,25 @@
 ```
 paas-webapp/
 ├── portal/
-│   ├── server.js
-│   ├── authService.js
+│   ├── server.js          # Express 진입점 + 미들웨어 조립
+│   ├── utils.js           # AppError, sendOk/sendError 등 공유 유틸
+│   ├── config.js          # 환경변수 로드 + 전역 상수
+│   ├── appManager.js      # 앱/Docker/파일시스템 도메인 로직
+│   ├── authService.js     # 세션/사용자 인증 (SQLite)
 │   ├── package.json
 │   ├── README.md
+│   ├── routes/
+│   │   ├── apps.js        # /apps 라우터
+│   │   └── users.js       # /users 라우터 (factory)
 │   └── public/
 │       ├── index.html
-│       ├── app.js
+│       ├── app-state.js   # 전역 상수·상태·DOM 참조 (1번 로드)
+│       ├── app-utils.js   # 순수 헬퍼, 폼 검증
+│       ├── app-render.js  # DOM 렌더링
+│       ├── app-ui.js      # 뷰/모달/인증 UI
+│       ├── app-exec.js    # Exec 터미널
+│       ├── app-api.js     # API 통신·데이터 로딩
+│       ├── app.js         # 이벤트 바인딩 + 부트스트랩
 │       ├── auth.html
 │       ├── auth.js
 │       └── styles.css
@@ -198,8 +223,12 @@ paas-webapp/
 ```
 
 ## 13. Agent 작업 규칙
-- API 계약 변경 시 `portal/server.js`와 `scripts/*` 인자/검증 규칙을 함께 맞춘다.
+- API 계약 변경 시 `portal/routes/apps.js`(또는 `routes/users.js`)와 `scripts/*` 인자/검증 규칙을 함께 맞춘다.
+- 앱 도메인 로직(파일시스템·Docker)은 `portal/appManager.js`에서만 수정한다. 라우트 핸들러에 인프라 코드를 추가하지 않는다.
 - 앱 생성 계약(`appname`, `repoUrl`, `branch`)을 유지한다.
-- UI 변경 시 `portal/public/index.html`과 `portal/public/app.js`를 함께 수정한다.
+- UI 변경 시 `portal/public/index.html`과 해당 역할의 `app-*.js` 파일을 함께 수정한다.
+  - 상태·상수: `app-state.js` / 헬퍼: `app-utils.js` / 렌더링: `app-render.js`
+  - 뷰·모달: `app-ui.js` / Exec: `app-exec.js` / API: `app-api.js` / 이벤트: `app.js`
+- 프론트엔드 스크립트 로드 순서를 변경하거나 새 파일을 추가할 때는 `index.html`의 `<script>` 순서와 `app-state.js` 상단의 의존성 주석을 함께 갱신한다.
 - 컨테이너 실행 변경 시 `scripts/*`, `scripts/generate-compose.js`, `docker-compose.yml`을 함께 검토한다.
-- 새로운 경로 상수 추가 시 `.env.example`에 기재하지 않는다. 코드(11.2 표)에서 기본값을 선언하고, 동일한 변수명을 `common.sh` / `generate-compose.js` / `server.js` 중 해당 계층에서 통일한다.
+- 새로운 경로 상수 추가 시 `.env.example`에 기재하지 않는다. 코드(11.2 표)에서 기본값을 선언하고, 동일한 변수명을 `common.sh` / `generate-compose.js` / `config.js` 중 해당 계층에서 통일한다.

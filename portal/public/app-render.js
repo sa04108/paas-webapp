@@ -1,0 +1,140 @@
+// =============================================================================
+// app-render.js - 앱 목록 · 사용자 목록 렌더링
+// =============================================================================
+// 역할:
+//   state.apps, state.users 데이터를 DOM으로 변환한다.
+//   app-utils.js(escapeHtml, statusClass 등)에 의존한다.
+// =============================================================================
+
+// ── 앱 카드 목록 렌더링 ───────────────────────────────────────────────────────
+
+function renderApps(apps) {
+  el.appCountChip.textContent = String(apps.length);
+
+  if (!apps.length) {
+    el.emptyState.style.display = "block";
+    if (!isLoggedIn()) {
+      el.emptyState.textContent = "로그인하면 앱 목록을 조회할 수 있습니다.";
+    } else if (isPasswordLocked()) {
+      el.emptyState.textContent = "비밀번호를 변경한 뒤 앱 목록을 조회할 수 있습니다.";
+    } else {
+      el.emptyState.textContent = "앱이 없습니다. 먼저 앱을 생성하세요.";
+    }
+    el.appsContainer.innerHTML = "";
+    return;
+  }
+
+  const actionsDisabled = canManageApps() ? "" : "disabled";
+  el.emptyState.style.display = "none";
+  el.appsContainer.innerHTML = apps.map((appItem) => {
+    const safeUser      = escapeHtml(appItem.userid);
+    const safeApp       = escapeHtml(appItem.appname);
+    const safeRepoUrl   = escapeHtml(appItem.repoUrl || "-");
+    const safeBranch    = escapeHtml(appItem.branch || "main");
+    const rawStatus     = appItem.status || "unknown";
+    const safeStatus    = escapeHtml(rawStatus);
+    const safeCreatedAt = escapeHtml(formatDate(appItem.createdAt));
+    const badgeHtml     = runtimeBadgeHtml(appItem.detectedRuntime);
+
+    // dev 모드에서는 외부 도메인 대신 localhost:port 링크를 제공한다.
+    let domainHtml;
+    if (state.devMode && appItem.devPort) {
+      const url     = `http://localhost:${appItem.devPort}`;
+      const safeUrl = escapeHtml(url);
+      domainHtml = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>`;
+    } else {
+      domainHtml = escapeHtml(appItem.domain || "-");
+    }
+
+    return `
+      <article class="app-card" data-userid="${safeUser}" data-appname="${safeApp}">
+        <div class="app-card-head">
+          <button class="app-name-btn" data-action="manage" type="button" ${actionsDisabled}>${safeUser} / ${safeApp}</button>
+          <div class="app-card-head-right">
+            <div class="app-card-badges">
+              ${badgeHtml}
+              <span class="status-pill ${statusClass(rawStatus)}">${safeStatus}</span>
+            </div>
+            <button class="action-btn app-manage-btn" data-action="manage" type="button" ${actionsDisabled}>관리</button>
+          </div>
+        </div>
+        <p class="app-domain">${domainHtml}</p>
+        <p class="app-meta">repo: ${safeRepoUrl} | branch: ${safeBranch} | created: ${safeCreatedAt}</p>
+        <div class="app-actions">
+          <button class="action-btn" data-action="start"  type="button" ${actionsDisabled}>Start</button>
+          <button class="action-btn" data-action="stop"   type="button" ${actionsDisabled}>Stop</button>
+          <button class="action-btn" data-action="deploy" type="button" ${actionsDisabled}>Deploy</button>
+          <button class="action-btn danger" data-action="delete" type="button" ${actionsDisabled}>Delete</button>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+// ── 사용자 테이블 렌더링 ──────────────────────────────────────────────────────
+
+function renderUsers(users) {
+  if (!canManageUsers()) {
+    el.usersCount.textContent = "0명";
+    el.usersTableBody.innerHTML = "";
+    el.usersEmptyState.hidden = false;
+    el.openCreateUserBtn.disabled = true;
+    if (!isLoggedIn()) {
+      el.usersEmptyState.textContent = "로그인하면 사용자 목록을 조회할 수 있습니다.";
+    } else if (isPasswordLocked()) {
+      el.usersEmptyState.textContent = "비밀번호를 변경한 뒤 사용자 목록을 조회할 수 있습니다.";
+    } else {
+      el.usersEmptyState.textContent = "관리자 계정에서만 사용자 목록을 조회할 수 있습니다.";
+    }
+    return;
+  }
+
+  el.openCreateUserBtn.disabled = false;
+  el.usersCount.textContent = `${users.length}명`;
+
+  if (!users.length) {
+    el.usersTableBody.innerHTML = "";
+    el.usersEmptyState.hidden = false;
+    el.usersEmptyState.textContent = "등록된 사용자가 없습니다.";
+    return;
+  }
+
+  el.usersEmptyState.hidden = true;
+  el.usersTableBody.innerHTML = users.map((item) => {
+    const safeUsername    = escapeHtml(item.username || "-");
+    const isAdmin         = item.isAdmin;
+    const safeRole        = isAdmin ? "Admin" : "User";
+    const safeCreatedAt   = escapeHtml(formatDate(item.createdAt));
+    const safeLastAccessAt = escapeHtml(formatDate(item.lastAccessAt));
+
+    // admin 계정은 삭제/승격 불가 — 보호됨 표시
+    const actionCell = isAdmin
+      ? `<span class="users-protected">보호됨</span>`
+      : `<div class="users-action-group">
+           <button
+             class="action-btn users-promote-btn"
+             data-action="promote-user"
+             data-id="${item.id}"
+             data-username="${safeUsername}"
+             type="button"
+           >Admin 승격</button>
+           <button
+             class="action-btn danger users-remove-btn"
+             data-action="remove-user"
+             data-id="${item.id}"
+             data-username="${safeUsername}"
+             type="button"
+           >제거</button>
+         </div>`;
+
+    return `
+      <tr>
+        <td>${safeUsername}</td>
+        <td><span class="role-badge ${isAdmin ? "role-admin" : "role-user"}">${safeRole}</span></td>
+        <td>${safeCreatedAt}</td>
+        <td>${safeLastAccessAt}</td>
+        <td>${actionCell}</td>
+      </tr>
+    `;
+  }).join("");
+}
