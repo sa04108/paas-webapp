@@ -118,6 +118,7 @@ function buildCompose({ userid, appname, appDir }) {
     `      - ${APP_NETWORK}`,
     '    labels:',
     `      - ${JSON.stringify('traefik.enable=true')}`,
+    `      - ${JSON.stringify(`traefik.http.services.${containerName}.loadbalancer.server.port=${containerPort}`)}`,
     `      - ${JSON.stringify('paas.type=user-app')}`,
     `      - ${JSON.stringify(`paas.userid=${userid}`)}`,
     `      - ${JSON.stringify(`paas.appname=${appname}`)}`,

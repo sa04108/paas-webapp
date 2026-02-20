@@ -54,8 +54,11 @@ function renderApps(apps) {
       const url     = `http://localhost:${appItem.devPort}`;
       const safeUrl = escapeHtml(url);
       domainHtml = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>`;
+    } else if (appItem.domain) {
+      const url = `https://${appItem.domain}`;
+      domainHtml = `<a href="${url}" target="_blank" rel="noopener noreferrer">${escapeHtml(appItem.domain)}</a>`;
     } else {
-      domainHtml = escapeHtml(appItem.domain || "-");
+      domainHtml = "-";
     }
 
     return `

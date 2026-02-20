@@ -11,7 +11,7 @@ services:
       - "--providers.docker.network=${APP_NETWORK:-paas-app}"
       - "--entrypoints.web.address=:80"
     ports:
-      - "18080:18080"
+      - "18080:80"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
@@ -46,7 +46,7 @@ services:
 networks:
   proxy:
     external: true
-    name: ${APP_NETWORK:-paas-app}
+    name: proxy
 
 volumes:
   portal_node_modules:
