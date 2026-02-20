@@ -6,19 +6,31 @@
  *
  * 주어진 디렉토리의 package.json을 분석하여 런타임 정보를 stdout에 JSON으로 출력한다.
  * create.sh / deploy.sh에서 호출된다.
+ *
+ * 반환 JSON:
+ *   runtime, displayName, icon   - 주요 런타임 (Dockerfile 생성 기준)
+ *   nodeVersion, hasLockFile
+ *   hasBuild, buildCommand, startCommand
+ *   dependencies                 - 감지된 모든 의존성 목록 (App 카드 표시용)
+ *                                  Node.js 는 항상 첫 번째로 포함된다.
+ *
+ * 내부 포트(컨테이너 포트)는 항상 5000으로 고정되며,
+ * 이 파일에서는 포트를 결정하지 않는다.
  */
 
 const fs = require('fs');
 const path = require('path');
 
-// 우선순위 순서로 정의. 앞에 있을수록 먼저 감지됨.
+// 우선순위 순서로 정의. isFramework=true인 항목 중 첫 번째가 주요 런타임이 된다.
+// isFramework=false 항목은 표시 전용(Dockerfile 생성에 영향 없음).
 const RUNTIME_RULES = [
+  // --- 프레임워크 (주요 런타임 후보, 우선순위 순) ---
   {
     dep: 'next',
     runtime: 'nextjs',
     displayName: 'Next.js',
     icon: 'nextjs',
-    port: 3000,
+    isFramework: true,
     hasBuild: true,
     defaultStartCmd: 'next start',
   },
@@ -27,7 +39,7 @@ const RUNTIME_RULES = [
     runtime: 'nestjs',
     displayName: 'NestJS',
     icon: 'nestjs',
-    port: 3000,
+    isFramework: true,
     hasBuild: true,
     defaultStartCmd: 'node dist/main',
   },
@@ -36,7 +48,7 @@ const RUNTIME_RULES = [
     runtime: 'nuxt',
     displayName: 'Nuxt.js',
     icon: 'nuxt',
-    port: 3000,
+    isFramework: true,
     hasBuild: true,
     defaultStartCmd: 'node .output/server/index.mjs',
   },
@@ -45,7 +57,7 @@ const RUNTIME_RULES = [
     runtime: 'vite',
     displayName: 'Vite',
     icon: 'vite',
-    port: 4173,
+    isFramework: true,
     hasBuild: true,
     defaultStartCmd: 'vite preview',
   },
@@ -54,7 +66,7 @@ const RUNTIME_RULES = [
     runtime: 'express',
     displayName: 'Express',
     icon: 'express',
-    port: 3000,
+    isFramework: true,
     hasBuild: false,
     defaultStartCmd: null,
   },
@@ -63,7 +75,7 @@ const RUNTIME_RULES = [
     runtime: 'fastify',
     displayName: 'Fastify',
     icon: 'fastify',
-    port: 3000,
+    isFramework: true,
     hasBuild: false,
     defaultStartCmd: null,
   },
@@ -72,9 +84,45 @@ const RUNTIME_RULES = [
     runtime: 'koa',
     displayName: 'Koa',
     icon: 'koa',
-    port: 3000,
+    isFramework: true,
     hasBuild: false,
     defaultStartCmd: null,
+  },
+  // --- 라이브러리 / 도구 (표시 전용) ---
+  {
+    dep: 'react',
+    runtime: 'react',
+    displayName: 'React',
+    icon: 'react',
+    isFramework: false,
+  },
+  {
+    dep: 'vue',
+    runtime: 'vue',
+    displayName: 'Vue',
+    icon: 'vue',
+    isFramework: false,
+  },
+  {
+    dep: 'tailwindcss',
+    runtime: 'tailwind',
+    displayName: 'Tailwind CSS',
+    icon: 'tailwind',
+    isFramework: false,
+  },
+  {
+    dep: 'typescript',
+    runtime: 'typescript',
+    displayName: 'TypeScript',
+    icon: 'typescript',
+    isFramework: false,
+  },
+  {
+    dep: 'prisma',
+    runtime: 'prisma',
+    displayName: 'Prisma',
+    icon: 'prisma',
+    isFramework: false,
   },
 ];
 
@@ -93,11 +141,11 @@ function detect(appDir) {
       runtime: 'node',
       displayName: 'Node.js',
       icon: 'nodejs',
-      port: 3000,
       nodeVersion: '22',
       hasBuild: false,
       buildCommand: null,
       startCommand: 'node index.js',
+      dependencies: [{ name: 'nodejs', displayName: 'Node.js', icon: 'nodejs' }],
     };
   }
 
@@ -113,28 +161,38 @@ function detect(appDir) {
   const hasLockFile = fs.existsSync(path.join(appDir, 'package-lock.json'))
     || fs.existsSync(path.join(appDir, 'npm-shrinkwrap.json'));
 
-  for (const rule of RUNTIME_RULES) {
-    if (!allDeps[rule.dep]) continue;
+  // 매칭된 모든 규칙 수집 (순서 유지)
+  const matchedRules = RUNTIME_RULES.filter(rule => !!allDeps[rule.dep]);
 
+  // 의존성 목록: Node.js 항상 첫 번째, 이후 매칭된 순서대로
+  const dependencies = [
+    { name: 'nodejs', displayName: 'Node.js', icon: 'nodejs' },
+    ...matchedRules.map(r => ({ name: r.runtime, displayName: r.displayName, icon: r.icon })),
+  ];
+
+  // 주요 런타임: 첫 번째 프레임워크 규칙
+  const primaryRule = matchedRules.find(r => r.isFramework);
+
+  if (primaryRule) {
     // scripts.build 존재 여부로 실제 빌드 필요성 판단 (프레임워크 기본값보다 우선)
-    const hasBuild = rule.hasBuild && !!pkg.scripts?.build;
+    const hasBuild = primaryRule.hasBuild && !!pkg.scripts?.build;
     const buildCommand = hasBuild ? 'npm run build' : null;
 
     // scripts.start가 있으면 npm start, 없으면 프레임워크 기본 명령
     const startCommand = pkg.scripts?.start
       ? 'npm start'
-      : (rule.defaultStartCmd || 'node index.js');
+      : (primaryRule.defaultStartCmd || 'node index.js');
 
     return {
-      runtime: rule.runtime,
-      displayName: rule.displayName,
-      icon: rule.icon,
-      port: rule.port,
+      runtime: primaryRule.runtime,
+      displayName: primaryRule.displayName,
+      icon: primaryRule.icon,
       nodeVersion,
       hasLockFile,
       hasBuild,
       buildCommand,
       startCommand,
+      dependencies,
     };
   }
 
@@ -143,12 +201,12 @@ function detect(appDir) {
     runtime: 'node',
     displayName: 'Node.js',
     icon: 'nodejs',
-    port: 3000,
     nodeVersion,
     hasLockFile,
     hasBuild: !!(pkg.scripts?.build),
     buildCommand: pkg.scripts?.build ? 'npm run build' : null,
     startCommand: pkg.scripts?.start ? 'npm start' : 'node index.js',
+    dependencies,
   };
 }
 

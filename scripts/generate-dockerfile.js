@@ -6,11 +6,17 @@
  *
  * detect-runtime.js가 출력한 JSON을 받아 <appDir>/.paas.Dockerfile을 생성한다.
  * - 사용자 repo에 이미 Dockerfile이 있으면 생성을 건너뛴다.
+ *   포트는 docker-compose의 PORT 환경변수(5000)로 강제되므로
+ *   사용자 Dockerfile을 수정할 필요가 없다.
  * - .paas.dockerignore도 함께 생성한다.
+ *
+ * 내부 포트는 항상 5000으로 고정된다.
  */
 
 const fs = require('fs');
 const path = require('path');
+
+const INTERNAL_PORT = 5000;
 
 // --- 내부 규약 파일명 ---
 const PAAS_DOCKERFILE_NAME   = '.paas.Dockerfile';
@@ -22,11 +28,9 @@ function buildDockerfile(runtime) {
     hasBuild,
     buildCommand,
     startCommand,
-    port = 3000,
     hasLockFile,
   } = runtime;
 
-  const installCmd = hasLockFile ? 'npm ci' : 'npm install';
   const installCmdWithDev = hasLockFile ? 'npm ci' : 'npm install';
   const installCmdProdOnly = hasLockFile ? 'npm ci --omit=dev' : 'npm install --omit=dev';
 
@@ -61,8 +65,8 @@ function buildDockerfile(runtime) {
   }
 
   lines.push('');
-  lines.push(`EXPOSE ${port}`);
-  lines.push(`ENV PORT=${port}`);
+  lines.push(`EXPOSE ${INTERNAL_PORT}`);
+  lines.push(`ENV PORT=${INTERNAL_PORT}`);
   lines.push(`CMD ${cmdJson}`);
 
   return lines.join('\n') + '\n';
@@ -86,9 +90,10 @@ coverage/
 function run(runtimeJson, appDir) {
   const resolvedDir = path.resolve(appDir);
 
-  // 사용자 repo에 자체 Dockerfile이 있으면 건너뜀
+  // 사용자 repo에 자체 Dockerfile이 있으면 건너뜀.
+  // 포트는 docker-compose의 PORT 환경변수로 강제되므로 수정 불필요.
   if (fs.existsSync(path.join(resolvedDir, 'Dockerfile'))) {
-    process.stdout.write(`[generate-dockerfile] 사용자 Dockerfile 감지 → 자동 생성 건너뜀\n`);
+    process.stdout.write(`[generate-dockerfile] 사용자 Dockerfile 감지 → 자동 생성 건너뜀 (PORT=5000은 compose 환경변수로 주입)\n`);
     return;
   }
 

@@ -284,10 +284,20 @@ function syncDomainPreview() {
 }
 
 function runtimeBadgeHtml(detectedRuntime) {
-  if (!detectedRuntime?.name) {
-    return "";
+  if (!detectedRuntime) return "";
+
+  // dependencies 배열이 있으면 전체를 뱃지로 렌더링
+  if (Array.isArray(detectedRuntime.dependencies) && detectedRuntime.dependencies.length > 0) {
+    return detectedRuntime.dependencies.map(dep => {
+      const safeIcon = escapeHtml(dep.icon || dep.name);
+      const safeName = escapeHtml(dep.displayName || dep.name);
+      return `<span class="runtime-badge ${safeIcon}">${safeName}</span>`;
+    }).join("");
   }
-  const safeIcon = escapeHtml(detectedRuntime.name);
+
+  // 구 데이터 호환: dependencies 없으면 단일 뱃지
+  if (!detectedRuntime.name) return "";
+  const safeIcon = escapeHtml(detectedRuntime.icon || detectedRuntime.name);
   const safeName = escapeHtml(detectedRuntime.displayName || detectedRuntime.name);
   return `<span class="runtime-badge ${safeIcon}">${safeName}</span>`;
 }

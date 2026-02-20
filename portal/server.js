@@ -61,8 +61,6 @@ const USER_ID_REGEX = /^[a-z][a-z0-9]{2,19}$/;
 const APP_NAME_REGEX = /^[a-z][a-z0-9-]{2,29}$/;
 const APP_META_FILE = ".paas-meta.json";
 const APP_COMPOSE_FILE = "docker-compose.yml";
-const APP_SOURCE_SUBDIR = process.env.APP_SOURCE_SUBDIR || "app";
-
 const IS_DEV = process.env.RUN_MODE === "development";
 
 // dev/prod 환경 분기는 scripts/generate-compose.js가 RUN_MODE 환경변수로 처리한다.
@@ -118,33 +116,11 @@ function resolveHashPort(userid, appname) {
 }
 
 /**
- * 사용자 Dockerfile의 첫 번째 EXPOSE 포트를 비동기로 파싱한다.
- * 없거나 읽기 실패 시 null 반환.
+ * dev 모드에서 앱의 호스트 포트를 반환한다.
+ * 컨테이너 포트는 항상 5000으로 고정되므로, 호스트 포트만 djb2 해시로 결정한다.
  */
-async function parseDockerfileExposePort(dockerfilePath) {
-  try {
-    const content = await fs.readFile(dockerfilePath, "utf8");
-    for (const line of content.split("\n")) {
-      const trimmed = line.trim();
-      if (/^EXPOSE\s+\d+/i.test(trimmed)) {
-        const port = Number.parseInt(trimmed.split(/\s+/)[1], 10);
-        if (port > 0 && port <= 65535) return port;
-      }
-    }
-  } catch {
-    // Dockerfile 없음 또는 읽기 실패
-  }
-  return null;
-}
-
-/**
- * dev 모드에서 앱의 실제 호스트 포트를 반환한다.
- * 사용자 Dockerfile에 EXPOSE가 있으면 그 포트, 없으면 djb2 해시 포트.
- */
-async function resolveDevPort(userid, appname, appDir) {
-  const dockerfilePath = path.join(appDir, APP_SOURCE_SUBDIR, "Dockerfile");
-  const exposePort = await parseDockerfileExposePort(dockerfilePath);
-  return exposePort ?? resolveHashPort(userid, appname);
+function resolveDevPort(userid, appname) {
+  return resolveHashPort(userid, appname);
 }
 
 function sendOk(res, data = {}, statusCode = 200) {
@@ -557,7 +533,7 @@ async function buildAppInfo(userid, appname, statusMap) {
       ? statusMap.get(appContainerName)
       : await getDockerContainerStatus(appDir, appContainerName);
 
-  const devPort = IS_DEV ? await resolveDevPort(userid, appname, appDir) : null;
+  const devPort = IS_DEV ? resolveDevPort(userid, appname) : null;
 
   return {
     userid,

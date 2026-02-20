@@ -69,7 +69,7 @@ echo "[create] Dockerfile 생성 중..."
 node "${GENERATE_DOCKERFILE_TOOL}" "${RUNTIME_JSON}" "${APP_DIR}/${APP_SOURCE_SUBDIR}"
 
 echo "[create] docker-compose.yml 생성 중..."
-node "${GENERATE_COMPOSE_TOOL}" "${USER_ID}" "${APP_NAME}" "${RUNTIME_JSON}"
+node "${GENERATE_COMPOSE_TOOL}" "${USER_ID}" "${APP_NAME}"
 
 echo "[create] 앱 메타데이터 기록..."
 REPO_URL="${REPO_URL}" \
@@ -81,7 +81,7 @@ const meta = {
   repoUrl: process.env.REPO_URL,
   branch: process.env.BRANCH,
   createdAt: new Date().toISOString(),
-  detectedRuntime: (({ runtime, displayName, icon }) => ({ name: runtime, displayName, icon }))(JSON.parse(process.env.RUNTIME_JSON))
+  detectedRuntime: (({ runtime, displayName, icon, dependencies }) => ({ name: runtime, displayName, icon, dependencies }))(JSON.parse(process.env.RUNTIME_JSON))
 };
 require('fs').writeFileSync(process.env.META_PATH, JSON.stringify(meta, null, 2));
 "
