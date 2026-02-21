@@ -217,23 +217,29 @@ function syncDomainPreview() {
 
 // ── 런타임 뱃지 HTML 생성 ────────────────────────────────────────────────────
 
+// 서버가 내려보내는 icon 클래스와 displayName으로 단일 뱃지 HTML을 생성한다.
+function badgeForRuntime(iconKey, displayName) {
+  const safeClass = escapeHtml(String(iconKey ?? ""));
+  const safeLabel = escapeHtml(String(displayName ?? iconKey));
+  return `<span class="runtime-badge ${safeClass}">${safeLabel}</span>`;
+}
+
 // detectedRuntime 메타데이터를 기반으로 기술 스택 뱃지 HTML을 생성한다.
 // dependencies 배열이 있으면 각 항목을 개별 뱃지로, 없으면 단일 뱃지로 렌더링한다.
 function runtimeBadgeHtml(detectedRuntime) {
   if (!detectedRuntime) return "";
 
   if (Array.isArray(detectedRuntime.dependencies) && detectedRuntime.dependencies.length > 0) {
-    return detectedRuntime.dependencies.map((dep) => {
-      const safeIcon = escapeHtml(dep.icon || dep.name);
-      const safeName = escapeHtml(dep.displayName || dep.name);
-      return `<span class="runtime-badge ${safeIcon}">${safeName}</span>`;
-    }).join("");
+    return detectedRuntime.dependencies
+      .map(dep => badgeForRuntime(dep.icon ?? dep.name, dep.displayName ?? dep.name))
+      .join("");
   }
 
   if (!detectedRuntime.name) return "";
-  const safeIcon = escapeHtml(detectedRuntime.icon || detectedRuntime.name);
-  const safeName = escapeHtml(detectedRuntime.displayName || detectedRuntime.name);
-  return `<span class="runtime-badge ${safeIcon}">${safeName}</span>`;
+  return badgeForRuntime(
+    detectedRuntime.icon ?? detectedRuntime.name,
+    detectedRuntime.displayName ?? detectedRuntime.name,
+  );
 }
 
 // ── 접근 상태 적용 ────────────────────────────────────────────────────────────

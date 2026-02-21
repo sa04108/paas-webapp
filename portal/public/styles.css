@@ -770,8 +770,10 @@ code {
   font-size: 0.84rem;
 }
 
-/* ── Runtime badge ── */
+/* ── Runtime badge (아이콘 전용 컴팩트 칩) ── */
 
+/* 런타임 이름을 풀네임 텍스트로 표시한다.
+   white-space: nowrap으로 배지 내부에서 줄바꿈 없이 한 덩어리로 유지한다. */
 .runtime-badge {
   display: inline-flex;
   align-items: center;
@@ -782,6 +784,7 @@ code {
   letter-spacing: 0.02em;
   line-height: 1.6;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .runtime-badge.nextjs  { background: #000;    color: #fff; }
@@ -945,13 +948,20 @@ code {
   gap: 11px;
   box-shadow: 0 10px 28px rgba(20, 56, 88, 0.1);
   animation: card-in 0.4s ease both;
+  min-width: 0; /* grid item의 min-width:auto 기본값으로 인한 컨테이너 이탈 방지 */
+  position: relative;
 }
 
 .app-card-head {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 앱 이름 행 — 관리 버튼이 absolute로 우상단에 고정되므로 우측 여백 확보 */
+.app-card-title-row {
+  min-width: 0;
+  padding-right: 68px; /* 관리 버튼 너비(~52px) + 여백(16px) */
 }
 
 .app-name {
@@ -1352,8 +1362,9 @@ code {
   color: var(--ink-main);
   cursor: pointer;
   text-align: left;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere; /* 하이픈 없는 긴 이름도 글자 단위로 줄바꿈 허용 */
   text-decoration: underline;
   text-decoration-color: transparent;
   text-underline-offset: 3px;
@@ -1372,18 +1383,21 @@ code {
   opacity: 1;
 }
 
-.app-card-head-right {
+/* 2행: 런타임 뱃지 + 상태 pill — 넘치면 줄바꿈 */
+.app-card-badges {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 
 .app-manage-btn {
+  position: absolute;
+  top: 15px;  /* 카드 padding과 일치 */
+  right: 15px;
   padding: 7px 11px;
   font-size: 0.78rem;
   white-space: nowrap;
-  flex-shrink: 0;
 }
 
 /* ── App detail — sub GNB ── */

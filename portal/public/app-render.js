@@ -63,13 +63,13 @@ function renderApps(apps) {
     return `
       <article class="app-card" data-userid="${safeUser}" data-appname="${safeApp}">
         <div class="app-card-head">
-          <button class="app-name-btn" data-action="manage" type="button" ${actionsDisabled}>${safeUser} / ${safeApp}</button>
-          <div class="app-card-head-right">
-            <div class="app-card-badges">
-              ${badgeHtml}
-              <span class="status-pill ${statusClass(rawStatus)}">${safeStatus}</span>
-            </div>
+          <div class="app-card-title-row">
+            <button class="app-name-btn" data-action="manage" type="button" ${actionsDisabled}>${safeUser} / ${safeApp}</button>
             <button class="action-btn app-manage-btn" data-action="manage" type="button" ${actionsDisabled}>관리</button>
+          </div>
+          <div class="app-card-badges">
+            ${badgeHtml}
+            <span class="status-pill ${statusClass(rawStatus)}">${safeStatus}</span>
           </div>
         </div>
         <p class="app-domain">${domainHtml}</p>
