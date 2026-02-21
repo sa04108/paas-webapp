@@ -47,8 +47,9 @@ async function apiFetch(path, options = {}) {
 
 async function loadConfig() {
   const data = await apiFetch("/config");
-  state.domain  = data.domain  || "my.domain.com";
-  state.devMode = Boolean(data.devMode);
+  state.domain      = data.domain  || "my.domain.com";
+  state.devMode     = Boolean(data.devMode);
+  state.traefikPort = data.traefikPort || null;
   el.domainChip.textContent = state.domain;
   el.limitChip.textContent  = `${data.limits.maxAppsPerUser}/${data.limits.maxTotalApps}`;
   el.devModeBadge.hidden = !state.devMode;

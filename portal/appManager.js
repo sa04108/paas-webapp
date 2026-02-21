@@ -17,7 +17,6 @@ const readline = require("node:readline");
 const { AppError } = require("./utils");
 const {
   config,
-  IS_DEV,
   RUNNER_SCRIPTS,
   USER_ID_REGEX,
   APP_NAME_REGEX,
@@ -147,17 +146,6 @@ async function readContainerName(appDir) {
 
 // ── 앱 정보 조회 ──────────────────────────────────────────────────────────────
 
-// dev 모드에서 앱의 호스트 포트를 결정하는 djb2 해시 (20000-29999 범위).
-// generate-compose.js의 resolveHostPort와 동일한 알고리즘을 사용하여
-// 서버/클라이언트가 같은 포트를 계산할 수 있도록 보장한다.
-function resolveDevPort(userid, appname) {
-  let hash = 5381;
-  for (const ch of `${userid}/${appname}`) {
-    hash = (((hash << 5) + hash) ^ ch.charCodeAt(0)) >>> 0;
-  }
-  return 20000 + (hash % 10000);
-}
-
 // Docker 상태 문자열을 정규화된 키워드로 변환한다.
 // docker ps의 Status 컬럼은 "Up 2 hours", "Exited (1) 5 minutes ago" 같은
 // 자유 형식이므로, 포함 여부로 판단한다.
@@ -193,7 +181,6 @@ async function buildAppInfo(userid, appname, statusMap) {
     userid,
     appname,
     domain: domainName(userid, appname),
-    devPort: IS_DEV ? resolveDevPort(userid, appname) : null,
     containerName: appContainerName,
     status: normalizeStatus(rawStatus),
     rawStatus,

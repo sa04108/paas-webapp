@@ -48,14 +48,13 @@ function renderApps(apps) {
     const safeCreatedAt = escapeHtml(formatDate(appItem.createdAt));
     const badgeHtml     = runtimeBadgeHtml(appItem.detectedRuntime);
 
-    // dev 모드에서는 외부 도메인 대신 localhost:port 링크를 제공한다.
+    // dev 모드에서는 http + Traefik 호스트 포트를 붙인다 (*.localhost 자동 해석).
+    // prod 모드에서는 https (NPM이 443 처리).
     let domainHtml;
-    if (state.devMode && appItem.devPort) {
-      const url     = `http://localhost:${appItem.devPort}`;
-      const safeUrl = escapeHtml(url);
-      domainHtml = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>`;
-    } else if (appItem.domain) {
-      const url = `https://${appItem.domain}`;
+    if (appItem.domain) {
+      const url = state.devMode && state.traefikPort
+        ? `http://${appItem.domain}:${state.traefikPort}`
+        : `https://${appItem.domain}`;
       domainHtml = `<a href="${url}" target="_blank" rel="noopener noreferrer">${escapeHtml(appItem.domain)}</a>`;
     } else {
       domainHtml = "-";

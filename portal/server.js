@@ -56,8 +56,9 @@ app.get("/health", (_req, res) =>
 
 app.get("/config", (_req, res) =>
   sendOk(res, {
-    domain:  config.PAAS_DOMAIN,
-    devMode: IS_DEV,
+    domain:      config.PAAS_DOMAIN,
+    devMode:     IS_DEV,
+    traefikPort: IS_DEV ? config.TRAEFIK_HOST_PORT : null,
     limits: {
       maxAppsPerUser: config.MAX_APPS_PER_USER,
       maxTotalApps:   config.MAX_TOTAL_APPS,

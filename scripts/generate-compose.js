@@ -6,12 +6,10 @@
  *
  * {APP_DIR}/docker-compose.yml을 생성한다.
  *
- * 컨테이너 포트: 사용 중인 Dockerfile의 EXPOSE 포트 (없으면 3000 기본값)
- * 호스트 포트:   djb2 해시 기반 결정적 포트 (20000-29999, dev 모드 전용)
+ * 컨테이너 포트: 사용 중인 Dockerfile의 EXPOSE 포트 (없으면 기본값)
  *
- * 환경 분기:
- *   RUN_MODE=development  → 호스트 포트 직접 노출
- *   RUN_MODE=production   → 포트 노출 없음, external 네트워크 사용 (리버스 프록시 라우팅)
+ * 모든 환경에서 포트를 직접 노출하지 않고 Traefik 리버스 프록시를 경유한다.
+ * dev 환경에서는 PAAS_DOMAIN=localhost 설정으로 *.localhost 도메인을 통해 접근한다.
  */
 
 const fs = require('node:fs');
@@ -33,8 +31,6 @@ const DEFAULT_RESTART_POLICY = process.env.DEFAULT_RESTART_POLICY || 'unless-sto
 // --- 내부 규약 ---
 const PAAS_DOCKERFILE_NAME = '.paas.Dockerfile';
 const DEFAULT_CONTAINER_PORT = 5000;
-
-const IS_DEV = process.env.RUN_MODE === 'development';
 
 // --- 유틸 ---
 
@@ -58,22 +54,10 @@ function parseDockerfileExposePort(dockerfilePath) {
   return null;
 }
 
-/**
- * 앱별 결정적 호스트 포트 산출 (djb2 변형, 20000-29999 범위).
- * dev 환경에서만 사용.
- */
-function resolveHostPort(userid, appname) {
-  let hash = 5381;
-  for (const ch of `${userid}/${appname}`) {
-    hash = (((hash << 5) + hash) ^ ch.charCodeAt(0)) >>> 0;
-  }
-  return 20000 + (hash % 10000);
-}
-
 // --- compose 생성 ---
 
 /**
- * @returns {{ content: string, hostPort: number, containerPort: number }}
+ * @returns {{ content: string, containerPort: number }}
  */
 function buildCompose({ userid, appname, appDir }) {
   const containerName = `${APP_CONTAINER_PREFIX}-${userid}-${appname}`;
@@ -85,17 +69,11 @@ function buildCompose({ userid, appname, appDir }) {
   // 사용 중인 Dockerfile 결정
   const dockerfileRef = hasUserDockerfile ? 'Dockerfile' : PAAS_DOCKERFILE_NAME;
 
-  const hostPort = resolveHostPort(userid, appname);
-
   // 컨테이너 포트: 사용 Dockerfile의 EXPOSE 값, 없으면 기본값
   const dockerfilePath = hasUserDockerfile
     ? userDockerfilePath
     : path.join(appDir, APP_SOURCE_SUBDIR, PAAS_DOCKERFILE_NAME);
   const containerPort = parseDockerfileExposePort(dockerfilePath) ?? DEFAULT_CONTAINER_PORT;
-
-  const portsLines = IS_DEV
-    ? ['    ports:', `      - "0.0.0.0:${hostPort}:${containerPort}"`]
-    : [];
 
   const content = [
     'services:',
@@ -105,7 +83,6 @@ function buildCompose({ userid, appname, appDir }) {
     `      dockerfile: ${JSON.stringify(dockerfileRef)}`,
     `    container_name: ${JSON.stringify(containerName)}`,
     `    restart: ${JSON.stringify(DEFAULT_RESTART_POLICY)}`,
-    ...portsLines,
     '    volumes:',
     `      - "./${APP_DATA_SUBDIR}:/data"`,
     '    environment:',
@@ -136,7 +113,7 @@ function buildCompose({ userid, appname, appDir }) {
     '',
   ].join('\n');
 
-  return { content, hostPort, containerPort };
+  return { content, containerPort };
 }
 
 // --- CLI entry point ---
@@ -153,12 +130,10 @@ const appDir = path.resolve(PAAS_APPS_DIR, userid, appname);
 const composePath = path.join(appDir, APP_COMPOSE_FILE);
 
 try {
-  const { content, hostPort, containerPort } = buildCompose({ userid, appname, appDir });
+  const { content, containerPort } = buildCompose({ userid, appname, appDir });
   fs.writeFileSync(composePath, content);
   process.stdout.write(`[generate-compose] 생성 완료: ${composePath}\n`);
-  if (IS_DEV) {
-    process.stdout.write(`[generate-compose] 호스트 포트: ${hostPort} → 컨테이너 포트: ${containerPort}\n`);
-  }
+  process.stdout.write(`[generate-compose] 컨테이너 포트: ${containerPort}\n`);
 } catch (e) {
   process.stderr.write(`docker-compose.yml 생성 실패: ${e.message}\n`);
   process.exit(1);

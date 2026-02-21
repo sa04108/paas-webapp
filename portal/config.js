@@ -22,6 +22,7 @@ const paasRoot = process.env.PAAS_ROOT || repoRoot;
 
 const config = {
   PAAS_DOMAIN:        process.env.PAAS_DOMAIN || "my.domain.com",
+  TRAEFIK_HOST_PORT:  toPositiveInt(process.env.TRAEFIK_HOST_PORT, 18080),
   PAAS_APPS_DIR:      process.env.PAAS_APPS_DIR || path.join(paasRoot, "apps"),
   PAAS_SCRIPTS_DIR:   process.env.PAAS_SCRIPTS_DIR || path.join(paasRoot, "scripts"),
   PORTAL_PORT:        toPositiveInt(process.env.PORTAL_PORT, 3000),

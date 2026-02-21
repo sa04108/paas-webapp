@@ -25,8 +25,9 @@ export const CREATE_FIELD_SHAKE_DURATION_MS = 320; // shake 애니메이션 지�
 // ── 앱 런타임 상태 ────────────────────────────────────────────────────────────
 
 export const state = {
-  domain:  "my.domain.com",
-  devMode: false,
+  domain:      "my.domain.com",
+  devMode:     false,
+  traefikPort: null,
   apps:    [],
   users:   [],
   pendingDeleteUser:  null,  // 삭제 확인 모달에 표시할 대상 사용자
