@@ -123,7 +123,7 @@ router.get("/", async (req, res, next) => {
     const fsApps = await listFilesystemApps();
     const user = req.auth?.user;
     // 모든 사용자(admin 포함)는 본인이 생성한 앱만 대시보드에서 조회한다.
-    const visibleApps = fsApps.filter((item) => item.userid === user?.username);
+    const visibleApps = fsApps.filter((item) => String(item.userid).toLowerCase() === String(user?.username || "").toLowerCase());
     const dockerStatuses = await listDockerStatuses();
     const appDetails = await Promise.all(
       visibleApps.map((appItem) => buildAppInfo(appItem.userid, appItem.appname, dockerStatuses))
