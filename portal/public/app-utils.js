@@ -33,6 +33,7 @@ function showToast(message, type = "info", durationMs = 4000) {
 
   const dismiss = () => {
     if (!toast.isConnected) return;
+    toast.style.animation = "none"; // forwards fill이 transition을 덮는 것을 방지
     toast.classList.add("dismissing");
     toast.addEventListener("transitionend", () => toast.remove(), { once: true });
   };
