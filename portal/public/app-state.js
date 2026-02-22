@@ -149,6 +149,12 @@ export const el = {
   submitPromoteAdminBtn:  document.getElementById("submit-promote-admin-btn"),
   promoteAdminTarget:     document.getElementById("promote-admin-target"),
   promoteAdminError:      document.getElementById("promote-admin-error"),
+
+  // 작업 목록 모달
+  jobListModal:           document.getElementById("job-list-modal"),
+  closeJobListBtn:        document.getElementById("close-job-list-btn"),
+  jobListTbody:           document.getElementById("job-list-tbody"),
+  jobListEmpty:           document.getElementById("job-list-empty"),
 };
 
 // 각 모달의 백드롭 클릭 시작 여부를 추적한다.
@@ -159,6 +165,7 @@ export const modalBackdropState = {
   createUser:  false,
   deleteUser:  false,
   promoteAdmin: false,
+  jobList:     false,
 };
 
 // 앱 생성 폼의 shake 애니메이션 타이머 ID 목록 (clearCreateValidationTimers로 일괄 취소)

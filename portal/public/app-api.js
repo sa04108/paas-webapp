@@ -285,6 +285,22 @@ async function retryJob(jobId) {
   return data;
 }
 
+/**
+ * interrupted/failed job을 서버에 취소(복구) 요청한다.
+ */
+async function cancelJob(jobId) {
+  const data = await apiFetch(`/jobs/${jobId}/cancel`, { method: "POST" });
+  const job = state.jobs.find((j) => j.id === jobId);
+  const label = job ? _jobLabel(job) : jobId;
+  showToast(`✅ 작업 취소 완료: ${label}`, "success");
+
+  // 상태 배열에서 직접 제거
+  state.jobs = state.jobs.filter((j) => j.id !== jobId);
+  renderJobIndicator(state.jobs);
+  await loadApps().catch(() => {});
+  return data;
+}
+
 // ── 공통 에러 처리 ────────────────────────────────────────────────────────────
 
 async function handleRequestError(error) {
@@ -463,6 +479,7 @@ export {
   pollJob,
   refreshDashboardData,
   retryJob,
+  cancelJob,
   saveDetailEnv,
   startAutoRefresh,
   startJobPolling,

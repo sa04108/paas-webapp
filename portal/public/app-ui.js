@@ -30,7 +30,7 @@ import {
   setPromoteAdminError,
   setSettingsError,
 } from "./app-utils.js";
-import { renderUsers } from "./app-render.js";
+import { renderUsers, renderJobList } from "./app-render.js";
 
 const uiHandlers = {
   loadDetailEnv: async () => {},
@@ -115,7 +115,8 @@ function syncModalOpenState() {
     !el.settingsModal.hidden   ||
     !el.createUserModal.hidden ||
     !el.deleteUserModal.hidden ||
-    !el.promoteAdminModal.hidden;
+    !el.promoteAdminModal.hidden ||
+    !el.jobListModal.hidden;
   document.body.classList.toggle("modal-open", hasOpenModal);
 }
 
@@ -223,6 +224,20 @@ function closePromoteAdminModal() {
   syncModalOpenState();
 }
 
+// ── 작업 목록 모달 ────────────────────────────────────────────────────────────
+
+function openJobListModal() {
+  modalBackdropState.jobList = false;
+  el.jobListModal.hidden = false;
+  syncModalOpenState();
+}
+
+function closeJobListModal() {
+  modalBackdropState.jobList = false;
+  el.jobListModal.hidden = true;
+  syncModalOpenState();
+}
+
 // ── 인증 UI 동기화 ────────────────────────────────────────────────────────────
 
 // 로그인 상태·역할·비밀번호 잠금 여부에 따라 전체 UI를 동기화한다.
@@ -268,6 +283,8 @@ function updateAuthUi() {
 // 진행중 job 목록을 기반으로 floating indicator와 상태 배너를 업데이트한다.
 // jobStore와 폴링 로직이 호출; 순환 의존 방지를 위해 retryJob은 핸들러로 주입받는다.
 function renderJobIndicator(jobs) {
+  renderJobList(jobs);
+
   const indicator = document.getElementById("job-indicator");
   if (!indicator) return;
 
@@ -294,8 +311,11 @@ function renderJobIndicator(jobs) {
   if (alertJobs.length > 0) {
     parts.push(
       `<span class="job-alert">⚠️ ${alertJobs.length}개 작업 중단 / 실패` +
-      ` — <button class="job-retry-all-btn" data-action="retry-all">재시도</button></span>`
+      ` — <button class="job-retry-all-btn" data-action="retry-all">재시도</button>` +
+      ` <button class="job-view-list-btn ghost-btn" style="padding: 2px 8px; margin-left:8px;" data-action="view-list">목록 보기</button></span>`
     );
+  } else if (activeJobs.length > 0) {
+    parts.push(`<button class="job-view-list-btn ghost-btn" style="padding: 2px 8px; margin-left:8px;" data-action="view-list">목록 보기</button>`);
   }
 
   indicator.innerHTML = parts.join(" &nbsp;|&nbsp; ");
@@ -305,6 +325,12 @@ function renderJobIndicator(jobs) {
     btn.addEventListener("click", () => {
       uiHandlers.retryAllAlertJobs?.(alertJobs);
     }, { once: true });
+  });
+
+  indicator.querySelectorAll(".job-view-list-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      openJobListModal();
+    });
   });
 }
 
@@ -316,12 +342,14 @@ export {
   closeMobileMenu,
   closePromoteAdminModal,
   closeSettingsModal,
+  closeJobListModal,
   configureUiHandlers,
   navigateToApp,
   openCreateUserModal,
   openDeleteUserModal,
   openPromoteAdminModal,
   openSettingsModal,
+  openJobListModal,
   renderJobIndicator,
   switchDetailTab,
   switchView,

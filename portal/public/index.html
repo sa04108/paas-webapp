@@ -371,6 +371,35 @@
         </section>
     </div>
 
+    <!-- ── 작업 목록 모달 ── -->
+    <div id="job-list-modal" class="modal-backdrop" hidden>
+        <section class="modal-card panel-inset job-list-modal-card" role="dialog" aria-modal="true"
+            aria-labelledby="job-list-title">
+            <div class="modal-head">
+                <h2 id="job-list-title">작업 목록</h2>
+                <button id="close-job-list-btn" class="icon-btn close-icon-btn" type="button" aria-label="작업 목록 닫기">
+                    <span aria-hidden="true">x</span>
+                </button>
+            </div>
+            <p class="modal-description">현재 진행 중이거나 실패한 백그라운드 작업입니다.</p>
+            <div class="users-table-wrap">
+                <table class="users-table" id="job-list-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">작업</th>
+                            <th scope="col">앱</th>
+                            <th scope="col">상태</th>
+                            <th scope="col">오류 사유</th>
+                            <th scope="col">관리</th>
+                        </tr>
+                    </thead>
+                    <tbody id="job-list-tbody"></tbody>
+                </table>
+            </div>
+            <p id="job-list-empty" class="empty-state" hidden>현재 작업이 없습니다.</p>
+        </section>
+    </div>
+
     <!-- 우하단 고정 영역: toast는 위쪽에 쌓이고, job indicator는 하단에 고정 -->
     <div class="bottom-right-stack">
         <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="false"></div>

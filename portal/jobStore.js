@@ -147,6 +147,15 @@ function requeueJob(jobId) {
   if (!_logBuffers.has(jobId)) _logBuffers.set(jobId, []);
 }
 
+/**
+ * job을 DB에서 완전히 삭제한다 (취소/복구용).
+ */
+function deleteJob(jobId) {
+  _db.prepare("DELETE FROM jobs WHERE id = ?").run(jobId);
+  _logBuffers.delete(jobId);
+  _closeSseSubscribers(jobId, "done");
+}
+
 // ── 조회 ──────────────────────────────────────────────────────────────────────
 
 /**
@@ -318,6 +327,7 @@ module.exports = {
   failJob,
   interruptJob,
   requeueJob,
+  deleteJob,
   getJob,
   listJobsByUser,
   listActiveJobs,

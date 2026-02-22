@@ -1123,6 +1123,10 @@ code {
   width: min(460px, 100%);
 }
 
+.job-list-modal-card {
+  width: min(840px, 100%) !important;
+}
+
 .modal-head {
   display: flex;
   align-items: center;
@@ -1187,6 +1191,28 @@ code {
     opacity: 1;
     transform: translateX(0);
   }
+}
+
+.job-error-cell {
+  max-width: 260px;
+  word-break: break-word;
+}
+
+.job-error-text {
+  display: inline-block;
+  color: #a83d3d;
+  font-size: 0.8rem;
+  background: rgba(206, 77, 77, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(206, 77, 77, 0.2);
+  line-height: 1.3;
+}
+
+#job-list-table th,
+#job-list-table td {
+  padding: 8px 10px;
+  /* 줄인 간격 */
 }
 
 @keyframes fade-in {
@@ -1408,6 +1434,19 @@ code {
 
   .modal-actions {
     flex-direction: column;
+  }
+
+  .job-error-cell {
+    max-width: none;
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+  }
+
+  #job-list-table th,
+  #job-list-table td {
+    padding: 6px 8px;
+    font-size: 0.8rem;
   }
 }
 

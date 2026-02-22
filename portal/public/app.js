@@ -37,6 +37,7 @@ import {
   closeMobileMenu,
   closePromoteAdminModal,
   closeSettingsModal,
+  closeJobListModal,
   configureUiHandlers,
   openCreateUserModal,
   openDeleteUserModal,
@@ -73,6 +74,7 @@ import {
   performAction,
   refreshDashboardData,
   retryJob,
+  cancelJob,
   saveDetailEnv,
   stopAutoRefresh,
 } from "./app-api.js";
@@ -448,6 +450,30 @@ el.usersTableBody.addEventListener("click", (event) => {
   }
 });
 
+// ── 직업 목록 모달 ────────────────────────────────────────────────────────────
+
+el.closeJobListBtn.addEventListener("click", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  closeJobListModal();
+});
+bindBackdropClose(el.jobListModal, "jobList", closeJobListModal);
+
+el.jobListTbody.addEventListener("click", async (event) => {
+  const retryBtn = event.target.closest("button[data-action='retry-job']");
+  if (retryBtn) {
+    const id = retryBtn.dataset.id;
+    if (id) await retryJob(id).catch(handleRequestError);
+    return;
+  }
+
+  const cancelBtn = event.target.closest("button[data-action='cancel-job']");
+  if (cancelBtn) {
+    const id = cancelBtn.dataset.id;
+    if (id) await cancelJob(id).catch(handleRequestError);
+  }
+});
+
 // ── ESC 키 모달 닫기 ──────────────────────────────────────────────────────────
 
 // 열린 모달 중 우선순위(promoteAdmin > deleteUser > createUser > settings) 순서로 닫는다.
@@ -456,7 +482,8 @@ document.addEventListener("keydown", (event) => {
   if (!el.promoteAdminModal.hidden) { closePromoteAdminModal();                  return; }
   if (!el.deleteUserModal.hidden)   { closeDeleteUserModal({ resetForm: true }); return; }
   if (!el.createUserModal.hidden)   { closeCreateUserModal({ resetForm: true }); return; }
-  if (!el.settingsModal.hidden)     { closeSettingsModal(); }
+  if (!el.settingsModal.hidden)     { closeSettingsModal();                      return; }
+  if (!el.jobListModal.hidden)      { closeJobListModal(); }
 });
 
 // ── 부트스트랩 ────────────────────────────────────────────────────────────────

@@ -10,6 +10,8 @@
 const express = require("express");
 const { ROLE_ADMIN } = require("../authService");
 const { AppError, sendOk, sendError } = require("../utils");
+const { RUNNER_SCRIPTS } = require("../config");
+const { runRunnerScript } = require("../appManager");
 const jobStore = require("../jobStore");
 
 const router = express.Router();
@@ -135,6 +137,38 @@ router.post("/:id/retry", async (req, res, next) => {
     );
 
     return sendOk(res, { jobId: job.id, status: "pending" });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// ── POST /jobs/:id/cancel ─────────────────────────────────────────────────────
+
+// interrupted 또는 failed 상태의 job을 취소하고 DB에서 완전히 제거한다.
+// create 작업의 경우 생성 중이던 잔류 파일과 컨테이너를 함께 정리(delete.sh)한다.
+router.post("/:id/cancel", async (req, res, next) => {
+  try {
+    const job = jobStore.getJob(req.params.id);
+    if (!job) return next(new AppError(404, "Job not found"));
+    assertJobAccess(req, job);
+
+    const cancelableStatuses = ["interrupted", "failed"];
+    if (!cancelableStatuses.includes(job.status)) {
+      throw new AppError(409, `Job is in '${job.status}' status and cannot be canceled`);
+    }
+
+    if (job.type === "create") {
+      const { userid, appname } = job.meta;
+      try {
+        await runRunnerScript(RUNNER_SCRIPTS.delete, [userid, appname]);
+      } catch (err) {
+        console.error(`[jobs] cleanup failed during cancel for ${job.id}:`, err);
+        // 클린업 중 오류가 발생해도 job 삭제는 진행한다.
+      }
+    }
+
+    jobStore.deleteJob(job.id);
+    return sendOk(res, { jobId: job.id, status: "canceled" });
   } catch (error) {
     return next(error);
   }

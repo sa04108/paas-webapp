@@ -153,7 +153,68 @@ function renderUsers(users) {
   }).join("");
 }
 
+// ── 작업 목록 테이블 렌더링 ──────────────────────────────────────────────────────
+
+function renderJobList(jobs) {
+  const activeStatuses = new Set(["pending", "running", "interrupted", "failed"]);
+  const activeJobs = jobs.filter((j) => activeStatuses.has(j.status));
+
+  const table = document.getElementById("job-list-table");
+  if (!activeJobs.length) {
+    el.jobListTbody.innerHTML = "";
+    el.jobListEmpty.hidden = false;
+    table.hidden = true;
+    return;
+  }
+
+  el.jobListEmpty.hidden = true;
+  table.hidden = false;
+
+  el.jobListTbody.innerHTML = activeJobs.map((job) => {
+    const typeMap = {
+      create: "앱 생성",
+      deploy: "재배포",
+      delete: "앱 삭제",
+      start:  "시작",
+      stop:   "중지",
+      "env-restart": "환경변수 재시작",
+    };
+    const jobName = escapeHtml(typeMap[job.type] || job.type);
+    const appPart = job.meta?.appname ? escapeHtml(`${job.meta.userid}/${job.meta.appname}`) : "-";
+    const rawStatus = job.status;
+    const safeStatus = escapeHtml(rawStatus);
+    
+    let errorReason = "-";
+    if (rawStatus === "failed" && job.error) {
+       errorReason = `<span class="job-error-text" title="${escapeHtml(job.error)}">${escapeHtml(job.error)}</span>`;
+    } else if (rawStatus === "interrupted") {
+       errorReason = `<span class="ink-subtle">서버 재시작으로 중단됨</span>`;
+    }
+
+    let actions = `<span class="ink-subtle">-</span>`;
+    if (rawStatus === "interrupted" || rawStatus === "failed") {
+      actions = `
+        <div class="users-action-group">
+          <button class="action-btn" data-action="retry-job" data-id="${job.id}" type="button">재시도</button>
+          <button class="action-btn danger" data-action="cancel-job" data-id="${job.id}" type="button">취소</button>
+        </div>
+      `;
+    }
+
+    return `
+      <tr>
+        <td>${jobName}</td>
+        <td>${appPart}</td>
+        <td><span class="status-pill ${statusClass(rawStatus)}">${safeStatus}</span></td>
+        <td class="job-error-cell">${errorReason}</td>
+        <td>${actions}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
 export {
   renderApps,
   renderUsers,
+  renderJobList,
 };
