@@ -63,6 +63,7 @@ import {
   handleCreate,
   handleRequestError,
   handleSettingsModalError,
+  loadAndRecoverJobs,
   loadApps,
   loadConfig,
   loadDetailEnv,
@@ -71,6 +72,7 @@ import {
   loadUsers,
   performAction,
   refreshDashboardData,
+  retryJob,
   saveDetailEnv,
   stopAutoRefresh,
 } from "./app-api.js";
@@ -81,6 +83,12 @@ configureUiHandlers({
   loadDetailEnv,
   loadDetailLogs,
   resetExecForApp,
+  // interrupted/failed job 전체 재시도 (job indicator에서 호출)
+  retryAllAlertJobs: async (alertJobs) => {
+    for (const job of alertJobs) {
+      await retryJob(job.id).catch(() => {});
+    }
+  },
 });
 
 el.appnameInput.addEventListener("input", () => {
@@ -475,6 +483,10 @@ async function bootstrap() {
   persistUiState();
 
   await refreshDashboardData();
+
+  // 새로고침/재방문 시 진행중 job 복원
+  await loadAndRecoverJobs();
+
   if (isPasswordLocked()) {
     setBanner("초기 비밀번호를 우상단 설정에서 변경하세요.", "error");
     return;

@@ -263,6 +263,52 @@ function updateAuthUi() {
   applyAccessState();
 }
 
+// ── Job Indicator ────────────────────────────────────────────────────────────
+
+// 진행중 job 목록을 기반으로 floating indicator와 상태 배너를 업데이트한다.
+// jobStore와 폴링 로직이 호출; 순환 의존 방지를 위해 retryJob은 핸들러로 주입받는다.
+function renderJobIndicator(jobs) {
+  const indicator = document.getElementById("job-indicator");
+  if (!indicator) return;
+
+  const activeStatuses = new Set(["pending", "running"]);
+  const alertStatuses  = new Set(["interrupted", "failed"]);
+
+  const activeJobs    = jobs.filter((j) => activeStatuses.has(j.status));
+  const alertJobs     = jobs.filter((j) => alertStatuses.has(j.status));
+
+  if (activeJobs.length === 0 && alertJobs.length === 0) {
+    indicator.hidden = true;
+    return;
+  }
+
+  indicator.hidden = false;
+
+  const parts = [];
+  if (activeJobs.length > 0) {
+    parts.push(
+      `<span class="job-spinner">⏳</span> ` +
+      `${activeJobs.length}개 작업 진행 중`
+    );
+  }
+  if (alertJobs.length > 0) {
+    parts.push(
+      `<span class="job-alert">⚠️ ${alertJobs.length}개 작업 중단 / 실패` +
+      ` — <button class="job-retry-all-btn" data-action="retry-all">재시도</button></span>`
+    );
+  }
+
+  indicator.innerHTML = parts.join(" &nbsp;|&nbsp; ");
+
+  // 재시도 버튼 이벤트 바인딩
+  indicator.querySelectorAll(".job-retry-all-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      uiHandlers.retryAllAlertJobs?.(alertJobs);
+    }, { once: true });
+  });
+}
+
+
 export {
   bindBackdropClose,
   closeCreateUserModal,
@@ -276,6 +322,7 @@ export {
   openDeleteUserModal,
   openPromoteAdminModal,
   openSettingsModal,
+  renderJobIndicator,
   switchDetailTab,
   switchView,
   toggleMobileMenu,

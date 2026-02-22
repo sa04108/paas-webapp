@@ -3,15 +3,14 @@
 // =============================================================================
 // 역할:
 //   서버 API 호출과 데이터 로딩/자동갱신, 앱 액션(start/stop/deploy/delete)을 담당한다.
-//   모듈 import를 통해 render/ui/utils/state에 명시적으로 의존한다.
+//   장시간 작업은 202 비동기 응답 + jobId 폴링 패턴으로 처리한다.
 // =============================================================================
 
 // ── 기본 API 통신 ─────────────────────────────────────────────────────────────
 
-// 모든 API 호출의 기반 함수. 응답이 ok: false이거나 HTTP 오류면 예외를 던진다.
 import { AUTO_REFRESH_MS, el, state } from "./app-state.js";
 import { renderApps, renderUsers } from "./app-render.js";
-import { navigateToApp, switchView, updateAuthUi } from "./app-ui.js";
+import { navigateToApp, switchView, updateAuthUi, renderJobIndicator } from "./app-ui.js";
 import {
   canManageApps,
   canManageUsers,
@@ -25,6 +24,7 @@ import {
   validateCreateForm,
 } from "./app-utils.js";
 
+// 모든 API 호출의 기반 함수. 응답이 ok: false이거나 HTTP 오류면 예외를 던진다.
 async function apiFetch(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   if (options.body && !headers["Content-Type"]) {
@@ -132,10 +132,161 @@ function startAutoRefresh() {
   }, AUTO_REFRESH_MS);
 }
 
+// ── Job 폴링 ─────────────────────────────────────────────────────────────────
+//
+// 새로고침 이후에도 진행중 job 상태를 복원하는 핵심 메커니즘.
+// 부트스트랩 시 /jobs를 조회하여 active job을 감지하고 자동으로 폴링을 시작한다.
+
+const JOB_POLL_INTERVAL_MS = 1500;
+const TERMINAL_STATUSES = new Set(["done", "failed", "interrupted"]);
+
+/**
+ * job 상태를 주기적으로 조회하고 완료/실패 시 UI를 업데이트한다.
+ * 페이지 새로고침 후에도 동일 jobId로 재연결되면 상태 복원이 이루어진다.
+ *
+ * @param {string}   jobId
+ * @param {object}   callbacks
+ * @param {Function} callbacks.onDone   - status='done' 시 호출 (job 객체 전달)
+ * @param {Function} callbacks.onFail   - status='failed'|'interrupted' 시 호출
+ */
+function pollJob(jobId, callbacks = {}) {
+  if (state.jobPollers.has(jobId)) return; // 이미 폴링 중
+
+  const intervalId = setInterval(async () => {
+    try {
+      const data = await apiFetch(`/jobs/${jobId}`);
+      const job = data.job;
+
+      // state.jobs 업데이트
+      const idx = state.jobs.findIndex((j) => j.id === jobId);
+      if (idx >= 0) state.jobs[idx] = job;
+      else state.jobs.unshift(job);
+
+      renderJobIndicator(state.jobs);
+
+      if (TERMINAL_STATUSES.has(job.status)) {
+        clearInterval(intervalId);
+        state.jobPollers.delete(jobId);
+
+        if (job.status === "done") {
+          callbacks.onDone?.(job);
+        } else {
+          callbacks.onFail?.(job);
+        }
+        // 앱 목록 갱신 (job 완료 후 상태 반영)
+        await loadApps().catch(() => {});
+      }
+    } catch (error) {
+      if (error.status === 401) {
+        clearInterval(intervalId);
+        state.jobPollers.delete(jobId);
+      }
+      // 그 외 네트워크 오류는 다음 interval에서 재시도
+    }
+  }, JOB_POLL_INTERVAL_MS);
+
+  state.jobPollers.set(jobId, intervalId);
+}
+
+/**
+ * 서버의 /jobs 엔드포인트를 조회하여 진행중인 job을 복원한다.
+ * 부트스트랩(페이지 로드/새로고침) 시 호출한다.
+ */
+async function loadAndRecoverJobs() {
+  if (!canManageApps()) return;
+  try {
+    const data = await apiFetch("/jobs");
+    state.jobs = data.jobs || [];
+    renderJobIndicator(state.jobs);
+
+    // active 상태인 job에 대해 폴링 재개
+    for (const job of state.jobs) {
+      if (!TERMINAL_STATUSES.has(job.status)) {
+        pollJob(job.id, {
+          onDone: (j) => _onJobDone(j),
+          onFail: (j) => _onJobFail(j),
+        });
+      }
+    }
+  } catch {
+    // /jobs 자체 오류는 무시 (앱 기능에 영향 없음)
+  }
+}
+
+function _onJobDone(job) {
+  const label = _jobLabel(job);
+  showToast(`✅ 완료: ${label}`, "success");
+}
+
+function _onJobFail(job) {
+  const label = _jobLabel(job);
+  const reason = job.status === "interrupted"
+    ? "서버 재시작으로 인해 중단됨 — 재시도 가능"
+    : (job.error || "알 수 없는 오류");
+  showToast(`❌ 실패: ${label} — ${reason}`, "error", 8000);
+}
+
+function _jobLabel(job) {
+  const { type, meta } = job;
+  const appPart = meta?.appname ? `${meta.userid}/${meta.appname}` : "";
+  const typeMap = {
+    create: "앱 생성",
+    deploy: "재배포",
+    delete: "앱 삭제",
+    start:  "시작",
+    stop:   "중지",
+    "env-restart": "환경변수 재시작",
+  };
+  return appPart ? `${typeMap[type] || type} (${appPart})` : (typeMap[type] || type);
+}
+
+/**
+ * 202 응답으로 jobId를 받아 즉시 폴링을 시작하는 헬퍼.
+ */
+function startJobPolling(jobId, appLabel, actionLabel) {
+  showToast(`${actionLabel} 시작: ${appLabel} — 진행 중...`, "info", 3000);
+
+  // state.jobs에 낙관적으로 pending job 추가
+  state.jobs.unshift({
+    id: jobId, status: "pending",
+    type: "unknown", userid: state.user?.username,
+    meta: {}, createdAt: Date.now(),
+  });
+  renderJobIndicator(state.jobs);
+
+  pollJob(jobId, {
+    onDone: (job) => {
+      const label = appLabel || _jobLabel(job);
+      showToast(`✅ ${actionLabel} 완료: ${label}`, "success");
+    },
+    onFail: (job) => {
+      const label = appLabel || _jobLabel(job);
+      const reason = job.status === "interrupted"
+        ? "서버 재시작으로 중단됨"
+        : (job.error || "오류 발생");
+      showToast(`❌ ${actionLabel} 실패: ${label} — ${reason}`, "error", 8000);
+    },
+  });
+}
+
+/**
+ * interrupted/failed job을 서버에 재시도 요청한다.
+ */
+async function retryJob(jobId) {
+  const data = await apiFetch(`/jobs/${jobId}/retry`, { method: "POST" });
+  const job = state.jobs.find((j) => j.id === jobId);
+  const label = job ? _jobLabel(job) : jobId;
+
+  pollJob(jobId, {
+    onDone: (j) => showToast(`✅ 재시도 완료: ${_jobLabel(j)}`, "success"),
+    onFail: (j) => showToast(`❌ 재시도 실패: ${_jobLabel(j)} — ${j.error || "오류"}`, "error", 8000),
+  });
+  showToast(`재시도 요청됨: ${label}`, "info");
+  return data;
+}
+
 // ── 공통 에러 처리 ────────────────────────────────────────────────────────────
 
-// 401 응답은 세션 만료로 처리하여 인증 페이지로 리다이렉트한다.
-// 그 외는 배너에 에러 메시지를 표시한다.
 async function handleRequestError(error) {
   if (error?.status === 401) {
     state.user  = null;
@@ -152,9 +303,6 @@ async function handleRequestError(error) {
   setBanner(normalizeErrorMessage(error), "error");
 }
 
-// 설정 모달(비밀번호 변경) 전용 에러 처리.
-// 현재 비밀번호 오류(401)는 모달 내 인라인으로 표시하고,
-// 다른 401(세션 만료)은 공통 핸들러로 위임한다.
 async function handleSettingsModalError(error) {
   const message = normalizeErrorMessage(error, "설정 변경 중 오류가 발생했습니다.");
   const isCurrentPasswordMismatch =
@@ -168,7 +316,6 @@ async function handleSettingsModalError(error) {
 
 // ── 앱 카드 액션 ─────────────────────────────────────────────────────────────
 
-// 클릭된 버튼이 속한 앱 카드에서 userid/appname/action을 추출한다.
 function getActionTarget(button) {
   const appCard = button.closest(".app-card");
   if (!appCard) return null;
@@ -179,8 +326,6 @@ function getActionTarget(button) {
   };
 }
 
-// 앱 카드의 버튼 액션을 처리한다.
-// manage → navigateToApp, delete → DELETE API, start/stop/deploy → POST API
 async function performAction(target) {
   if (!canManageApps()) {
     throw new Error("앱 관리를 위해 로그인 상태와 비밀번호 변경 상태를 확인하세요.");
@@ -198,31 +343,26 @@ async function performAction(target) {
     const keepData    = el.keepDataInput?.checked ?? false;
     const shouldDelete = window.confirm(`${appLabel} 앱을 삭제합니다.`);
     if (!shouldDelete) return;
-    showToast(`삭제 요청 중: ${appLabel}`, "info");
-    await apiFetch(`/apps/${userid}/${appname}`, {
+
+    const data = await apiFetch(`/apps/${userid}/${appname}`, {
       method: "DELETE",
       body: JSON.stringify({ keepData }),
     });
+    startJobPolling(data.jobId, appLabel, "삭제");
+
     if (state.selectedApp?.userid === userid && state.selectedApp?.appname === appname) {
       state.selectedApp = null;
       switchView("dashboard");
     }
-    showToast(`삭제 완료: ${appLabel}`, "success");
-    await loadApps();
     return;
   }
 
   const validActions = ["start", "stop", "deploy"];
   if (!validActions.includes(action)) return;
 
-  if (action === "deploy") {
-    showToast(`${appLabel} 재배포 중 (git pull + 이미지 재빌드, 시간이 걸릴 수 있습니다)...`, "info", 8000);
-  } else {
-    showToast(`${action} 요청 중: ${appLabel}`, "info");
-  }
-  await apiFetch(`/apps/${userid}/${appname}/${action}`, { method: "POST" });
-  showToast(`${action} 완료: ${appLabel}`, "success");
-  await loadApps();
+  const actionLabels = { start: "시작", stop: "중지", deploy: "재배포" };
+  const data = await apiFetch(`/apps/${userid}/${appname}/${action}`, { method: "POST" });
+  startJobPolling(data.jobId, appLabel, actionLabels[action] || action);
 }
 
 // ── 앱 관리 > Logs ────────────────────────────────────────────────────────────
@@ -247,8 +387,6 @@ async function loadDetailEnv() {
   el.detailEnvTextarea.value = data.env || "";
 }
 
-// 환경변수를 저장하고 컨테이너를 재시작한다.
-// 재시작 실패는 저장 성공과 분리하여 클라이언트에 개별 전달한다.
 async function saveDetailEnv() {
   if (!state.selectedApp) return;
   setEnvError("");
@@ -261,12 +399,10 @@ async function saveDetailEnv() {
       method: "PUT",
       body: JSON.stringify({ env: envContent }),
     });
-    if (result.restartError) {
-      showToast(`환경변수 저장 완료, 컨테이너 재시작 실패: ${result.restartError}`, "error", 6000);
-    } else {
-      showToast(`환경변수 저장 및 재시작 완료: ${userid}/${appname}`, "success");
+    if (result.jobId) {
+      startJobPolling(result.jobId, `${userid}/${appname}`, "환경변수 재시작");
     }
-    await loadApps();
+    showToast(`환경변수 저장 완료: ${userid}/${appname}`, "success");
   } catch (error) {
     setEnvError(normalizeErrorMessage(error, "환경변수 저장 중 오류가 발생했습니다."));
   } finally {
@@ -297,15 +433,13 @@ async function handleCreate(event) {
 
   const submitBtn = el.createSubmitBtn;
   submitBtn.disabled = true;
-  submitBtn.textContent = "생성 중...";
+  submitBtn.textContent = "요청 중...";
   try {
-    showToast("앱 생성 중 (repo clone 및 빌드 포함, 시간이 걸릴 수 있습니다)...", "info", 8000);
     const data = await apiFetch("/apps", { method: "POST", body: JSON.stringify(body) });
-    showToast(`앱 생성 완료: ${data.app.domain}`, "success");
+    startJobPolling(data.jobId, `${body.appname}`, "앱 생성");
     el.createForm.reset();
     el.repoBranchInput.value = "main";
     syncDomainPreview();
-    await loadApps();
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = "Create App";
@@ -319,14 +453,18 @@ export {
   handleRequestError,
   handleSettingsModalError,
   loadApps,
+  loadAndRecoverJobs,
   loadConfig,
   loadDetailEnv,
   loadDetailLogs,
   loadSession,
   loadUsers,
   performAction,
+  pollJob,
   refreshDashboardData,
+  retryJob,
   saveDetailEnv,
   startAutoRefresh,
+  startJobPolling,
   stopAutoRefresh,
 };

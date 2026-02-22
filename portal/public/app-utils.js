@@ -35,7 +35,12 @@ function showToast(message, type = "info", durationMs = 4000) {
     if (!toast.isConnected) return;
     toast.style.animation = "none"; // forwards fill이 transition을 덮는 것을 방지
     toast.classList.add("dismissing");
-    toast.addEventListener("transitionend", () => toast.remove(), { once: true });
+    // transitionend가 발화되지 않는 경우(reduced-motion, 빠른 제거 등)를 대비한 fallback
+    const fallback = window.setTimeout(() => toast.remove(), 400);
+    toast.addEventListener("transitionend", () => {
+      window.clearTimeout(fallback);
+      toast.remove();
+    }, { once: true });
   };
 
   const timer = window.setTimeout(dismiss, durationMs);

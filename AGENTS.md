@@ -19,7 +19,9 @@
   - `portal/utils.js` — AppError, sendOk/sendError 등 공유 유틸
   - `portal/config.js` — 환경변수 로드, 상수 (USER_ID_REGEX, APP_NAME_REGEX 등)
   - `portal/appManager.js` — 앱/Docker/파일시스템 도메인 로직 전체
+  - `portal/jobStore.js` — 백그라운드 Job 상태 관리 (in-memory + SQLite 영속화)
   - `portal/routes/apps.js` — `/apps` 라우터 (Express.Router)
+  - `portal/routes/jobs.js` — `/jobs` 라우터 (job 조회, SSE, 재시도)
   - `portal/routes/users.js` — `/users` 라우터 (factory: `createUsersRouter(authService)`)
 - 인증/세션/사용자 관리: SQLite + `portal/authService.js`
 - 앱 생명주기: `scripts/create.sh`, `scripts/deploy.sh`, `scripts/delete.sh`
@@ -29,12 +31,12 @@
   - `scripts/generate-compose.js`
   - `scripts/lib/common.sh`
 - 프론트엔드: 번들러 없는 다중 스크립트 (전역 스코프 공유, 순서 의존성 있음)
-  - `portal/public/app-state.js` — 전역 상수·상태·DOM 참조 (최우선 로드)
+  - `portal/public/app-state.js` — 전역 상수·상태·DOM 참조 (최우선 로드), `jobs`, `jobPollers` 포함
   - `portal/public/app-utils.js` — 순수 헬퍼, 폼 검증, 인증 상태 확인
   - `portal/public/app-render.js` — renderApps, renderUsers
-  - `portal/public/app-ui.js` — 뷰/탭 전환, 모달, updateAuthUi, navigateToApp
+  - `portal/public/app-ui.js` — 뷰/탭 전환, 모달, updateAuthUi, navigateToApp, renderJobIndicator
   - `portal/public/app-exec.js` — Exec 터미널 (히스토리, 탭 완성, cwd 추적)
-  - `portal/public/app-api.js` — API 통신, 데이터 로딩, 앱 액션
+  - `portal/public/app-api.js` — API 통신, 데이터 로딩, 앱 액션, job 폴링/복원
   - `portal/public/app.js` — 이벤트 바인딩 + 부트스트랩
 
 ## 5. 인증과 권한
@@ -61,26 +63,34 @@
   - body: `{ appname, repoUrl, branch? }`
   - `branch` 기본값: `main`
   - `repoUrl`은 `http://` 또는 `https://`로 시작해야 한다.
+  - **응답: `202 { jobId }` — 비동기 실행** (이전에는 블로킹 200)
 - `GET /apps`
 - `GET /apps/:userid/:appname`
-- `POST /apps/:userid/:appname/start`
-- `POST /apps/:userid/:appname/stop`
-- `POST /apps/:userid/:appname/deploy`
-- `DELETE /apps/:userid/:appname`
+- `POST /apps/:userid/:appname/start` → `202 { jobId }`
+- `POST /apps/:userid/:appname/stop` → `202 { jobId }`
+- `POST /apps/:userid/:appname/deploy` → `202 { jobId }`
+- `DELETE /apps/:userid/:appname` → `202 { jobId }`
   - body: `{ keepData?: boolean }`
 - `GET /apps/:userid/:appname/logs?lines=<n>`
   - `n` 범위: `1..1000`
   - 기본값: `120`
 
-### 6.3 사용자 관리
+### 6.3 Job 관리 (신규)
+- `GET /jobs` — 현재 사용자의 active + 최근 24h job 목록
+- `GET /jobs/:id` — job 단건 조회 `{ id, type, status, meta, error, logs[] }`
+- `GET /jobs/:id/stream` — SSE 실시간 로그 스트리밍
+- `POST /jobs/:id/retry` — `interrupted`/`failed` job 재시도
+
+### 6.4 사용자 관리
 - `GET /users`
 - `POST /users`
   - body: `{ username, password, isAdmin }`
 - `DELETE /users/:id`
   - body: `{ currentPassword }`
 
-### 6.4 응답 형식
-- 성공: `{ ok: true, data: ... }`
+### 6.5 응답 형식
+- 성공 (동기): `{ ok: true, data: ... }`
+- 성공 (비동기 job): `{ ok: true, data: { jobId } }` — HTTP 202
 - 실패: `{ ok: false, error: "message" }`
 
 ## 7. 앱 생명주기 스크립트

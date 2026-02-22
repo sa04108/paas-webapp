@@ -23,7 +23,10 @@ const { AppError, sendOk, sendError } = require("./utils");
 const { config, envFilePath, IS_DEV } = require("./config");
 const { ensureBaseDirectories } = require("./appManager");
 const appsRouter = require("./routes/apps");
+const { executeJob } = require("./routes/apps");
 const createUsersRouter = require("./routes/users");
+const jobsRouter = require("./routes/jobs");
+const jobStore = require("./jobStore");
 
 // ── authService 초기화 ────────────────────────────────────────────────────────
 
@@ -102,6 +105,14 @@ app.use(
   appsRouter
 );
 
+// /jobs: 세션 검증 → 비밀번호 변경 여부 확인 → job 라우터
+app.use(
+  "/jobs",
+  authService.requireSessionAuth,
+  authService.requirePasswordUpdated,
+  jobsRouter
+);
+
 // 미들웨어 체인: 세션 검증 → admin 권한 확인 → 비밀번호 변경 여부 확인 → 라우터
 app.use(
   "/users",
@@ -136,6 +147,11 @@ app.use((err, _req, res, _next) => {
 async function start() {
   await ensureBaseDirectories();
   await authService.init();
+
+  // jobStore 초기화 및 서버 재시작 복원
+  jobStore.init(config.PORTAL_DB_PATH);
+  await jobStore.recoverOnStartup(executeJob);
+
   app.listen(config.PORTAL_PORT, () => {
     console.log(`[portal] listening on http://localhost:${config.PORTAL_PORT}`);
     console.log(`[portal] env: ${envFilePath}`);

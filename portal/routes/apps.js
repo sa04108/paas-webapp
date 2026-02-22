@@ -3,6 +3,8 @@
 // =============================================================================
 // 역할:
 //   앱 생명주기 관련 모든 HTTP 엔드포인트를 제공한다.
+//   장시간 작업(create/deploy/delete/start/stop)은 즉시 202 + jobId를 반환하고
+//   백그라운드에서 비동기 실행한다. 짧은 작업(logs/exec/env 읽기)은 동기 처리한다.
 //   인증/권한 미들웨어는 server.js에서 이 라우터 앞에 적용된다.
 // =============================================================================
 "use strict";
@@ -31,6 +33,7 @@ const {
   runContainerExec,
   runContainerComplete,
 } = require("../appManager");
+const jobStore = require("../jobStore");
 
 const router = express.Router();
 
@@ -58,7 +61,6 @@ function validateCreateBody(body) {
 }
 
 // 로그인된 사용자의 userid를 req.auth에서 추출한다.
-// 세션에 username이 없거나 정규식 불일치 시 401 에러를 던진다.
 function resolveRequestUserId(req) {
   const userid = String(req.auth?.user?.username || "").trim().toLowerCase();
   if (!userid) throw new AppError(401, "Unauthorized");
@@ -66,11 +68,7 @@ function resolveRequestUserId(req) {
   return userid;
 }
 
-// URL 파라미터(:userid, :appname)를 검증하고, 접근 권한을 확인한 뒤 appDir을 반환한다.
-// admin은 모든 앱에 직접 접근할 수 있다(운영 목적).
-// 일반 사용자는 본인 앱에만 접근할 수 있다.
-// 대시보드 목록(GET /apps)은 별도로 본인 앱만 필터링하므로,
-// 이 함수는 단건 접근(start/stop/deploy/delete/logs/exec/env)에만 사용된다.
+// URL 파라미터(:userid, :appname)를 검증하고 접근 권한을 확인한다.
 async function resolveAppRequestContext(req) {
   const userid  = String(req.params?.userid  || "").trim();
   const appname = String(req.params?.appname || "").trim();
@@ -85,9 +83,79 @@ async function resolveAppRequestContext(req) {
   return { userid, appname, appDir };
 }
 
+// ── 공용 job 실행 함수 (재시도에도 재사용) ───────────────────────────────────
+
+/**
+ * job 객체를 받아 type에 따라 적절한 작업을 실행한다.
+ * jobStore.recoverOnStartup() 및 /jobs/:id/retry 엔드포인트에서도 호출된다.
+ */
+async function executeJob(job) {
+  const { id, type, meta } = job;
+  const onLog = (line) => jobStore.appendLog(id, line);
+
+  jobStore.startJob(id);
+  try {
+    switch (type) {
+      case "create": {
+        const { userid, appname, repoUrl, branch } = meta;
+        await runRunnerScript(RUNNER_SCRIPTS.create, [userid, appname, repoUrl, branch], { onLog });
+        const appInfo = await buildAppInfo(userid, appname, null);
+        jobStore.finishJob(id, JSON.stringify({ app: appInfo }));
+        break;
+      }
+      case "deploy": {
+        const { userid, appname } = meta;
+        await runRunnerScript(RUNNER_SCRIPTS.deploy, [userid, appname], { onLog });
+        jobStore.finishJob(id, "deployed");
+        break;
+      }
+      case "delete": {
+        const { userid, appname, keepData } = meta;
+        const args = [userid, appname];
+        if (keepData) args.push("--keep-data");
+        await runRunnerScript(RUNNER_SCRIPTS.delete, args, { onLog });
+        jobStore.finishJob(id, "deleted");
+        break;
+      }
+      case "start": {
+        const { appDir } = meta;
+        const result = await runDockerCompose(appDir, ["up", "-d"]);
+        const status = await getDockerContainerStatus(appDir);
+        jobStore.finishJob(id, JSON.stringify({ status: normalizeStatus(status) }));
+        break;
+      }
+      case "stop": {
+        const { appDir } = meta;
+        await runDockerCompose(appDir, ["stop"]);
+        jobStore.finishJob(id, "stopped");
+        break;
+      }
+      case "env-restart": {
+        const { appDir } = meta;
+        await runDockerCompose(appDir, ["up", "-d", "--force-recreate"]);
+        jobStore.finishJob(id, "restarted");
+        break;
+      }
+      default:
+        throw new AppError(500, `Unknown job type: ${type}`);
+    }
+  } catch (error) {
+    const message = error instanceof AppError
+      ? error.message
+      : (error.message || "Unknown error");
+    jobStore.failJob(id, message);
+  }
+}
+
+// executeJob을 jobs 라우터에 주입 (재시도 기능을 위해)
+const jobsRouter = require("./jobs");
+jobsRouter.setExecuteJobFn(executeJob);
+
+module.exports.executeJob = executeJob;
+
 // ── 앱 CRUD ───────────────────────────────────────────────────────────────────
 
-// POST /apps — create.sh를 통해 앱 디렉터리 생성, repo clone, compose 파일 생성
+// POST /apps — 앱 생성 (비동기 job)
 router.post("/", async (req, res, next) => {
   try {
     const userid = resolveRequestUserId(req);
@@ -107,10 +175,10 @@ router.post("/", async (req, res, next) => {
       throw new AppError(409, "App already exists");
     }
 
-    // create.sh 내부에서 .paas-meta.json을 작성하므로 별도 writeAppMeta 불필요
-    const scriptResult = await runRunnerScript(RUNNER_SCRIPTS.create, [userid, appname, repoUrl, branch]);
-    const appInfo = await buildAppInfo(userid, appname, null);
-    return sendOk(res, { app: appInfo, output: scriptResult.stdout || "created" }, 201);
+    const jobId = jobStore.createJob("create", { userid, appname, repoUrl, branch }, userid);
+    // 즉시 202 반환 후 백그라운드 실행
+    res.status(202).json({ ok: true, data: { jobId } });
+    setImmediate(() => executeJob(jobStore.getJob(jobId)));
   } catch (error) {
     return next(error);
   }
@@ -121,7 +189,6 @@ router.get("/", async (req, res, next) => {
   try {
     const { apps: dockerApps, hasLabelErrors } = await listDockerApps();
     const user = req.auth?.user;
-    // 모든 사용자(admin 포함)는 본인이 생성한 앱만 대시보드에서 조회한다.
     const visibleApps = dockerApps.filter((item) => String(item.userid).toLowerCase() === String(user?.username || "").toLowerCase());
     const appDetails = await Promise.all(
       visibleApps.map((appItem) => buildAppInfo(appItem.userid, appItem.appname, appItem))
@@ -155,50 +222,50 @@ router.get("/:userid/:appname", async (req, res, next) => {
 
 // ── 앱 생명주기 제어 ──────────────────────────────────────────────────────────
 
-// POST /apps/:userid/:appname/start — docker compose up -d
+// POST /apps/:userid/:appname/start — docker compose up -d (비동기 job)
 router.post("/:userid/:appname/start", async (req, res, next) => {
   try {
-    const { appDir } = await resolveAppRequestContext(req);
-    const result = await runDockerCompose(appDir, ["up", "-d"]);
-    const status = await getDockerContainerStatus(appDir);
-    return sendOk(res, { status: normalizeStatus(status), output: result.stdout || "started" });
+    const { userid, appname, appDir } = await resolveAppRequestContext(req);
+    const jobId = jobStore.createJob("start", { userid, appname, appDir }, userid);
+    res.status(202).json({ ok: true, data: { jobId } });
+    setImmediate(() => executeJob(jobStore.getJob(jobId)));
   } catch (error) {
     return next(error);
   }
 });
 
-// POST /apps/:userid/:appname/stop — docker compose stop
+// POST /apps/:userid/:appname/stop — docker compose stop (비동기 job)
 router.post("/:userid/:appname/stop", async (req, res, next) => {
   try {
-    const { appDir } = await resolveAppRequestContext(req);
-    const result = await runDockerCompose(appDir, ["stop"]);
-    return sendOk(res, { status: "stopped", output: result.stdout || "stopped" });
+    const { userid, appname, appDir } = await resolveAppRequestContext(req);
+    const jobId = jobStore.createJob("stop", { userid, appname, appDir }, userid);
+    res.status(202).json({ ok: true, data: { jobId } });
+    setImmediate(() => executeJob(jobStore.getJob(jobId)));
   } catch (error) {
     return next(error);
   }
 });
 
-// POST /apps/:userid/:appname/deploy — deploy.sh (git pull + 이미지 재빌드 + 재시작)
+// POST /apps/:userid/:appname/deploy — deploy.sh (비동기 job)
 router.post("/:userid/:appname/deploy", async (req, res, next) => {
   try {
     const { userid, appname } = await resolveAppRequestContext(req);
-    const result = await runRunnerScript(RUNNER_SCRIPTS.deploy, [userid, appname]);
-    return sendOk(res, { output: result.stdout || "deployed" });
+    const jobId = jobStore.createJob("deploy", { userid, appname }, userid);
+    res.status(202).json({ ok: true, data: { jobId } });
+    setImmediate(() => executeJob(jobStore.getJob(jobId)));
   } catch (error) {
     return next(error);
   }
 });
 
-// DELETE /apps/:userid/:appname — delete.sh (컨테이너 제거 + 앱 디렉터리 삭제)
+// DELETE /apps/:userid/:appname — delete.sh (비동기 job)
 router.delete("/:userid/:appname", async (req, res, next) => {
   try {
     const { userid, appname } = await resolveAppRequestContext(req);
     const keepData = normalizeBoolean(req.body?.keepData, false);
-    const args = [userid, appname];
-    if (keepData) args.push("--keep-data");
-
-    const result = await runRunnerScript(RUNNER_SCRIPTS.delete, args);
-    return sendOk(res, { deleted: true, keepData, output: result.stdout || "deleted" });
+    const jobId = jobStore.createJob("delete", { userid, appname, keepData }, userid);
+    res.status(202).json({ ok: true, data: { jobId } });
+    setImmediate(() => executeJob(jobStore.getJob(jobId)));
   } catch (error) {
     return next(error);
   }
@@ -206,7 +273,7 @@ router.delete("/:userid/:appname", async (req, res, next) => {
 
 // ── 로그 ──────────────────────────────────────────────────────────────────────
 
-// GET /apps/:userid/:appname/logs?lines=N — docker compose logs
+// GET /apps/:userid/:appname/logs?lines=N — docker compose logs (동기, 빠름)
 router.get("/:userid/:appname/logs", async (req, res, next) => {
   try {
     const { appDir } = await resolveAppRequestContext(req);
@@ -223,7 +290,6 @@ router.get("/:userid/:appname/logs", async (req, res, next) => {
 // ── Exec ──────────────────────────────────────────────────────────────────────
 
 // POST /apps/:userid/:appname/exec — 컨테이너 내부에서 임의 명령 실행
-// 30초 타임아웃이 적용되며, 비정상 종료여도 stdout/stderr는 그대로 반환한다.
 router.post("/:userid/:appname/exec", async (req, res, next) => {
   try {
     const { appDir } = await resolveAppRequestContext(req);
@@ -232,8 +298,6 @@ router.post("/:userid/:appname/exec", async (req, res, next) => {
     if (!command) throw new AppError(400, "command is required");
     if (command.length > 2048) throw new AppError(400, "command too long (max 2048 chars)");
 
-    // --workdir 옵션으로 Docker가 프로세스 cwd를 직접 설정한다.
-    // shell-level `cd &&` 방식보다 명확하고 신뢰도가 높다.
     const cwd = String(req.body?.cwd || "").trim();
 
     const containerName = await readContainerName(appDir);
@@ -246,8 +310,7 @@ router.post("/:userid/:appname/exec", async (req, res, next) => {
   }
 });
 
-// POST /apps/:userid/:appname/exec/complete — 컨테이너 내부 경로 탭 완성
-// sh glob을 통해 partial 문자열로 시작하는 파일/디렉터리 목록을 반환한다.
+// POST /apps/:userid/:appname/exec/complete — 탭 완성
 router.post("/:userid/:appname/exec/complete", async (req, res, next) => {
   try {
     const { appDir } = await resolveAppRequestContext(req);
@@ -280,26 +343,18 @@ router.get("/:userid/:appname/env", async (req, res, next) => {
   }
 });
 
-// PUT /apps/:userid/:appname/env — .env.paas 파일 저장 후 컨테이너 재시작
-// 환경변수 저장 성공/실패와 컨테이너 재시작 성공/실패를 독립적으로 클라이언트에 전달한다.
+// PUT /apps/:userid/:appname/env — .env.paas 파일 저장 후 컨테이너 재시작 (비동기 job)
 router.put("/:userid/:appname/env", async (req, res, next) => {
   try {
-    const { appDir } = await resolveAppRequestContext(req);
+    const { userid, appname, appDir } = await resolveAppRequestContext(req);
     const content = String(req.body?.env || "");
 
-    // env_file 항목이 없는 구형 compose 파일에 자동으로 env_file 항목을 추가한다
     await patchComposeEnvFile(appDir);
     await writeEnvFile(appDir, content);
 
-    // 변경된 환경변수를 즉시 반영하기 위해 컨테이너를 재생성·재시작한다
-    let restartError = null;
-    try {
-      await runDockerCompose(appDir, ["up", "-d", "--force-recreate"]);
-    } catch (restartErr) {
-      restartError = restartErr?.message || "Container restart failed";
-    }
-
-    return sendOk(res, { saved: true, restartError });
+    const jobId = jobStore.createJob("env-restart", { userid, appname, appDir }, userid);
+    res.status(202).json({ ok: true, data: { jobId, saved: true } });
+    setImmediate(() => executeJob(jobStore.getJob(jobId)));
   } catch (error) {
     return next(error);
   }

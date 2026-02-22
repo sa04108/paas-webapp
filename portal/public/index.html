@@ -1,429 +1,384 @@
 <!doctype html>
 <html lang="ko">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Hyunbbai Portal</title>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link
-            href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
-            rel="stylesheet"
-        />
-        <link rel="stylesheet" href="./styles.css?v=20260221-01" />
-    </head>
-    <body>
-        <div class="mesh-layer" aria-hidden="true">
-            <span class="orb orb-a"></span>
-            <span class="orb orb-b"></span>
-            <span class="orb orb-c"></span>
-        </div>
 
-        <header id="gnb" class="gnb" aria-label="메인 네비게이션">
-            <div class="gnb-left">
-                <a class="gnb-brand" href="/" aria-label="Hyunbbai Portal">
-                    <span class="gnb-logo" aria-hidden="true">P</span>
-                    <span class="gnb-brand-text">
-                        <span class="eyebrow">Hyunbbai</span>
-                        <strong>Portal</strong>
-                    </span>
-                </a>
-                <nav class="gnb-nav">
-                    <button
-                        class="gnb-item active"
-                        type="button"
-                        data-view="dashboard"
-                    >
-                        <svg class="gnb-icon" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
-                        </svg>
-                        <span>대시보드</span>
-                    </button>
-                    <button class="gnb-item" type="button" data-view="create">
-                        <svg class="gnb-icon" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                        </svg>
-                        <span>앱 생성</span>
-                    </button>
-                    <button
-                        id="gnb-users-btn"
-                        class="gnb-item"
-                        type="button"
-                        data-view="users"
-                        hidden
-                    >
-                        <svg class="gnb-icon" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M16 11c1.66 0 2.99-1.57 2.99-3.5S17.66 4 16 4s-3 1.57-3 3.5S14.34 11 16 11zm-8 0c1.66 0 2.99-1.57 2.99-3.5S9.66 4 8 4 5 5.57 5 7.5 6.34 11 8 11zm0 2c-2.33 0-7 1.17-7 3.5V20h14v-3.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.94 1.97 3.45V20h6v-3.5c0-2.33-4.67-3.5-7-3.5z"/>
-                        </svg>
-                        <span>유저 관리</span>
-                    </button>
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hyunbbai Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css?v=20260221-01" />
+</head>
+
+<body>
+    <div class="mesh-layer" aria-hidden="true">
+        <span class="orb orb-a"></span>
+        <span class="orb orb-b"></span>
+        <span class="orb orb-c"></span>
+    </div>
+
+    <header id="gnb" class="gnb" aria-label="메인 네비게이션">
+        <div class="gnb-left">
+            <a class="gnb-brand" href="/" aria-label="Hyunbbai Portal">
+                <span class="gnb-logo" aria-hidden="true">P</span>
+                <span class="gnb-brand-text">
+                    <span class="eyebrow">Hyunbbai</span>
+                    <strong>Portal</strong>
+                </span>
+            </a>
+            <nav class="gnb-nav">
+                <button class="gnb-item active" type="button" data-view="dashboard">
+                    <svg class="gnb-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
+                    </svg>
+                    <span>대시보드</span>
+                </button>
+                <button class="gnb-item" type="button" data-view="create">
+                    <svg class="gnb-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                    </svg>
+                    <span>앱 생성</span>
+                </button>
+                <button id="gnb-users-btn" class="gnb-item" type="button" data-view="users" hidden>
+                    <svg class="gnb-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                            d="M16 11c1.66 0 2.99-1.57 2.99-3.5S17.66 4 16 4s-3 1.57-3 3.5S14.34 11 16 11zm-8 0c1.66 0 2.99-1.57 2.99-3.5S9.66 4 8 4 5 5.57 5 7.5 6.34 11 8 11zm0 2c-2.33 0-7 1.17-7 3.5V20h14v-3.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.94 1.97 3.45V20h6v-3.5c0-2.33-4.67-3.5-7-3.5z" />
+                    </svg>
+                    <span>유저 관리</span>
+                </button>
+            </nav>
+            <button id="mobile-menu-btn" class="icon-btn gnb-hamburger" type="button" aria-label="메뉴">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" />
+                </svg>
+            </button>
+        </div>
+        <div class="gnb-right">
+            <span id="dev-mode-badge" class="dev-mode-badge" hidden>DEV</span>
+            <p id="auth-state" class="auth-state">로그아웃 상태</p>
+            <button id="settings-btn" class="icon-btn" type="button" aria-label="설정" hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                        d="M19.14 12.94a7.8 7.8 0 0 0 .05-.94 7.8 7.8 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.2 7.2 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54a7.2 7.2 0 0 0-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.8 7.8 0 0 0-.05.94 7.8 7.8 0 0 0 .05.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.39 1.04.7 1.62.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54c.58-.24 1.12-.55 1.62-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58Z" />
+                </svg>
+            </button>
+            <button id="logout-btn" class="ghost-btn gnb-logout-btn" type="button" hidden>
+                로그아웃
+            </button>
+        </div>
+    </header>
+
+    <div class="app-layout">
+        <main class="main-content">
+            <p id="status-banner" class="status-banner info">
+                세션 확인 중...
+            </p>
+
+            <!-- ── 대시보드 ── -->
+            <section id="view-dashboard" class="view-section">
+                <header class="view-header">
+                    <h2>대시보드</h2>
+                    <p class="view-subtitle">배포된 앱 현황을 확인합니다.</p>
+                </header>
+                <div class="dashboard-stats">
+                    <div class="chip">
+                        <span class="chip-label">DOMAIN</span>
+                        <strong id="domain-chip">-</strong>
+                    </div>
+                    <div class="chip">
+                        <span class="chip-label">Limit</span>
+                        <strong id="limit-chip">-</strong>
+                    </div>
+                    <div class="chip">
+                        <span class="chip-label">Apps</span>
+                        <strong id="app-count-chip">0</strong>
+                    </div>
+                </div>
+                <section class="panel app-panel">
+                    <div class="panel-head">
+                        <h3>배포된 앱</h3>
+                        <button id="refresh-btn" class="ghost-btn" type="button">새로고침</button>
+                    </div>
+                    <p id="empty-state" class="empty-state">앱이 없습니다. 먼저 앱을 생성하세요.</p>
+                    <div id="apps-container" class="apps-container"></div>
+                </section>
+            </section>
+
+            <!-- ── 앱 생성 ── -->
+            <section id="view-create" class="view-section" hidden>
+                <header class="view-header">
+                    <h2>앱 생성</h2>
+                    <p class="view-subtitle">새 앱을 생성하고 배포합니다.</p>
+                </header>
+                <article class="panel create-panel">
+                    <form id="create-form" novalidate>
+                        <label for="appname-input">App Name</label>
+                        <input id="appname-input" name="appname" type="text" placeholder="myapp" required />
+
+                        <label for="repo-url-input">GitHub Repository URL(Public)</label>
+                        <input id="repo-url-input" name="repoUrl" type="url" placeholder="https://github.com/user/repo"
+                            required />
+                        <!-- <p class="field-hint">Public 저장소만 지원합니다.</p> -->
+
+                        <label for="repo-branch-input">Branch</label>
+                        <input id="repo-branch-input" name="branch" type="text" placeholder="main" value="main" />
+
+                        <div class="preview-text preview-row preview-row-domain">
+                            <span class="preview-label">예상 주소:</span>
+                            <code id="domain-preview" class="preview-code">owner-appname.my.domain.com</code>
+                        </div>
+
+                        <button id="create-submit-btn" class="primary-btn" type="submit">Create App</button>
+                    </form>
+                </article>
+            </section>
+
+            <!-- ── 앱 관리 (per-app) ── -->
+            <section id="view-app-detail" class="view-section" hidden>
+                <!-- Sub-GNB -->
+                <nav class="app-detail-gnb" aria-label="앱 관리 네비게이션">
+                    <div class="app-detail-gnb-left">
+                        <button id="app-detail-back-btn" class="app-detail-back-btn ghost-btn" type="button">
+                            <svg viewBox="0 0 24 24" aria-hidden="true" class="app-detail-back-icon">
+                                <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+                            </svg>
+                            대시보드
+                        </button>
+                        <div class="app-detail-title">
+                            <span id="app-detail-appname" class="app-detail-appname">-</span>
+                            <span class="app-detail-label">운영센터</span>
+                        </div>
+                    </div>
+                    <div class="app-detail-tabs" role="tablist" aria-label="앱 관리 탭">
+                        <button id="detail-tab-btn-logs" class="detail-tab-btn active" type="button"
+                            data-detail-tab="logs" role="tab" aria-selected="true"
+                            aria-controls="detail-panel-logs">Logs</button>
+                        <button id="detail-tab-btn-exec" class="detail-tab-btn" type="button" data-detail-tab="exec"
+                            role="tab" aria-selected="false" aria-controls="detail-panel-exec">Exec</button>
+                        <button id="detail-tab-btn-settings" class="detail-tab-btn" type="button"
+                            data-detail-tab="settings" role="tab" aria-selected="false"
+                            aria-controls="detail-panel-settings">Settings</button>
+                    </div>
                 </nav>
-                <button
-                    id="mobile-menu-btn"
-                    class="icon-btn gnb-hamburger"
-                    type="button"
-                    aria-label="메뉴"
-                >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
-                    </svg>
+
+                <!-- Logs panel -->
+                <section id="detail-panel-logs" class="panel detail-panel" role="tabpanel"
+                    aria-labelledby="detail-tab-btn-logs">
+                    <div class="panel-head logs-head">
+                        <h3>Logs</h3>
+                        <div class="logs-controls">
+                            <input id="detail-log-lines-input" type="number" class="log-lines-input" min="1" max="1000"
+                                value="120" aria-label="로그 조회 라인 수" title="로그 조회 라인 수" />
+                            <button id="detail-refresh-logs-btn" class="ghost-btn" type="button">새로고침</button>
+                        </div>
+                    </div>
+                    <p id="detail-logs-title" class="detail-logs-title">앱을 선택하면 로그가 표시됩니다.</p>
+                    <pre id="detail-logs-output" class="logs-output">No logs yet.</pre>
+                </section>
+
+                <!-- Exec panel -->
+                <section id="detail-panel-exec" class="panel detail-panel" role="tabpanel"
+                    aria-labelledby="detail-tab-btn-exec" hidden>
+                    <div class="panel-head">
+                        <h3>Exec</h3>
+                        <button id="detail-exec-clear-btn" class="ghost-btn" type="button">Clear</button>
+                    </div>
+                    <div class="exec-terminal">
+                        <pre id="detail-exec-output" class="exec-output"></pre>
+                        <div class="exec-input-row">
+                            <span class="exec-prompt" aria-hidden="true"><span id="detail-exec-prompt-cwd"
+                                    class="exec-prompt-cwd"></span>$</span>
+                            <input id="detail-exec-input" type="text" class="exec-input"
+                                placeholder="명령어를 입력하세요 (예: ls -la, env, ps)" autocomplete="off" spellcheck="false" />
+                            <button id="detail-exec-run-btn" class="action-btn" type="button">실행</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Settings panel -->
+                <section id="detail-panel-settings" class="panel detail-panel" role="tabpanel"
+                    aria-labelledby="detail-tab-btn-settings" hidden>
+                    <div class="panel-head">
+                        <h3>Settings</h3>
+                    </div>
+                    <p class="env-help">
+                        환경변수를 <code>KEY=VALUE</code> 형식으로 한 줄에 하나씩 입력하세요.<br>
+                        저장하면 컨테이너가 자동으로 재시작됩니다.
+                    </p>
+                    <textarea id="detail-env-textarea" class="env-textarea"
+                        placeholder="NODE_ENV=production&#10;API_KEY=your-key-here&#10;DATABASE_URL=postgres://..."
+                        spellcheck="false"></textarea>
+                    <p id="detail-env-error" class="modal-error" role="alert" hidden></p>
+                    <div class="env-actions">
+                        <button id="detail-env-save-btn" class="primary-btn env-save-btn" type="button">저장 및
+                            재시작</button>
+                    </div>
+                    <div class="settings-separator"></div>
+                    <div class="settings-danger-zone">
+                        <h4 class="settings-danger-title">삭제 옵션</h4>
+                        <label class="checkbox-row" for="keep-data-input">
+                            <input id="keep-data-input" type="checkbox" />
+                            <span>앱 삭제 시 data 폴더 보존</span>
+                        </label>
+                    </div>
+                </section>
+            </section>
+
+            <!-- ── 유저 관리 ── -->
+            <section id="view-users" class="view-section" hidden>
+                <header class="view-header">
+                    <h2>유저 관리</h2>
+                    <p class="view-subtitle">username, 권한, 가입일자, 접속일자를 확인합니다.</p>
+                </header>
+                <article class="panel users-panel">
+                    <div class="panel-head">
+                        <h3>사용자 목록</h3>
+                        <div class="users-head-actions">
+                            <span id="users-count" class="users-count">0명</span>
+                            <button id="open-create-user-btn" class="ghost-btn users-add-btn" type="button">추가</button>
+                        </div>
+                    </div>
+                    <p id="users-empty-state" class="empty-state">등록된 사용자가 없습니다.</p>
+                    <div class="users-table-wrap">
+                        <table class="users-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">username</th>
+                                    <th scope="col">권한</th>
+                                    <th scope="col">가입일자</th>
+                                    <th scope="col">접속일자</th>
+                                    <th scope="col">관리</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body"></tbody>
+                        </table>
+                    </div>
+                </article>
+            </section>
+        </main>
+    </div>
+
+    <div id="gnb-mobile-overlay" class="gnb-mobile-overlay" aria-hidden="true"></div>
+
+    <!-- ── 비밀번호 설정 모달 ── -->
+    <div id="settings-modal" class="modal-backdrop" hidden>
+        <section class="modal-card panel-inset" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+            <div class="modal-head">
+                <h2 id="settings-title">설정</h2>
+                <button id="close-settings-btn" class="icon-btn close-icon-btn" type="button" aria-label="설정 닫기">
+                    <span aria-hidden="true">x</span>
                 </button>
             </div>
-            <div class="gnb-right">
-                <span id="dev-mode-badge" class="dev-mode-badge" hidden>DEV</span>
-                <p id="auth-state" class="auth-state">로그아웃 상태</p>
-                <button
-                    id="settings-btn"
-                    class="icon-btn"
-                    type="button"
-                    aria-label="설정"
-                    hidden
-                >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M19.14 12.94a7.8 7.8 0 0 0 .05-.94 7.8 7.8 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.2 7.2 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54a7.2 7.2 0 0 0-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.8 7.8 0 0 0-.05.94 7.8 7.8 0 0 0 .05.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.39 1.04.7 1.62.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54c.58-.24 1.12-.55 1.62-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58Z"/>
-                    </svg>
-                </button>
-                <button
-                    id="logout-btn"
-                    class="ghost-btn gnb-logout-btn"
-                    type="button"
-                    hidden
-                >
-                    로그아웃
+            <p class="modal-description">비밀번호를 변경할 수 있습니다.</p>
+            <p id="settings-error" class="modal-error" role="alert" hidden></p>
+            <form id="password-form" novalidate>
+                <label for="current-password-input">현재 비밀번호</label>
+                <input id="current-password-input" type="password" autocomplete="current-password" required />
+                <label for="new-password-input">새 비밀번호 (8자 이상)</label>
+                <input id="new-password-input" type="password" autocomplete="new-password" required />
+                <label for="new-password-confirm-input">새 비밀번호 확인</label>
+                <input id="new-password-confirm-input" type="password" autocomplete="new-password" required />
+                <button id="change-password-btn" class="primary-btn" type="submit">비밀번호 변경</button>
+            </form>
+        </section>
+    </div>
+
+    <!-- ── 유저 추가 모달 ── -->
+    <div id="create-user-modal" class="modal-backdrop" hidden>
+        <section class="modal-card panel-inset" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
+            <div class="modal-head">
+                <h2 id="create-user-title">유저 추가</h2>
+                <button id="close-create-user-btn" class="icon-btn close-icon-btn" type="button" aria-label="유저 추가 닫기">
+                    <span aria-hidden="true">x</span>
                 </button>
             </div>
-        </header>
-
-        <div class="app-layout">
-            <main class="main-content">
-                <p id="status-banner" class="status-banner info">
-                    세션 확인 중...
-                </p>
-
-                <!-- ── 대시보드 ── -->
-                <section id="view-dashboard" class="view-section">
-                    <header class="view-header">
-                        <h2>대시보드</h2>
-                        <p class="view-subtitle">배포된 앱 현황을 확인합니다.</p>
-                    </header>
-                    <div class="dashboard-stats">
-                        <div class="chip">
-                            <span class="chip-label">DOMAIN</span>
-                            <strong id="domain-chip">-</strong>
-                        </div>
-                        <div class="chip">
-                            <span class="chip-label">Limit</span>
-                            <strong id="limit-chip">-</strong>
-                        </div>
-                        <div class="chip">
-                            <span class="chip-label">Apps</span>
-                            <strong id="app-count-chip">0</strong>
-                        </div>
-                    </div>
-                    <section class="panel app-panel">
-                        <div class="panel-head">
-                            <h3>배포된 앱</h3>
-                            <button id="refresh-btn" class="ghost-btn" type="button">새로고침</button>
-                        </div>
-                        <p id="empty-state" class="empty-state">앱이 없습니다. 먼저 앱을 생성하세요.</p>
-                        <div id="apps-container" class="apps-container"></div>
-                    </section>
-                </section>
-
-                <!-- ── 앱 생성 ── -->
-                <section id="view-create" class="view-section" hidden>
-                    <header class="view-header">
-                        <h2>앱 생성</h2>
-                        <p class="view-subtitle">새 앱을 생성하고 배포합니다.</p>
-                    </header>
-                    <article class="panel create-panel">
-                        <form id="create-form" novalidate>
-                            <label for="appname-input">App Name</label>
-                            <input id="appname-input" name="appname" type="text" placeholder="myapp" required />
-
-                            <label for="repo-url-input">GitHub Repository URL(Public)</label>
-                            <input id="repo-url-input" name="repoUrl" type="url" placeholder="https://github.com/user/repo" required />
-                            <!-- <p class="field-hint">Public 저장소만 지원합니다.</p> -->
-
-                            <label for="repo-branch-input">Branch</label>
-                            <input id="repo-branch-input" name="branch" type="text" placeholder="main" value="main" />
-
-                            <div class="preview-text preview-row preview-row-domain">
-                                <span class="preview-label">예상 주소:</span>
-                                <code id="domain-preview" class="preview-code">owner-appname.my.domain.com</code>
-                            </div>
-
-                            <button id="create-submit-btn" class="primary-btn" type="submit">Create App</button>
-                        </form>
-                    </article>
-                </section>
-
-                <!-- ── 앱 관리 (per-app) ── -->
-                <section id="view-app-detail" class="view-section" hidden>
-                    <!-- Sub-GNB -->
-                    <nav class="app-detail-gnb" aria-label="앱 관리 네비게이션">
-                        <div class="app-detail-gnb-left">
-                            <button id="app-detail-back-btn" class="app-detail-back-btn ghost-btn" type="button">
-                                <svg viewBox="0 0 24 24" aria-hidden="true" class="app-detail-back-icon">
-                                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-                                </svg>
-                                대시보드
-                            </button>
-                            <div class="app-detail-title">
-                                <span id="app-detail-appname" class="app-detail-appname">-</span>
-                                <span class="app-detail-label">운영센터</span>
-                            </div>
-                        </div>
-                        <div class="app-detail-tabs" role="tablist" aria-label="앱 관리 탭">
-                            <button
-                                id="detail-tab-btn-logs"
-                                class="detail-tab-btn active"
-                                type="button"
-                                data-detail-tab="logs"
-                                role="tab"
-                                aria-selected="true"
-                                aria-controls="detail-panel-logs"
-                            >Logs</button>
-                            <button
-                                id="detail-tab-btn-exec"
-                                class="detail-tab-btn"
-                                type="button"
-                                data-detail-tab="exec"
-                                role="tab"
-                                aria-selected="false"
-                                aria-controls="detail-panel-exec"
-                            >Exec</button>
-                            <button
-                                id="detail-tab-btn-settings"
-                                class="detail-tab-btn"
-                                type="button"
-                                data-detail-tab="settings"
-                                role="tab"
-                                aria-selected="false"
-                                aria-controls="detail-panel-settings"
-                            >Settings</button>
-                        </div>
-                    </nav>
-
-                    <!-- Logs panel -->
-                    <section id="detail-panel-logs" class="panel detail-panel" role="tabpanel" aria-labelledby="detail-tab-btn-logs">
-                        <div class="panel-head logs-head">
-                            <h3>Logs</h3>
-                            <div class="logs-controls">
-                                <input
-                                    id="detail-log-lines-input"
-                                    type="number"
-                                    class="log-lines-input"
-                                    min="1"
-                                    max="1000"
-                                    value="120"
-                                    aria-label="로그 조회 라인 수"
-                                    title="로그 조회 라인 수"
-                                />
-                                <button id="detail-refresh-logs-btn" class="ghost-btn" type="button">새로고침</button>
-                            </div>
-                        </div>
-                        <p id="detail-logs-title" class="detail-logs-title">앱을 선택하면 로그가 표시됩니다.</p>
-                        <pre id="detail-logs-output" class="logs-output">No logs yet.</pre>
-                    </section>
-
-                    <!-- Exec panel -->
-                    <section id="detail-panel-exec" class="panel detail-panel" role="tabpanel" aria-labelledby="detail-tab-btn-exec" hidden>
-                        <div class="panel-head">
-                            <h3>Exec</h3>
-                            <button id="detail-exec-clear-btn" class="ghost-btn" type="button">Clear</button>
-                        </div>
-                        <div class="exec-terminal">
-                            <pre id="detail-exec-output" class="exec-output"></pre>
-                            <div class="exec-input-row">
-                                <span class="exec-prompt" aria-hidden="true"><span id="detail-exec-prompt-cwd" class="exec-prompt-cwd"></span>$</span>
-                                <input
-                                    id="detail-exec-input"
-                                    type="text"
-                                    class="exec-input"
-                                    placeholder="명령어를 입력하세요 (예: ls -la, env, ps)"
-                                    autocomplete="off"
-                                    spellcheck="false"
-                                />
-                                <button id="detail-exec-run-btn" class="action-btn" type="button">실행</button>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- Settings panel -->
-                    <section id="detail-panel-settings" class="panel detail-panel" role="tabpanel" aria-labelledby="detail-tab-btn-settings" hidden>
-                        <div class="panel-head">
-                            <h3>Settings</h3>
-                        </div>
-                        <p class="env-help">
-                            환경변수를 <code>KEY=VALUE</code> 형식으로 한 줄에 하나씩 입력하세요.<br>
-                            저장하면 컨테이너가 자동으로 재시작됩니다.
-                        </p>
-                        <textarea
-                            id="detail-env-textarea"
-                            class="env-textarea"
-                            placeholder="NODE_ENV=production&#10;API_KEY=your-key-here&#10;DATABASE_URL=postgres://..."
-                            spellcheck="false"
-                        ></textarea>
-                        <p id="detail-env-error" class="modal-error" role="alert" hidden></p>
-                        <div class="env-actions">
-                            <button id="detail-env-save-btn" class="primary-btn env-save-btn" type="button">저장 및 재시작</button>
-                        </div>
-                        <div class="settings-separator"></div>
-                        <div class="settings-danger-zone">
-                            <h4 class="settings-danger-title">삭제 옵션</h4>
-                            <label class="checkbox-row" for="keep-data-input">
-                                <input id="keep-data-input" type="checkbox" />
-                                <span>앱 삭제 시 data 폴더 보존</span>
-                            </label>
-                        </div>
-                    </section>
-                </section>
-
-                <!-- ── 유저 관리 ── -->
-                <section id="view-users" class="view-section" hidden>
-                    <header class="view-header">
-                        <h2>유저 관리</h2>
-                        <p class="view-subtitle">username, 권한, 가입일자, 접속일자를 확인합니다.</p>
-                    </header>
-                    <article class="panel users-panel">
-                        <div class="panel-head">
-                            <h3>사용자 목록</h3>
-                            <div class="users-head-actions">
-                                <span id="users-count" class="users-count">0명</span>
-                                <button id="open-create-user-btn" class="ghost-btn users-add-btn" type="button">추가</button>
-                            </div>
-                        </div>
-                        <p id="users-empty-state" class="empty-state">등록된 사용자가 없습니다.</p>
-                        <div class="users-table-wrap">
-                            <table class="users-table">
-                                <thead>
-                                    <tr>
-                                        <th scope="col">username</th>
-                                        <th scope="col">권한</th>
-                                        <th scope="col">가입일자</th>
-                                        <th scope="col">접속일자</th>
-                                        <th scope="col">관리</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="users-table-body"></tbody>
-                            </table>
-                        </div>
-                    </article>
-                </section>
-            </main>
-        </div>
-
-        <div id="gnb-mobile-overlay" class="gnb-mobile-overlay" aria-hidden="true"></div>
-
-        <!-- ── 비밀번호 설정 모달 ── -->
-        <div id="settings-modal" class="modal-backdrop" hidden>
-            <section class="modal-card panel-inset" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-                <div class="modal-head">
-                    <h2 id="settings-title">설정</h2>
-                    <button id="close-settings-btn" class="icon-btn close-icon-btn" type="button" aria-label="설정 닫기">
-                        <span aria-hidden="true">x</span>
-                    </button>
-                </div>
-                <p class="modal-description">비밀번호를 변경할 수 있습니다.</p>
-                <p id="settings-error" class="modal-error" role="alert" hidden></p>
-                <form id="password-form" novalidate>
-                    <label for="current-password-input">현재 비밀번호</label>
-                    <input id="current-password-input" type="password" autocomplete="current-password" required />
-                    <label for="new-password-input">새 비밀번호 (8자 이상)</label>
-                    <input id="new-password-input" type="password" autocomplete="new-password" required />
-                    <label for="new-password-confirm-input">새 비밀번호 확인</label>
-                    <input id="new-password-confirm-input" type="password" autocomplete="new-password" required />
-                    <button id="change-password-btn" class="primary-btn" type="submit">비밀번호 변경</button>
-                </form>
-            </section>
-        </div>
-
-        <!-- ── 유저 추가 모달 ── -->
-        <div id="create-user-modal" class="modal-backdrop" hidden>
-            <section class="modal-card panel-inset" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
-                <div class="modal-head">
-                    <h2 id="create-user-title">유저 추가</h2>
-                    <button id="close-create-user-btn" class="icon-btn close-icon-btn" type="button" aria-label="유저 추가 닫기">
-                        <span aria-hidden="true">x</span>
-                    </button>
-                </div>
-                <p class="modal-description">새 계정을 생성합니다. username은 소문자 영문/숫자 3~20자 형식입니다.</p>
-                <p id="create-user-error" class="modal-error" role="alert" hidden></p>
-                <form id="create-user-form" novalidate>
-                    <label for="create-username-input">username</label>
-                    <input id="create-username-input" type="text" placeholder="alice" autocomplete="username" maxlength="20" required />
-                    <label for="create-password-input">password</label>
-                    <input id="create-password-input" type="password" placeholder="8자 이상 비밀번호" autocomplete="new-password" required />
-                    <label for="create-password-confirm-input">password confirm</label>
-                    <input id="create-password-confirm-input" type="password" placeholder="비밀번호를 다시 입력하세요" autocomplete="new-password" required />
-                    <label for="create-user-role-input">권한</label>
-                    <select id="create-user-role-input">
-                        <option value="user">일반 사용자</option>
-                        <option value="admin">관리자</option>
-                    </select>
-                    <div class="modal-actions">
-                        <button id="cancel-create-user-btn" class="ghost-btn" type="button">취소</button>
-                        <button id="submit-create-user-btn" class="primary-btn" type="submit">확인</button>
-                    </div>
-                </form>
-            </section>
-        </div>
-
-        <!-- ── 유저 삭제 모달 ── -->
-        <div id="delete-user-modal" class="modal-backdrop" hidden>
-            <section class="modal-card panel-inset" role="dialog" aria-modal="true" aria-labelledby="delete-user-title">
-                <div class="modal-head">
-                    <h2 id="delete-user-title">사용자 제거</h2>
-                    <button id="close-delete-user-btn" class="icon-btn close-icon-btn" type="button" aria-label="사용자 제거 닫기">
-                        <span aria-hidden="true">x</span>
-                    </button>
-                </div>
-                <p id="delete-user-target" class="modal-description">삭제할 사용자를 확인하세요.</p>
-                <p class="modal-description">현재 로그인한 admin 비밀번호를 입력해야 제거할 수 있습니다.</p>
-                <p id="delete-user-error" class="modal-error" role="alert" hidden></p>
-                <form id="delete-user-form" novalidate>
-                    <label for="delete-user-password-input">현재 admin 비밀번호</label>
-                    <input id="delete-user-password-input" type="password" placeholder="현재 로그인한 admin 비밀번호" autocomplete="current-password" required />
-                    <div class="modal-actions">
-                        <button id="cancel-delete-user-btn" class="ghost-btn" type="button">취소</button>
-                        <button id="submit-delete-user-btn" class="action-btn danger" type="submit">제거</button>
-                    </div>
-                </form>
-            </section>
-        </div>
-
-        <!-- ── Admin 승격 경고 모달 ── -->
-        <div id="promote-admin-modal" class="modal-backdrop" hidden>
-            <section class="modal-card panel-inset" role="dialog" aria-modal="true" aria-labelledby="promote-admin-title">
-                <div class="modal-head">
-                    <h2 id="promote-admin-title">Admin 승격 확인</h2>
-                    <button id="close-promote-admin-btn" class="icon-btn close-icon-btn" type="button" aria-label="닫기">
-                        <span aria-hidden="true">x</span>
-                    </button>
-                </div>
-                <div class="promote-warning-box">
-                    <svg class="promote-warning-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
-                    </svg>
-                    <p id="promote-admin-target" class="promote-target-text"></p>
-                </div>
-                <p class="modal-description promote-warning-desc">
-                    Admin으로 승격된 사용자는 <strong>다시 일반 사용자로 권한을 내릴 수 없습니다.</strong><br>
-                    신중하게 결정하세요.
-                </p>
-                <p id="promote-admin-error" class="modal-error" role="alert" hidden></p>
+            <p class="modal-description">새 계정을 생성합니다. username은 소문자 영문/숫자 3~20자 형식입니다.</p>
+            <p id="create-user-error" class="modal-error" role="alert" hidden></p>
+            <form id="create-user-form" novalidate>
+                <label for="create-username-input">username</label>
+                <input id="create-username-input" type="text" placeholder="alice" autocomplete="username" maxlength="20"
+                    required />
+                <label for="create-password-input">password</label>
+                <input id="create-password-input" type="password" placeholder="8자 이상 비밀번호" autocomplete="new-password"
+                    required />
+                <label for="create-password-confirm-input">password confirm</label>
+                <input id="create-password-confirm-input" type="password" placeholder="비밀번호를 다시 입력하세요"
+                    autocomplete="new-password" required />
+                <label for="create-user-role-input">권한</label>
+                <select id="create-user-role-input">
+                    <option value="user">일반 사용자</option>
+                    <option value="admin">관리자</option>
+                </select>
                 <div class="modal-actions">
-                    <button id="cancel-promote-admin-btn" class="ghost-btn" type="button">취소</button>
-                    <button id="submit-promote-admin-btn" class="action-btn danger" type="button">Admin으로 승격</button>
+                    <button id="cancel-create-user-btn" class="ghost-btn" type="button">취소</button>
+                    <button id="submit-create-user-btn" class="primary-btn" type="submit">확인</button>
                 </div>
-            </section>
-        </div>
+            </form>
+        </section>
+    </div>
 
-        <!-- Toast 알림 컨테이너 -->
+    <!-- ── 유저 삭제 모달 ── -->
+    <div id="delete-user-modal" class="modal-backdrop" hidden>
+        <section class="modal-card panel-inset" role="dialog" aria-modal="true" aria-labelledby="delete-user-title">
+            <div class="modal-head">
+                <h2 id="delete-user-title">사용자 제거</h2>
+                <button id="close-delete-user-btn" class="icon-btn close-icon-btn" type="button" aria-label="사용자 제거 닫기">
+                    <span aria-hidden="true">x</span>
+                </button>
+            </div>
+            <p id="delete-user-target" class="modal-description">삭제할 사용자를 확인하세요.</p>
+            <p class="modal-description">현재 로그인한 admin 비밀번호를 입력해야 제거할 수 있습니다.</p>
+            <p id="delete-user-error" class="modal-error" role="alert" hidden></p>
+            <form id="delete-user-form" novalidate>
+                <label for="delete-user-password-input">현재 admin 비밀번호</label>
+                <input id="delete-user-password-input" type="password" placeholder="현재 로그인한 admin 비밀번호"
+                    autocomplete="current-password" required />
+                <div class="modal-actions">
+                    <button id="cancel-delete-user-btn" class="ghost-btn" type="button">취소</button>
+                    <button id="submit-delete-user-btn" class="action-btn danger" type="submit">제거</button>
+                </div>
+            </form>
+        </section>
+    </div>
+
+    <!-- ── Admin 승격 경고 모달 ── -->
+    <div id="promote-admin-modal" class="modal-backdrop" hidden>
+        <section class="modal-card panel-inset" role="dialog" aria-modal="true" aria-labelledby="promote-admin-title">
+            <div class="modal-head">
+                <h2 id="promote-admin-title">Admin 승격 확인</h2>
+                <button id="close-promote-admin-btn" class="icon-btn close-icon-btn" type="button" aria-label="닫기">
+                    <span aria-hidden="true">x</span>
+                </button>
+            </div>
+            <div class="promote-warning-box">
+                <svg class="promote-warning-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
+                </svg>
+                <p id="promote-admin-target" class="promote-target-text"></p>
+            </div>
+            <p class="modal-description promote-warning-desc">
+                Admin으로 승격된 사용자는 <strong>다시 일반 사용자로 권한을 내릴 수 없습니다.</strong><br>
+                신중하게 결정하세요.
+            </p>
+            <p id="promote-admin-error" class="modal-error" role="alert" hidden></p>
+            <div class="modal-actions">
+                <button id="cancel-promote-admin-btn" class="ghost-btn" type="button">취소</button>
+                <button id="submit-promote-admin-btn" class="action-btn danger" type="button">Admin으로 승격</button>
+            </div>
+        </section>
+    </div>
+
+    <!-- 우하단 고정 영역: toast는 위쪽에 쌓이고, job indicator는 하단에 고정 -->
+    <div class="bottom-right-stack">
         <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="false"></div>
+        <div id="job-indicator" class="job-indicator" hidden aria-live="polite"></div>
+    </div>
 
-        <!-- ES modules: app.js is the single entrypoint -->
-        <script type="module" src="./app.js?v=20260221-01"></script>
-    </body>
+    <!-- ES modules: app.js is the single entrypoint -->
+    <script type="module" src="./app.js?v=20260221-01"></script>
+</body>
+
 </html>

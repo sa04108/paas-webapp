@@ -30,13 +30,15 @@ export const state = {
   traefikPort: null,
   apps:    [],
   users:   [],
-  pendingDeleteUser:  null,  // 삭제 확인 모달에 표시할 대상 사용자
-  pendingPromoteUser: null,  // Admin 승격 확인 모달에 표시할 대상 사용자
-  user:    null,             // 현재 로그인된 사용자 객체 (null = 비로그인)
-  refreshTimer:    null,     // setInterval 핸들 (자동 갱신)
+  jobs:    [],           // 진행중 / 최근 완료 job 목록
+  jobPollers: new Map(), // Map<jobId, intervalId> — 폴링 핸들 추적
+  pendingDeleteUser:  null,
+  pendingPromoteUser: null,
+  user:    null,
+  refreshTimer:    null,
   activeView:      DEFAULT_VIEW,
   activeDetailTab: DEFAULT_DETAIL_TAB,
-  selectedApp:     null,     // 앱 관리 화면에서 선택된 앱 { userid, appname }
+  selectedApp:     null,
 };
 
 // ── DOM 요소 참조 캐시 ────────────────────────────────────────────────────────

@@ -257,6 +257,7 @@ function runCommandStreaming(command, args, options = {}) {
       .on("line", (line) => {
         stdoutLines.push(line);
         console.log(`[portal][${tag}] ${line}`);
+        options.onLog?.(line);
       });
 
     readline
@@ -264,6 +265,7 @@ function runCommandStreaming(command, args, options = {}) {
       .on("line", (line) => {
         stderrLines.push(line);
         console.error(`[portal][${tag}] ${line}`);
+        options.onLog?.(line);
       });
 
     child.on("close", (code) => {
