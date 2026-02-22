@@ -394,8 +394,10 @@ async function loadDetailLogs() {
   if (!state.selectedApp) return;
   const { userid, appname } = state.selectedApp;
   const rawLines = Number.parseInt(el.detailLogLinesInput.value, 10);
-  const lines    = Number.isFinite(rawLines) ? Math.max(1, Math.min(1000, rawLines)) : 120;
-  el.detailLogsTitle.textContent = `${userid}/${appname} 로그 조회 중...`;
+  const lines = Number.isFinite(rawLines)
+    ? Math.max(1, Math.min(1000, rawLines))
+    : 120;
+  el.detailLogsTitle.textContent = `${userid}/${appname} Fetching logs...`;
   const data = await apiFetch(`/apps/${userid}/${appname}/logs?lines=${lines}`);
   el.detailLogsTitle.textContent = `${userid}/${appname} (${lines} lines)`;
   el.detailLogsOutput.textContent = data.logs || "(empty)";
