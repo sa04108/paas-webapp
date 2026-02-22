@@ -36,6 +36,7 @@ const authService = createAuthService({
   sessionTtlHours:   config.SESSION_TTL_HOURS,
   cookieSecure:      config.PORTAL_COOKIE_SECURE,
   bcryptRounds:      config.BCRYPT_ROUNDS,
+  isDev:             IS_DEV,
   sendOk,
   sendError,
   AppError,

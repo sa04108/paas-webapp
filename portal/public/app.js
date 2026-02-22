@@ -238,6 +238,7 @@ el.passwordForm.addEventListener("submit", async (event) => {
     closeSettingsModal();
     await refreshDashboardData();
     showToast("비밀번호 변경이 완료되었습니다.", "success");
+    setBanner("", "none");
   } catch (error) {
     await handleSettingsModalError(error);
   }

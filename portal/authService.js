@@ -113,6 +113,7 @@ function createAuthService(options) {
     sessionTtlHours: Number(options.sessionTtlHours) > 0 ? Number(options.sessionTtlHours) : 168,
     cookieSecure: Boolean(options.cookieSecure),
     bcryptRounds: Number(options.bcryptRounds) > 0 ? Number(options.bcryptRounds) : 10,
+    isDev: Boolean(options.isDev),
   };
 
   const sendOk = options.sendOk;
@@ -131,7 +132,7 @@ function createAuthService(options) {
       id: Number(row.id),
       username: String(row.username),
       role: String(row.role || ROLE_ADMIN),
-      mustChangePassword: normalizeBoolean(row.mustChangePassword, false)
+      mustChangePassword: config.isDev ? false : normalizeBoolean(row.mustChangePassword, false)
     };
   }
 

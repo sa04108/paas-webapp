@@ -55,6 +55,7 @@ function showToast(message, type = "info", durationMs = 4000) {
 function setBanner(message, type = "info") {
   el.statusBanner.className = `status-banner ${type}`;
   el.statusBanner.textContent = message;
+  el.statusBanner.hidden = !message;
 }
 
 // API 에러 객체의 메시지를 UI 표시용 문자열로 정규화한다.
