@@ -91,8 +91,8 @@ mkdir -p "$(app_log_dir_for "${APP_DIR}")"
 echo "[create] 컨테이너 빌드 및 기동 중..."
 docker compose -f "${COMPOSE_FILE}" up -d --build 2>&1 | tee -a "${APP_DIR}/${APP_LOGS_SUBDIR}/create.log"
 
-echo "[create] 소스 디렉토리 삭제 중 (용량 절약)..."
-rm -rf "${APP_DIR}/${APP_SOURCE_SUBDIR}"
+# echo "[create] 소스 디렉토리 유지 (deploy 목적)..."
+# rm -rf "${APP_DIR}/${APP_SOURCE_SUBDIR}"
 
 # 성공 시 trap 해제
 trap - ERR

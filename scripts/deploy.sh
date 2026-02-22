@@ -55,8 +55,27 @@ echo "[deploy] app=${USER_ID}/${APP_NAME} started_at=$(date -Is)"
 
 require_node
 
-echo "[deploy] 최신 코드 반영 중 (git pull)..."
-git -C "${APP_DIR}/${APP_SOURCE_SUBDIR}" pull
+if [[ ! -d "${APP_DIR}/${APP_SOURCE_SUBDIR}" ]]; then
+  echo "[deploy] 소스 디렉토리 없음. .paas-meta.json 기반으로 다시 clone 합니다..."
+  META_PATH="${APP_DIR}/.paas-meta.json"
+  if [[ ! -f "${META_PATH}" ]]; then
+    echo "[deploy] 메타데이터 파일 없음: ${META_PATH}" >&2
+    exit 1
+  fi
+  REPO_URL=$(node -p "try { require('${META_PATH}').repoUrl } catch(e) { '' }")
+  BRANCH=$(node -p "try { require('${META_PATH}').branch || 'main' } catch(e) { 'main' }")
+  
+  if [[ -z "${REPO_URL}" || "${REPO_URL}" == "undefined" ]]; then
+    echo "[deploy] 메타데이터에 repoUrl 이 없습니다." >&2
+    exit 1
+  fi
+  
+  echo "[deploy] repo 복제: ${REPO_URL} (branch: ${BRANCH})"
+  git clone --depth 1 --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}/${APP_SOURCE_SUBDIR}"
+else
+  echo "[deploy] 최신 코드 반영 중 (git pull)..."
+  git -C "${APP_DIR}/${APP_SOURCE_SUBDIR}" pull
+fi
 
 echo "[deploy] 런타임 재감지 중..."
 RUNTIME_JSON="$(node "${DETECT_RUNTIME_TOOL}" "${APP_DIR}/${APP_SOURCE_SUBDIR}")"
