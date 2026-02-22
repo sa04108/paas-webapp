@@ -43,6 +43,7 @@ import {
   openDeleteUserModal,
   openPromoteAdminModal,
   openSettingsModal,
+  openJobListModal,
   switchDetailTab,
   switchView,
   toggleMobileMenu,
@@ -452,6 +453,8 @@ el.usersTableBody.addEventListener("click", (event) => {
 });
 
 // ── 직업 목록 모달 ────────────────────────────────────────────────────────────
+
+el.jobListBtn.addEventListener("click", openJobListModal);
 
 el.closeJobListBtn.addEventListener("click", (event) => {
   event.preventDefault();

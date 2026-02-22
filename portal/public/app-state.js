@@ -151,6 +151,7 @@ export const el = {
   promoteAdminError:      document.getElementById("promote-admin-error"),
 
   // 작업 목록 모달
+  jobListBtn:             document.getElementById("job-list-btn"),
   jobListModal:           document.getElementById("job-list-modal"),
   closeJobListBtn:        document.getElementById("close-job-list-btn"),
   jobListTbody:           document.getElementById("job-list-tbody"),

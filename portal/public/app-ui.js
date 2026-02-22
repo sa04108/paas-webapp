@@ -247,6 +247,7 @@ function updateAuthUi() {
     el.authState.textContent = "인증 필요";
     el.logoutBtn.hidden  = true;
     el.settingsBtn.hidden = true;
+    el.jobListBtn.hidden = true;
     el.gnbUsersBtn.hidden = true;
     state.users = [];
     renderUsers([]);
@@ -265,6 +266,7 @@ function updateAuthUi() {
   el.authState.textContent = `${state.user.username} (${state.user.role})${suffix}`;
   el.logoutBtn.hidden  = false;
   el.settingsBtn.hidden = false;
+  el.jobListBtn.hidden = false;
   el.gnbUsersBtn.hidden = !canManageUsers();
 
   if (el.gnbUsersBtn.hidden && state.activeView === "users") {

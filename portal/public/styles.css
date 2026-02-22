@@ -1116,7 +1116,7 @@ code {
   place-items: center;
   background: rgba(11, 24, 36, 0.45);
   padding: 20px;
-  z-index: 20;
+  z-index: 10000;
 }
 
 .modal-card {
