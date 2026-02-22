@@ -195,11 +195,16 @@ async function buildAppInfo(userid, appname, dockerAppItem = null) {
 }
 
 async function ensureAppExists(userid, appname) {
-  const appDir = getAppDir(userid, appname);
-  if (!(await pathExists(appDir))) {
+  const { apps } = await listDockerApps();
+  const exists = apps.some(
+    (a) =>
+      a.userid.toLowerCase() === userid.toLowerCase() &&
+      a.appname.toLowerCase() === appname.toLowerCase()
+  );
+  if (!exists) {
     throw new AppError(404, "App not found");
   }
-  return appDir;
+  return getAppDir(userid, appname);
 }
 
 // ── 커맨드 실행 ───────────────────────────────────────────────────────────────

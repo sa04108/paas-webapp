@@ -219,8 +219,8 @@ function pollJob(jobId, options = {}) {
           showToast(`❌ ${action} 실패: ${target} — ${reason}`, "error", 8000);
           onFail?.(job);
         }
-        // 앱 목록 갱신 (job 완료 후 상태 반영)
-        await loadApps().catch(() => {});
+        // 앱 목록 갱신 (job 완료 후 상태 반영 — 어드민 목록 포함)
+        await refreshDashboardData().catch(() => {});
       }
     } catch (error) {
       if (error.status === 401) {
@@ -304,7 +304,7 @@ async function cancelJob(jobId) {
   // 상태 배열에서 직접 제거
   state.jobs = state.jobs.filter((j) => j.id !== jobId);
   renderJobIndicator(state.jobs);
-  await loadApps().catch(() => {});
+  await refreshDashboardData().catch(() => {});
   return data;
 }
 
