@@ -293,8 +293,14 @@ function renderDomains(domains) {
     return `
       <tr>
         <td><span class="domain-type-badge">CNAME</span></td>
-        <td><code class="domain-name">${safeDomain}</code></td>
-        <td><code class="domain-cname-target">${safeCname}</code></td>
+        <td><a href="https://${safeDomain}" target="_blank" rel="noopener noreferrer" class="domain-name">${safeDomain}</a></td>
+        <td>
+          <div class="domain-cname-cell">
+            <code class="domain-cname-target">${safeCname}</code>
+            <button class="ghost-btn domains-copy-btn" data-action="copy-cname"
+              data-cname="${safeCname}" type="button" title="복사"><svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" aria-hidden="true"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button>
+          </div>
+        </td>
         <td><span class="domain-status-badge ${badgeClass}">${statusLabel}</span></td>
         <td>
           <div class="users-action-group">

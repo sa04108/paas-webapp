@@ -221,6 +221,16 @@ el.detailPanelDomains.addEventListener("click", async (event) => {
     return;
   }
 
+  const copyCnameBtn = event.target.closest("button[data-action='copy-cname']");
+  if (copyCnameBtn) {
+    const cname = copyCnameBtn.dataset.cname;
+    if (!cname) return;
+    navigator.clipboard.writeText(cname).then(() => {
+      showToast("CNAME 타겟 복사 완료", "success");
+    }).catch(() => {});
+    return;
+  }
+
   const removeBtn = event.target.closest("button[data-action='remove-domain']");
   if (removeBtn) {
     const id = Number.parseInt(removeBtn.dataset.id, 10);

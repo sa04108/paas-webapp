@@ -2047,9 +2047,11 @@ code {
 }
 
 .domains-copy-btn {
-  padding: 2px 8px;
-  font-size: 0.8rem;
-  line-height: 1.4;
+  padding: 3px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .domain-type-badge {
@@ -2065,6 +2067,14 @@ code {
   letter-spacing: 0.04em;
 }
 
+a.domain-name {
+  text-decoration: none;
+}
+a.domain-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .domain-name,
 .domain-cname-target {
   font-family: "IBM Plex Mono", monospace;
@@ -2073,6 +2083,13 @@ code {
   padding: 2px 6px;
   border-radius: 5px;
   color: var(--ink-main);
+}
+
+.domain-cname-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .domain-status-badge {

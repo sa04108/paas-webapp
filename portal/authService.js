@@ -634,19 +634,19 @@ function createAuthService(options) {
       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
     `);
     statements.selectCustomDomainsByApp = db.prepare(`
-      SELECT id, userid, appname, domain, target, port,
+      SELECT id, userid, appname, domain, target AS cnameTarget, port,
              status, verified_at AS verifiedAt, created_at AS createdAt, updated_at AS updatedAt
       FROM custom_domains
       WHERE userid = ? AND appname = ?
       ORDER BY created_at ASC
     `);
     statements.selectCustomDomainById = db.prepare(`
-      SELECT id, userid, appname, domain, target, port,
+      SELECT id, userid, appname, domain, target AS cnameTarget, port,
              status, verified_at AS verifiedAt, created_at AS createdAt, updated_at AS updatedAt
       FROM custom_domains WHERE id = ?
     `);
     statements.selectCustomDomainByDomain = db.prepare(`
-      SELECT id, userid, appname, domain, target, port,
+      SELECT id, userid, appname, domain, target AS cnameTarget, port,
              status, verified_at AS verifiedAt, created_at AS createdAt, updated_at AS updatedAt
       FROM custom_domains WHERE domain = ?
     `);
@@ -663,7 +663,7 @@ function createAuthService(options) {
       DELETE FROM custom_domains WHERE userid = ? AND appname = ?
     `);
     statements.listAllActiveCustomDomains = db.prepare(`
-      SELECT id, userid, appname, domain, target, port,
+      SELECT id, userid, appname, domain, target AS cnameTarget, port,
              status, verified_at AS verifiedAt, created_at AS createdAt, updated_at AS updatedAt
       FROM custom_domains
       WHERE status = 'active'
