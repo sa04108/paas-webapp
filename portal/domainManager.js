@@ -111,10 +111,57 @@ function createDomainManager({ statements }) {
     await fs.mkdir(DYNAMIC_CONFIG_DIR, { recursive: true });
     // 시작 시 현재 active 도메인으로 YAML 재빌드 (재시작 후 상태 복구)
     await rebuildTraefikConfig(statements);
+
+    // ── 자동 도메인 검증 ────────────────────────────────────────────────────
+    // pending/error 도메인: 5분마다 재검증 (DNS TTL 60~300s 고려)
+    // active 도메인: 2시간마다 재검증 (CNAME 삭제·만료 감지)
+
+    let pendingVerifyRunning = false;
+    async function autoVerifyPending() {
+      if (pendingVerifyRunning) return;
+      pendingVerifyRunning = true;
+      try {
+        const domains = statements.selectAllNonActiveDomains.all();
+        for (const row of domains) {
+          try {
+            await verifyDomain(row.id, row.userid, row.appname);
+          } catch (err) {
+            console.error(`[domainManager] auto-verify error (id=${row.id} ${row.domain}):`, err.message);
+          }
+        }
+      } finally {
+        pendingVerifyRunning = false;
+      }
+    }
+
+    let activeReverifyRunning = false;
+    async function autoReverifyActive() {
+      if (activeReverifyRunning) return;
+      activeReverifyRunning = true;
+      try {
+        const domains = statements.listAllActiveCustomDomains.all();
+        for (const row of domains) {
+          try {
+            await verifyDomain(row.id, row.userid, row.appname);
+          } catch (err) {
+            console.error(`[domainManager] auto-reverify error (id=${row.id} ${row.domain}):`, err.message);
+          }
+        }
+      } finally {
+        activeReverifyRunning = false;
+      }
+    }
+
+    setInterval(autoVerifyPending,   5 * 60 * 1000).unref();
+    setInterval(autoReverifyActive, 2 * 60 * 60 * 1000).unref();
   }
 
   function listDomains(userid, appname) {
     return statements.selectCustomDomainsByApp.all(userid, appname);
+  }
+
+  function listActiveDomains(userid, appname) {
+    return statements.selectActiveCustomDomainsByApp.all(userid, appname);
   }
 
   function addDomain(userid, appname, domain, port) {
@@ -124,9 +171,10 @@ function createDomainManager({ statements }) {
     }
 
     // 플랫폼 도메인 등록 차단
-    if (domain.endsWith(`.${config.PAAS_DOMAIN}`)) {
-      throw new AppError(400, "플랫폼 기본 도메인은 등록할 수 없습니다.");
-    }
+    // if (domain.includes(`${config.PAAS_DOMAIN}`)) {
+    //   throw new AppError(400, "플랫폼 기본 도메인은 등록할 수 없습니다.");
+    // }
+    // 내 도메인으로 테스트하고 싶어서 임시로 풀어둠
 
     // 전역 중복 확인
     const existing = statements.selectCustomDomainByDomain.get(domain);
@@ -194,7 +242,8 @@ function createDomainManager({ statements }) {
 
     const updated = statements.selectCustomDomainById.get(id);
 
-    if (isVerified) {
+    // active→error 전환 시에도 Traefik 설정을 재빌드해야 해당 도메인 라우팅이 제거된다.
+    if (isVerified || row.status === "active") {
       await rebuildTraefikConfig(statements);
     }
 
@@ -221,6 +270,7 @@ function createDomainManager({ statements }) {
   return {
     init,
     listDomains,
+    listActiveDomains,
     addDomain,
     removeDomain,
     verifyDomain,

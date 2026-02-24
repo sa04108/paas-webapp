@@ -669,6 +669,20 @@ function createAuthService(options) {
       WHERE status = 'active'
       ORDER BY userid, appname, created_at ASC
     `);
+    statements.selectActiveCustomDomainsByApp = db.prepare(`
+      SELECT id, userid, appname, domain, target AS cnameTarget, port,
+             status, verified_at AS verifiedAt, created_at AS createdAt, updated_at AS updatedAt
+      FROM custom_domains
+      WHERE userid = ? AND appname = ? AND status = 'active'
+      ORDER BY created_at ASC
+    `);
+    statements.selectAllNonActiveDomains = db.prepare(`
+      SELECT id, userid, appname, domain, target AS cnameTarget, port,
+             status, verified_at AS verifiedAt, created_at AS createdAt, updated_at AS updatedAt
+      FROM custom_domains
+      WHERE status != 'active'
+      ORDER BY created_at ASC
+    `);
 
     const admin = statements.selectUserByUsername.get("admin");
     if (!admin) {

@@ -24,7 +24,7 @@ const { AppError, sendOk, sendError } = require("./utils");
 const { config, envFilePath, IS_DEV } = require("./config");
 const { ensureBaseDirectories } = require("./appManager");
 const appsRouter = require("./routes/apps");
-const { executeJob, setOnAppDeletedHook, setOnAppDeployedHook } = require("./routes/apps");
+const { executeJob, setOnAppDeletedHook, setOnAppDeployedHook, setListActiveDomainsForApp } = require("./routes/apps");
 const createUsersRouter = require("./routes/users");
 const createDomainsRouter = require("./routes/domains");
 const jobsRouter = require("./routes/jobs");
@@ -225,6 +225,8 @@ async function start() {
   setOnAppDeletedHook((userid, appname) => domainManager.removeAppDomains(userid, appname));
   // 재배포 완료 시 포트 갱신 훅
   setOnAppDeployedHook((userid, appname, port) => domainManager.refreshAppPort(userid, appname, port));
+  // GET /apps 응답에 active 커스텀 도메인을 포함시키기 위한 주입
+  setListActiveDomainsForApp((userid, appname) => domainManager.listActiveDomains(userid, appname));
 
   // 커스텀 도메인 라우터: /apps/:userid/:appname/domains
   // appsRouter와 별도 마운트 (mergeParams 활용)

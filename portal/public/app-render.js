@@ -61,6 +61,12 @@ function renderApps(apps) {
     } else {
       domainHtml = "-";
     }
+    if (appItem.activeCustomDomains?.length) {
+      const customLinks = appItem.activeCustomDomains
+        .map(d => `<a href="https://${escapeHtml(d.domain)}" target="_blank" rel="noopener noreferrer">${escapeHtml(d.domain)}</a>`)
+        .join(", ");
+      domainHtml += `, ${customLinks}`;
+    }
 
     return `
       <article class="app-card" data-userid="${safeUser}" data-appname="${safeApp}">
@@ -116,6 +122,12 @@ function renderAdminApps(apps) {
       domainHtml = `<a href="${url}" target="_blank" rel="noopener noreferrer">${escapeHtml(appItem.domain)}</a>`;
     } else {
       domainHtml = "-";
+    }
+    if (appItem.activeCustomDomains?.length) {
+      const customLinks = appItem.activeCustomDomains
+        .map(d => `<a href="https://${escapeHtml(d.domain)}" target="_blank" rel="noopener noreferrer">${escapeHtml(d.domain)}</a>`)
+        .join(", ");
+      domainHtml += `, ${customLinks}`;
     }
 
     return `

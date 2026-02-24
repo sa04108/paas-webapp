@@ -171,9 +171,11 @@ jobsRouter.setExecuteJobFn(executeJob);
 
 let _onAppDeletedHook = null;
 let _onAppDeployedHook = null;
+let _listActiveDomainsForApp = null;
 
 function setOnAppDeletedHook(fn) { _onAppDeletedHook = fn; }
 function setOnAppDeployedHook(fn) { _onAppDeployedHook = fn; }
+function setListActiveDomainsForApp(fn) { _listActiveDomainsForApp = fn; }
 
 // ── 앱 CRUD ───────────────────────────────────────────────────────────────────
 
@@ -227,6 +229,12 @@ router.get("/", async (req, res, next) => {
         if (aTime !== bTime) return bTime - aTime;
         return `${a.userid}/${a.appname}`.localeCompare(`${b.userid}/${b.appname}`);
       });
+
+    if (_listActiveDomainsForApp) {
+      for (const app of apps) {
+        app.activeCustomDomains = _listActiveDomainsForApp(app.userid, app.appname);
+      }
+    }
 
     return sendOk(res, { apps, total: apps.length, hasLabelErrors });
   } catch (error) {
@@ -379,8 +387,9 @@ router.put("/:userid/:appname/env", async (req, res, next) => {
 });
 
 // module.exports = router 이후에도 접근 가능하도록 router 객체에 직접 부착
-router.executeJob            = executeJob;
-router.setOnAppDeletedHook   = setOnAppDeletedHook;
-router.setOnAppDeployedHook  = setOnAppDeployedHook;
+router.executeJob                  = executeJob;
+router.setOnAppDeletedHook         = setOnAppDeletedHook;
+router.setOnAppDeployedHook        = setOnAppDeployedHook;
+router.setListActiveDomainsForApp  = setListActiveDomainsForApp;
 
 module.exports = router;
