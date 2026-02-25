@@ -226,7 +226,7 @@ function renderUsers(users) {
 // ── 작업 목록 테이블 렌더링 ──────────────────────────────────────────────────────
 
 function renderJobList(jobs) {
-  const activeStatuses = new Set(["pending", "running", "interrupted", "failed"]);
+  const activeStatuses = new Set(["pending", "running", "done", "interrupted", "failed", "warn"]);
   const activeJobs = jobs.filter((j) => activeStatuses.has(j.status));
 
   const table = document.getElementById("job-list-table");
@@ -247,18 +247,43 @@ function renderJobList(jobs) {
     const safeStatus = escapeHtml(rawStatus);
     
     let errorReason = "-";
-    if (rawStatus === "failed" && job.error) {
-       errorReason = `<span class="job-error-text" title="${escapeHtml(job.error)}">${escapeHtml(job.error)}</span>`;
+    const logText = job.error || job.output;
+    if (logText) {
+      const singleLineLog = logText.split('\n')[0];
+      let textClass = "job-neutral-text";
+      if (rawStatus === "failed") textClass = "job-error-text";
+      else if (rawStatus === "warn") textClass = "job-warn-text";
+
+      errorReason = `
+        <div style="display: flex; align-items: center; max-width: 250px;">
+          <span class="${textClass}" style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(singleLineLog)}">${escapeHtml(singleLineLog)}</span>
+          <button class="ghost-btn" data-action="view-job-log" data-id="${job.id}" type="button" style="padding: 2px 6px; margin-left: 4px;" title="전체 로그 보기">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+          </button>
+        </div>
+      `;
     } else if (rawStatus === "interrupted") {
        errorReason = `<span class="ink-subtle">서버 재시작으로 중단됨</span>`;
     }
 
     let actions = `<span class="ink-subtle">-</span>`;
+    const closeBtnHtml = `
+      <button class="ghost-btn danger-ghost-btn" data-action="cancel-job" data-id="${job.id}" type="button" style="padding: 4px 8px; min-width: auto; height: 28px; display: inline-flex; align-items: center; justify-content: center;" title="목록에서 제거">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+      </button>
+    `;
+
     if (rawStatus === "interrupted" || rawStatus === "failed") {
       actions = `
         <div class="users-action-group">
           <button class="action-btn" data-action="retry-job" data-id="${job.id}" type="button">재시도</button>
-          <button class="action-btn danger" data-action="cancel-job" data-id="${job.id}" type="button">취소</button>
+          ${closeBtnHtml}
+        </div>
+      `;
+    } else if (rawStatus === "done" || rawStatus === "warn") {
+      actions = `
+        <div class="users-action-group">
+          ${closeBtnHtml}
         </div>
       `;
     }

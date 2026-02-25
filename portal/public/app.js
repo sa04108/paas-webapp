@@ -40,6 +40,7 @@ import {
   closePromoteAdminModal,
   closeSettingsModal,
   closeJobListModal,
+  closeJobLogModal,
   configureUiHandlers,
   openAddDomainModal,
   openCreateUserModal,
@@ -47,6 +48,7 @@ import {
   openPromoteAdminModal,
   openSettingsModal,
   openJobListModal,
+  openJobLogModal,
   switchAdminTab,
   switchDetailTab,
   switchView,
@@ -85,6 +87,7 @@ import {
   removeCustomDomain,
   retryJob,
   cancelJob,
+  clearCompletedJobs,
   saveDetailEnv,
   startDetailLogsAutoRefresh,
   stopDetailLogsAutoRefresh,
@@ -631,6 +634,45 @@ el.jobListTbody.addEventListener("click", async (event) => {
   if (cancelBtn) {
     const id = cancelBtn.dataset.id;
     if (id) await cancelJob(id).catch(handleRequestError);
+    return;
+  }
+
+  const viewLogBtn = event.target.closest("button[data-action='view-job-log']");
+  if (viewLogBtn) {
+    const id = viewLogBtn.dataset.id;
+    if (id) {
+      const job = state.jobs.find((j) => j.id === id);
+      if (job) {
+        openJobLogModal(job.error || job.output || "내용 없음");
+      }
+    }
+  }
+});
+
+el.clearCompletedJobsBtn.addEventListener("click", async () => {
+  if (!window.confirm("모든 완료된 작업 내역을 지우시겠습니까?")) return;
+  try {
+    await clearCompletedJobs();
+  } catch (error) {
+    await handleRequestError(error);
+  }
+});
+
+el.closeJobLogBtn.addEventListener("click", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  closeJobLogModal();
+});
+bindBackdropClose(el.jobLogModal, "jobLog", closeJobLogModal);
+
+el.copyJobLogBtn.addEventListener("click", async () => {
+  const text = el.jobLogContent.textContent;
+  if (!text || text === "내용 없음") return;
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast("로그 내용이 클립보드에 복사되었습니다.", "success");
+  } catch (error) {
+    showToast("클립보드 복사에 실패했습니다.", "error");
   }
 });
 

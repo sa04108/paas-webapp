@@ -295,12 +295,25 @@ async function retryJob(jobId) {
 }
 
 /**
+ * 모든 완료된 작업을 일괄 삭제한다.
+ */
+async function clearCompletedJobs() {
+  const data = await apiFetch("/jobs", { method: "DELETE" });
+  showToast("완료된 작업 기록이 지워졌습니다.", "success");
+
+  state.jobs = state.jobs.filter((j) => j.status === "pending" || j.status === "running");
+  renderJobIndicator(state.jobs);
+  await refreshDashboardData().catch(() => {});
+  return data;
+}
+
+/**
  * interrupted/failed job을 서버에 취소(복구) 요청한다.
  */
 async function cancelJob(jobId) {
   const data = await apiFetch(`/jobs/${jobId}/cancel`, { method: "POST" });
   const label = _getJobTargetLabel(jobId);
-  showToast(`✅ 작업 취소 완료: ${label}`, "success");
+  showToast(`✅ 작업 제거 완료: ${label}`, "success");
 
   // 상태 배열에서 직접 제거
   state.jobs = state.jobs.filter((j) => j.id !== jobId);
@@ -519,6 +532,7 @@ export {
   addCustomDomain,
   apiFetch,
   cancelJob,
+  clearCompletedJobs,
   getActionTarget,
   handleCreate,
   handleRequestError,

@@ -286,7 +286,7 @@ function runCommandStreaming(command, args, options = {}) {
 
 // .sh 러너 스크립트를 bash로 실행한다.
 // 경로 트래버설 방지를 위해 scriptName을 basename으로 검증한다.
-async function runRunnerScript(scriptName, args) {
+async function runRunnerScript(scriptName, args, options = {}) {
   const safeScriptName = path.basename(String(scriptName || "").trim());
   if (!safeScriptName || safeScriptName !== scriptName) {
     throw new AppError(500, `Invalid runner script name: ${scriptName}`);
@@ -303,6 +303,7 @@ async function runRunnerScript(scriptName, args) {
       cwd: config.PAAS_SCRIPTS_DIR,
       stream: true,
       logTag: safeScriptName,
+      onLog: options.onLog,
     });
     dockerAppsCache.ts = 0; // 실행 후 Docker 갱신을 위해 캐시 무효화
     console.log(`[portal] ${safeScriptName} completed`);

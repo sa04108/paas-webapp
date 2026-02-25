@@ -171,8 +171,9 @@
                             aria-controls="detail-panel-logs">Logs</button>
                         <button id="detail-tab-btn-exec" class="detail-tab-btn" type="button" data-detail-tab="exec"
                             role="tab" aria-selected="false" aria-controls="detail-panel-exec">Exec</button>
-                        <button id="detail-tab-btn-domains" class="detail-tab-btn" type="button" data-detail-tab="domains" role="tab"
-                            aria-selected="false" aria-controls="detail-panel-domains">Domains</button>
+                        <button id="detail-tab-btn-domains" class="detail-tab-btn" type="button"
+                            data-detail-tab="domains" role="tab" aria-selected="false"
+                            aria-controls="detail-panel-domains">Domains</button>
                         <button id="detail-tab-btn-settings" class="detail-tab-btn" type="button"
                             data-detail-tab="settings" role="tab" aria-selected="false"
                             aria-controls="detail-panel-settings">Settings</button>
@@ -217,8 +218,8 @@
                 </section>
 
                 <!-- Domains panel -->
-                <section id="detail-panel-domains" class="panel detail-panel" role="tabpanel" aria-labelledby="detail-tab-btn-domains"
-                    hidden>
+                <section id="detail-panel-domains" class="panel detail-panel" role="tabpanel"
+                    aria-labelledby="detail-tab-btn-domains" hidden>
                     <div class="panel-head">
                         <h3>Custom Domains</h3>
                         <button id="detail-add-domain-btn" class="ghost-btn" type="button">+ Add Domain</button>
@@ -355,12 +356,10 @@
 
     <!-- ── 도메인 추가 모달 ── -->
     <div id="add-domain-modal" class="modal-backdrop" hidden>
-        <section class="modal-card panel-inset" role="dialog" aria-modal="true"
-            aria-labelledby="add-domain-title">
+        <section class="modal-card panel-inset" role="dialog" aria-modal="true" aria-labelledby="add-domain-title">
             <div class="modal-head">
                 <h2 id="add-domain-title">도메인 추가</h2>
-                <button id="close-add-domain-btn" class="icon-btn close-icon-btn" type="button"
-                    aria-label="도메인 추가 닫기">
+                <button id="close-add-domain-btn" class="icon-btn close-icon-btn" type="button" aria-label="도메인 추가 닫기">
                     <span aria-hidden="true">x</span>
                 </button>
             </div>
@@ -371,8 +370,8 @@
             <p id="add-domain-error" class="modal-error" role="alert" hidden></p>
             <form id="add-domain-form" novalidate>
                 <label for="add-domain-input">Domain</label>
-                <input id="add-domain-input" type="text" placeholder="my.domain.com"
-                    autocomplete="off" spellcheck="false" required />
+                <input id="add-domain-input" type="text" placeholder="my.domain.com" autocomplete="off"
+                    spellcheck="false" required />
                 <div class="modal-actions">
                     <button id="cancel-add-domain-btn" class="ghost-btn" type="button">취소</button>
                     <button id="submit-add-domain-btn" class="primary-btn" type="submit">추가</button>
@@ -499,11 +498,16 @@
             aria-labelledby="job-list-title">
             <div class="modal-head">
                 <h2 id="job-list-title">작업 목록</h2>
-                <button id="close-job-list-btn" class="icon-btn close-icon-btn" type="button" aria-label="작업 목록 닫기">
-                    <span aria-hidden="true">x</span>
-                </button>
+                <div style="display: flex; align-items: center;">
+                    <button id="clear-completed-jobs-btn" class="ghost-btn danger-ghost-btn" type="button"
+                        style="margin-right: 12px;">모든 완료된 작업 지우기</button>
+                    <button id="close-job-list-btn" class="icon-btn close-icon-btn" type="button" aria-label="작업 목록 닫기">
+                        <span aria-hidden="true">x</span>
+                    </button>
+                </div>
             </div>
-            <p class="modal-description">현재 진행 중이거나 실패한 백그라운드 작업입니다.</p>
+            <p class="modal-description" style="margin-bottom: 12px;">모든 작업 내역(진행중, 완료 등)을 표시합니다. (완료된 작업은 최근 10개까지만
+                보관됩니다)</p>
             <div class="users-table-wrap">
                 <table class="users-table" id="job-list-table">
                     <thead>
@@ -511,7 +515,7 @@
                             <th scope="col">작업</th>
                             <th scope="col">앱</th>
                             <th scope="col">상태</th>
-                            <th scope="col">오류 사유</th>
+                            <th scope="col">로그</th>
                             <th scope="col">관리</th>
                         </tr>
                     </thead>
@@ -519,6 +523,31 @@
                 </table>
             </div>
             <p id="job-list-empty" class="empty-state" hidden>현재 작업이 없습니다.</p>
+        </section>
+    </div>
+
+    <!-- ── 작업 로그 상세 모달 ── -->
+    <div id="job-log-modal" class="modal-backdrop" style="z-index: 10001;" hidden>
+        <section class="modal-card panel-inset" role="dialog" aria-modal="true" aria-labelledby="job-log-title"
+            style="max-width: 800px; width: 90%;">
+            <div class="modal-head">
+                <h2 id="job-log-title">작업 로그 상세</h2>
+                <div style="display: flex; align-items: center;">
+                    <button id="copy-job-log-btn" class="ghost-btn" type="button"
+                        style="margin-right: 12px; display: flex; align-items: center; gap: 4px;">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" width="16" height="16">
+                            <path fill="currentColor"
+                                d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
+                        </svg>
+                        복사
+                    </button>
+                    <button id="close-job-log-btn" class="icon-btn close-icon-btn" type="button" aria-label="로그 상세 닫기">
+                        <span aria-hidden="true">x</span>
+                    </button>
+                </div>
+            </div>
+            <pre id="job-log-content" class="logs-output"
+                style="max-height: 60vh; overflow-y: auto; white-space: pre-wrap; font-size: 0.9rem; line-height: 1.4; padding: 16px;">내용 없음</pre>
         </section>
     </div>
 

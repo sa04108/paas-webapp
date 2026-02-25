@@ -55,6 +55,20 @@ router.get("/", (req, res, next) => {
   }
 });
 
+// ── DELETE /jobs ──────────────────────────────────────────────────────────────
+
+router.delete("/", (req, res, next) => {
+  try {
+    const user = req.auth?.user;
+    if (!user) return next(new AppError(401, "Unauthorized"));
+
+    jobStore.deleteCompletedJobs(user.username);
+    return sendOk(res, { message: "Completed jobs removed" });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 // ── GET /jobs/:id ─────────────────────────────────────────────────────────────
 
 router.get("/:id", resolveJob, (req, res, next) => {
@@ -158,7 +172,7 @@ router.post("/:id/cancel", resolveJob, async (req, res, next) => {
       throw new AppError(409, `Job is in '${job.status}' status and cannot be canceled`);
     }
 
-    if (job.type === "create") {
+    if (job.type === "create" && job.status !== "done" && job.status !== "warn") {
       const { userid, appname } = job.meta;
       try {
         await runRunnerScript(RUNNER_SCRIPTS.delete, [userid, appname]);

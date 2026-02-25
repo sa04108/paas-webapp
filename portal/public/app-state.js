@@ -193,9 +193,17 @@ export const el = {
   // 작업 목록 모달
   jobListBtn: document.getElementById("job-list-btn"),
   jobListModal: document.getElementById("job-list-modal"),
+  clearCompletedJobsBtn: document.getElementById("clear-completed-jobs-btn"),
   closeJobListBtn: document.getElementById("close-job-list-btn"),
   jobListTbody: document.getElementById("job-list-tbody"),
   jobListEmpty: document.getElementById("job-list-empty"),
+
+  // 작업 로그 상세 모달
+  jobLogModal: document.getElementById("job-log-modal"),
+  jobLogTitle: document.getElementById("job-log-title"),
+  copyJobLogBtn: document.getElementById("copy-job-log-btn"),
+  closeJobLogBtn: document.getElementById("close-job-log-btn"),
+  jobLogContent: document.getElementById("job-log-content"),
 
   // Admin 대시보드
   adminTabBtns: Array.from(
@@ -224,6 +232,7 @@ export const modalBackdropState = {
   deleteUser: false,
   promoteAdmin: false,
   jobList: false,
+  jobLog: false,
   addDomain: false,
 };
 

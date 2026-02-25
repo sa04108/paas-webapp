@@ -283,6 +283,21 @@ function closeJobListModal() {
   syncModalOpenState();
 }
 
+// ── 작업 로그 상세 모달 ────────────────────────────────────────────────────────
+
+function openJobLogModal(logText) {
+  modalBackdropState.jobLog = false;
+  el.jobLogContent.textContent = logText || "내용 없음";
+  el.jobLogModal.hidden = false;
+  syncModalOpenState();
+}
+
+function closeJobLogModal() {
+  modalBackdropState.jobLog = false;
+  el.jobLogModal.hidden = true;
+  syncModalOpenState();
+}
+
 // ── 인증 UI 동기화 ────────────────────────────────────────────────────────────
 
 // 로그인 상태·역할·비밀번호 잠금 여부에 따라 전체 UI를 동기화한다.
@@ -402,6 +417,8 @@ export {
   openPromoteAdminModal,
   openSettingsModal,
   openJobListModal,
+  openJobLogModal,
+  closeJobLogModal,
   renderJobIndicator,
   switchAdminTab,
   switchDetailTab,

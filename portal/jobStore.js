@@ -31,7 +31,7 @@ const JOB_STATUS = {
 
 const TERMINAL_STATUSES = new Set([JOB_STATUS.DONE, JOB_STATUS.FAILED, JOB_STATUS.INTERRUPTED]);
 const RETRYABLE_STATUSES = new Set([JOB_STATUS.FAILED, JOB_STATUS.INTERRUPTED]);
-const CANCELABLE_STATUSES = new Set([JOB_STATUS.FAILED, JOB_STATUS.INTERRUPTED]);
+const CANCELABLE_STATUSES = new Set([JOB_STATUS.DONE, JOB_STATUS.WARN, JOB_STATUS.FAILED, JOB_STATUS.INTERRUPTED]);
 
 // 완료된 job 보존 기간 (24시간)
 const JOB_TTL_MS = 24 * 60 * 60 * 1000;
@@ -112,9 +112,18 @@ function startJob(jobId) {
  */
 function finishJob(jobId, output = "") {
   const now = Date.now();
-  _db.prepare(`
+  const logs = _logBuffers.get(jobId);
+  let finalOutput = String(output);
+  if (logs && logs.length > 0) {
+    finalOutput = logs.join('\n') + (finalOutput ? '\n\n[Result]\n' + finalOutput : '');
+  }
+
+  const row = _db.prepare(`
     UPDATE jobs SET status = 'done', output = ?, finished_at = ? WHERE id = ?
-  `).run(output, now, jobId);
+    RETURNING userid
+  `).get(finalOutput, now, jobId);
+  
+  if (row) _enforceUserJobLimit(row.userid);
   _closeSseSubscribers(jobId, "done");
 }
 
@@ -123,9 +132,18 @@ function finishJob(jobId, output = "") {
  */
 function failJob(jobId, errorMessage = "Unknown error") {
   const now = Date.now();
-  _db.prepare(`
+  const logs = _logBuffers.get(jobId);
+  let finalError = String(errorMessage);
+  if (logs && logs.length > 0) {
+    finalError = logs.join('\n') + '\n\n[Error]\n' + finalError;
+  }
+
+  const row = _db.prepare(`
     UPDATE jobs SET status = 'failed', error = ?, finished_at = ? WHERE id = ?
-  `).run(errorMessage, now, jobId);
+    RETURNING userid
+  `).get(finalError, now, jobId);
+  
+  if (row) _enforceUserJobLimit(row.userid);
   _closeSseSubscribers(jobId, "failed");
 }
 
@@ -172,20 +190,16 @@ function getJob(jobId) {
 
 /**
  * 특정 사용자의 job 목록 조회.
- * active job(pending/running/interrupted) + 최근 TTL 이내 완료 job을 반환한다.
+ * active job(pending/running/interrupted) + 최근 완료 조회를 위해
+ * 표시 상한(LIMIT 10)을 적용해 반환한다.
  */
 function listJobsByUser(userid) {
-  const cutoff = Date.now() - JOB_TTL_MS;
   const rows = _db.prepare(`
     SELECT * FROM jobs
     WHERE userid = ?
-      AND (
-        status IN ('pending', 'running', 'interrupted')
-        OR finished_at > ?
-      )
     ORDER BY created_at DESC
-    LIMIT 100
-  `).all(userid, cutoff);
+    LIMIT 20
+  `).all(userid);
   return rows.map(_deserialize);
 }
 
@@ -307,17 +321,31 @@ function _closeSseSubscribers(jobId, finalStatus) {
   _sseSubscribers.delete(jobId);
 }
 
-function _cleanupExpired() {
-  const cutoff = Date.now() - JOB_TTL_MS;
-  const result = _db.prepare(`
+function deleteCompletedJobs(userid) {
+  _db.prepare(`
     DELETE FROM jobs
-    WHERE status IN ('done', 'failed', 'interrupted')
-      AND finished_at IS NOT NULL
-      AND finished_at < ?
-  `).run(cutoff);
-  if (result.changes > 0) {
-    console.log(`[jobStore] cleaned up ${result.changes} expired job(s)`);
-  }
+    WHERE userid = ?
+      AND status NOT IN ('pending', 'running')
+  `).run(userid);
+}
+
+function _enforceUserJobLimit(userid, maxRetain = 10) {
+  // 사용자의 완료된 작업 중, (최신 maxRetain개) 에 포함되지 않는 과거 작업들을 삭제
+  _db.prepare(`
+    DELETE FROM jobs
+    WHERE userid = ?
+      AND status NOT IN ('pending', 'running')
+      AND id NOT IN (
+        SELECT id FROM jobs
+        WHERE userid = ? AND status NOT IN ('pending', 'running')
+        ORDER BY created_at DESC
+        LIMIT ?
+      )
+  `).run(userid, userid, maxRetain);
+}
+
+function _cleanupExpired() {
+  // 사용자가 명시적으로 지우기 전까지 보관함
 }
 
 // ── exports ───────────────────────────────────────────────────────────────────
@@ -338,6 +366,7 @@ module.exports = {
   getJob,
   listJobsByUser,
   listActiveJobs,
+  deleteCompletedJobs,
   appendLog,
   getLogs,
   subscribeSse,
