@@ -46,10 +46,10 @@ if [[ -e "${APP_DIR}" ]]; then
   exit 1
 fi
 
-# app 디렉토리 생성 실패 시 정리
+# app 소스 디렉토리 복제 실패 시 정리 (메타데이터 및 기타 구조 보존을 위해 app 폴더 전체 대신 소스코드만 삭제)
 cleanup_on_failure() {
-  echo "[create] 실패 — 생성 중간 상태 정리: ${APP_DIR}" >&2
-  rm -rf "${APP_DIR}"
+  echo "[create] 실패 — 생성 중간 상태 정리 (소스 디렉토리만 삭제): ${APP_DIR}/${APP_SOURCE_SUBDIR}" >&2
+  rm -rf "${APP_DIR}/${APP_SOURCE_SUBDIR}"
 }
 trap cleanup_on_failure ERR
 
