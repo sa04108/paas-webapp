@@ -11,7 +11,6 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.constraints=Label(`paas.type`, `user-app`)"
-      - "--providers.docker.defaultRule=Host(`{{ index .Labels \"paas.domain\" }}`)"
       - "--providers.docker.network=${APP_NETWORK:-paas-app}"
       - "--providers.file.directory=/traefik-dynamic"
       - "--providers.file.watch=true"

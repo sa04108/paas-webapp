@@ -5,8 +5,7 @@ services:
         command:
             - '--providers.docker=true'
             - '--providers.docker.exposedbydefault=false'
-            - '--providers.docker.constraints=Label(`paas.type`, `user-app`)'
-            - '--providers.docker.defaultRule=Host(`{{ index .Labels "paas.domain" }}`)'
+            - '--providers.docker.constraints=Label(`paas.type`, `user-app`) || Label(`paas.type`, `core`)'
             - '--providers.docker.network=${APP_NETWORK:-paas-app}'
             - '--providers.file.directory=/traefik-dynamic'
             - '--providers.file.watch=true'
@@ -24,7 +23,6 @@ services:
             - '--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json'
         environment:
             - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
-            - PAAS_DOMAIN=${PAAS_DOMAIN}
         ports:
             - '80:80'
             - '443:443'
@@ -62,6 +60,13 @@ services:
             - /var/run/docker.sock:/var/run/docker.sock
         networks:
             - paas-app
+        labels:
+            - 'paas.type=core'
+            - 'traefik.enable=true'
+            - 'traefik.http.routers.portal.rule=Host(`${PAAS_DOMAIN}`)'
+            - 'traefik.http.routers.portal.entrypoints=websecure'
+            - 'traefik.http.routers.portal.tls.certresolver=letsencrypt'
+            - 'traefik.http.services.portal.loadbalancer.server.port=${PORTAL_PORT:-3000}'
 
 networks:
     #    proxy:
