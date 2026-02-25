@@ -24,6 +24,7 @@ services:
             - '--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json'
         environment:
             - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+            - PAAS_DOMAIN=${PAAS_DOMAIN}
         ports:
             - '80:80'
             - '443:443'
