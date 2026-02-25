@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git log:*)",
+      "Bash(ls:*)",
+      "Bash(node --check:*)",
+      "WebFetch(domain:fonts.google.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
+    ]
+  }
+}
