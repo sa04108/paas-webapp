@@ -30,7 +30,7 @@ const {
   patchComposeEnvFile,
   readEnvFile,
   writeEnvFile,
-  getContainerLogs,
+  getComposeLogs,
   runContainerExec,
   runContainerComplete,
 } = require("../appManager");
@@ -298,17 +298,14 @@ router.delete("/:userid/:appname", async (req, res, next) => {
 
 // ── 로그 ──────────────────────────────────────────────────────────────────────
 
-// GET /apps/:userid/:appname/logs?lines=N — docker logs (동기, compose 파일 불필요)
+// GET /apps/:userid/:appname/logs?lines=N — docker compose logs (동기, 멀티 컨테이너 지원)
 router.get("/:userid/:appname/logs", async (req, res, next) => {
   try {
-    const { userid, appname } = await resolveAppRequestContext(req);
+    const { appDir } = await resolveAppRequestContext(req);
     const requestedLines = Number.parseInt(String(req.query.lines || "120"), 10);
     const lines = Number.isFinite(requestedLines) ? Math.max(1, Math.min(1000, requestedLines)) : 120;
 
-    const app = await findDockerApp(userid, appname);
-    if (!app?.containerName) throw new AppError(404, "Container not found for this app");
-
-    const logs = await getContainerLogs(app.containerName, lines);
+    const logs = await getComposeLogs(appDir, lines);
     return sendOk(res, { lines, logs });
   } catch (error) {
     return next(error);

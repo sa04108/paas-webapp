@@ -429,18 +429,11 @@ async function findDockerApp(userid, appname) {
   );
 }
 
-// 컨테이너 이름을 받아 로그를 조회한다. compose 파일이 필요 없다.
-async function getContainerLogs(containerName, lines) {
-  try {
-    const result = await runCommand("docker", [
-      "logs", "--tail", String(lines), containerName,
-    ]);
-    // docker logs는 stdout + stderr 모두를 활용하므로 병합한다.
-    return [result.stdout, result.stderr].filter(Boolean).join("\n");
-  } catch (error) {
-    if (error.code === "ENOENT") throw new AppError(503, "docker command is not available");
-    throw new AppError(502, `docker logs failed: ${summarizeCommandError(error)}`);
-  }
+// 앱 디렉터리를 기준으로 docker compose logs를 조회한다. (다중 컨테이너 지원)
+async function getComposeLogs(appDir, lines) {
+  const result = await runDockerCompose(appDir, ["logs", "--no-color", "--tail", String(lines)]);
+  // docker compose logs는 stdout + stderr에 출력될 수 있으므로 병합한다.
+  return [result.stdout, result.stderr].filter(Boolean).join("\n");
 }
 
 // ── 환경변수 파일 관리 ────────────────────────────────────────────────────────
@@ -580,7 +573,7 @@ module.exports = {
   readEnvFile,
   writeEnvFile,
   // 컨테이너 Exec
-  getContainerLogs,
+  getComposeLogs,
   runContainerExec,
   runContainerComplete,
 };
