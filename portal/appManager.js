@@ -10,7 +10,8 @@
 const path = require("node:path");
 const fs = require("node:fs/promises");
 const { constants: fsConstants } = require("node:fs");
-const { spawn } = require("node:child_process");
+const { execFile, spawn } = require("node:child_process");
+const { promisify } = require("node:util");
 const Docker = require("dockerode");
 const readline = require("node:readline");
 
@@ -23,6 +24,8 @@ const {
   APP_META_FILE,
   APP_COMPOSE_FILE,
 } = require("./config");
+
+const execFileAsync = promisify(execFile);
 
 const docker = new Docker(); // /var/run/docker.sock (Unix socket)
 
