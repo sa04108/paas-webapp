@@ -77,8 +77,7 @@ function openExecSocket() {
   let ws;
   try {
     ws = new WebSocket(url);
-  } catch (err) {
-    console.error("[exec-ws] open failed:", err);
+  } catch {
     return;
   }
 
@@ -87,7 +86,6 @@ function openExecSocket() {
   ws.binaryType = "arraybuffer";
 
   ws.onopen = () => {
-    console.log("[exec-ws] connected");
     fitAddon.fit();
     _sendResize();
     term.focus();
@@ -103,14 +101,15 @@ function openExecSocket() {
 
   ws.onclose = () => {
     if (execWs === ws) execWs = null;
-    console.log("[exec-ws] closed");
   };
 
-  ws.onerror = () => console.error("[exec-ws] socket error");
+  ws.onerror = null;
 }
 
 function closeExecSocket() {
   if (execWs) {
+    // 의도적 종료이므로 onclose 핸들러를 해제하여
+    // execWs 참조가 이중으로 정리되는 것을 방지한다.
     execWs.onclose = null;
     execWs.close();
     execWs = null;
