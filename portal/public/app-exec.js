@@ -68,6 +68,7 @@ function openExecSocket() {
   if (!state.selectedApp) return;
 
   _ensureTerminal();
+  term.reset();
 
   const { userid, appname } = state.selectedApp;
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
