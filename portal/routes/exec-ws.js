@@ -92,13 +92,14 @@ function createExecWsHandler({ resolveSessionAuth, findDockerApp, getDockerConta
 
         // ── dockerode TTY exec ─────────────────────────────────────────────────
         // Tty: true  → 컨테이너 내부에 PTY 생성, hijack: true → raw duplex stream
-        // bash --norc: readline 활성 (방향키·Tab 완성), bash 없으면 sh fallback
+        // bash 존재 여부를 먼저 확인한 뒤 exec — POSIX sh에서 exec 실패 시
+        // 셸 자체가 종료되어 || fallback에 도달하지 못하는 문제를 방지한다.
         // PS1=$USER:$PWD# : POSIX 표준 변수 사용 → bash/sh 모두에서 동작
         let exec, stream;
         try {
             const container = getDockerContainer(app.containerName);
             exec = await container.exec({
-                Cmd: ["sh", "-c", "exec bash --norc || exec sh"],
+                Cmd: ["sh", "-c", "command -v bash >/dev/null 2>&1 && exec bash --norc; exec sh"],
                 User: "root",
                 Env: [
                     "TERM=xterm-256color",  // readline이 키 시퀀스를 알 수 있도록
