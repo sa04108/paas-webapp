@@ -38,9 +38,16 @@ function truncateReason(str) {
  * 매칭 실패 시 null 반환.
  */
 function parseExecWsUrl(url) {
-    const m = (url || "").split("?")[0].match(EXEC_WS_PATH);
+    const [path, qs] = (url || "").split("?");
+    const m = path.match(EXEC_WS_PATH);
     if (!m) return null;
-    return { userid: m[1], appname: m[2] };
+    const params = new URLSearchParams(qs || "");
+    return {
+        userid: m[1],
+        appname: m[2],
+        cols: parseInt(params.get("cols"), 10) || 0,
+        rows: parseInt(params.get("rows"), 10) || 0,
+    };
 }
 
 /**
@@ -61,7 +68,7 @@ function createExecWsHandler({ resolveSessionAuth, findDockerApp, getDockerConta
             return;
         }
 
-        const { userid, appname } = params;
+        const { userid, appname, cols: initCols, rows: initRows } = params;
 
         // ── 인증 확인 ──────────────────────────────────────────────────────────
         // server.js upgrade 핸들러가 req._wsAuth에 검증된 auth를 첨부한다.
@@ -118,6 +125,16 @@ function createExecWsHandler({ resolveSessionAuth, findDockerApp, getDockerConta
         } catch (err) {
             ws.close(1011, truncateReason("Exec failed: " + err.message));
             return;
+        }
+
+        // 클라이언트가 전달한 초기 터미널 크기를 즉시 적용한다.
+        // 셸이 SIGWINCH를 수신하기 전에 기본 80x24로 readline이 초기화되면
+        // 탭 완성 등에서 줄 바꿈 위치가 어긋나는 문제가 발생한다.
+        if (initCols > 0 && initRows > 0) {
+            exec.resize({
+                h: Math.max(1, Math.min(initRows, 256)),
+                w: Math.max(1, Math.min(initCols, 512)),
+            }).catch(() => {});
         }
 
         console.log(`[exec-ws] connected: ${userid}/${appname}`);
