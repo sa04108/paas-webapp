@@ -3,7 +3,7 @@
 ## 1. GitHub App 생성
 1. GitHub → Settings → Developer settings → GitHub Apps → New GitHub App
 2. **Repository permissions → Contents: Read-only** (clone에 필요한 최소 권한)
-3. **Callback URL**: `https://<포털 외부주소>/github/callback` (이 값은 GitHub App 측 설정이며, 포털 env로는 주입하지 않는다)
+3. **Callback URL**: `https://portal.<루트도메인>/api/github/callback` (이 값은 GitHub App 측 설정이며, 포털 env로는 주입하지 않는다)
 4. **"Request user authorization (OAuth) during installation" 체크** (설치 후 code+state를 Callback으로 받기 위함)
 5. **Webhook**: 본 버전은 미사용 (체크 해제 가능)
 6. Where can this app be installed: 필요에 따라 Only on this account / Any account
