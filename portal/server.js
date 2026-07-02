@@ -10,9 +10,9 @@
 //     utils.js       — AppError, sendOk/sendError 등 공통 헬퍼
 //     authService.js — 인증/세션/사용자 관리
 //     appManager.js  — 앱 파일시스템 및 Docker 관리
-//     routes/apps.js     — /apps 라우트 핸들러
-//     routes/users.js    — /users 라우트 핸들러 팩토리
-//     routes/domains.js  — /apps/:userid/:appname/domains 라우트 핸들러
+//     routes/apps.js     — /api/apps 라우트 핸들러
+//     routes/users.js    — /api/users 라우트 핸들러 팩토리
+//     routes/domains.js  — /api/apps/:userid/:appname/domains 라우트 핸들러
 //     domainManager.js   — 커스텀 도메인 CRUD + Traefik 동적 설정 관리
 // =============================================================================
 "use strict";
@@ -67,9 +67,16 @@ app.get("/health", (_req, res) =>
   sendOk(res, { service: "portal", status: "ok", now: new Date().toISOString() })
 );
 
-app.get("/config", (_req, res) =>
+// ── API 라우터 ────────────────────────────────────────────────────────────────
+// 모든 JSON API는 이 라우터에 모아 /api 아래로 마운트한다.
+// UI 경로(path 라우팅)와 API 경로가 섞이지 않도록 격리하기 위함이다.
+
+const api = express.Router();
+
+api.get("/config", (_req, res) =>
   sendOk(res, {
     domain: config.PAAS_DOMAIN,
+    appsDomain: `apps.${config.PAAS_DOMAIN}`,
     devMode: IS_DEV,
     traefikPort: IS_DEV ? config.TRAEFIK_HOST_PORT : null,
     limits: {
@@ -97,8 +104,11 @@ function serveHtmlWithVersion(res, filePath) {
   return res.send(html);
 }
 
-// / 와 /index.html 은 동일한 대시보드 페이지를 제공한다.
-app.get(["/", "/index.html"], (req, res) => {
+// UI 경로(SPA): 어떤 화면이든 index.html을 서빙하고, 실제 뷰 결정은
+// 프론트 라우터(app-router.js)가 pathname을 파싱해 수행한다.
+const UI_PATHS = ["/", "/index.html", "/dashboard", "/create", "/users", "/admin", "/apps/:userid/:appname"];
+
+app.get(UI_PATHS, (req, res) => {
   if (!canAccessDashboardUi(req)) return res.redirect("/auth");
   return serveHtmlWithVersion(res, dashboardPagePath);
 });
@@ -135,22 +145,22 @@ app.get("/*.js", (req, res, next) => {
 // 정적 파일 서빙 (index: false 로 자동 index.html 서빙 비활성화 — 위 라우트로 처리)
 app.use(express.static(publicDir, { index: false }));
 
-// ── 인증 라우트 (/auth/login, /auth/logout, /auth/me, /auth/change-password) ──
+// ── 인증 라우트 (/api/auth/login, /api/auth/logout, /api/auth/me, /api/auth/change-password) ──
 
-authService.attachRoutes(app);
+authService.attachRoutes(api);
 
 // ── 보호된 라우트 ─────────────────────────────────────────────────────────────
 
 // 미들웨어 체인: 세션 검증 → 비밀번호 변경 여부 확인 → 라우터
-app.use(
+api.use(
   "/apps",
   authService.requireSessionAuth,
   authService.requirePasswordUpdated,
   appsRouter
 );
 
-// /jobs: 세션 검증 → 비밀번호 변경 여부 확인 → job 라우터
-app.use(
+// /api/jobs: 세션 검증 → 비밀번호 변경 여부 확인 → job 라우터
+api.use(
   "/jobs",
   authService.requireSessionAuth,
   authService.requirePasswordUpdated,
@@ -158,7 +168,7 @@ app.use(
 );
 
 // 미들웨어 체인: 세션 검증 → admin 권한 확인 → 비밀번호 변경 여부 확인 → 라우터
-app.use(
+api.use(
   "/users",
   authService.requireSessionAuth,
   authService.requirePaasAdmin,
@@ -171,7 +181,7 @@ const { promisify } = require("node:util");
 const execAsync = promisify(exec);
 
 // Admin 전용 Portal 로그 조회 엔드포인트
-app.get(
+api.get(
   "/admin/portal-logs",
   authService.requireSessionAuth,
   authService.requirePaasAdmin,
@@ -197,8 +207,12 @@ app.get(
   }
 );
 
-// 매칭되지 않은 /apps, /users, /admin 하위 경로 catch-all은
-// start() 내부에서 domains 라우터 등록 이후에 추가된다. (미들웨어 순서 보장)
+// /api 마운트. 하위 라우트 일부(domains/github)는 start()에서 추가되지만,
+// express 라우팅은 요청 시점에 해석되므로 문제 없다.
+app.use("/api", api);
+
+// 매칭되지 않은 /api/* 경로에 대한 catch-all은 start() 내부에서
+// domains·github 라우터 등록 이후에 추가된다. (미들웨어 순서 보장)
 
 // ── 글로벌 에러 핸들러 ────────────────────────────────────────────────────────
 
@@ -234,10 +248,10 @@ async function start() {
   // GET /apps 응답에 active 커스텀 도메인을 포함시키기 위한 주입
   setListActiveDomainsForApp((userid, appname) => domainManager.listActiveDomains(userid, appname));
 
-  // 커스텀 도메인 라우터: /apps/:userid/:appname/domains
+  // 커스텀 도메인 라우터: /api/apps/:userid/:appname/domains
   // appsRouter와 별도 마운트 (mergeParams 활용)
   // 주의: catch-all보다 반드시 먼저 등록해야 한다
-  app.use(
+  api.use(
     "/apps/:userid/:appname/domains",
     authService.requireSessionAuth,
     authService.requirePasswordUpdated,
@@ -251,17 +265,17 @@ async function start() {
   });
   setGithubService(githubService);
 
-  // /github 라우터: 세션 검증 + 비밀번호 변경 확인
-  app.use(
+  // /api/github 라우터: 세션 검증 + 비밀번호 변경 확인
+  api.use(
     "/github",
     authService.requireSessionAuth,
     authService.requirePasswordUpdated,
     createGithubRouter(githubService)
   );
 
-  // 매칭되지 않은 /apps, /users, /admin, /github 하위 경로는 404로 처리한다.
+  // 매칭되지 않은 /api/* 경로는 모두 404 JSON으로 처리한다.
   // domains·github 라우터 등록 이후에 위치해야 순서가 보장된다.
-  app.use(["/apps", "/users", "/admin", "/github"], (_req, res) => sendError(res, 404, "Not found"));
+  api.use((_req, res) => sendError(res, 404, "Not found"));
 
   // jobStore 초기화 및 서버 재시작 복원
   jobStore.init(config.PORTAL_DB_PATH);
@@ -280,7 +294,7 @@ async function start() {
   const server = http.createServer(app);
 
   // HTTP → WS 업그레이드 핸들러
-  // exec WS 경로(/apps/:userid/:appname/exec/ws)만 허용하고,
+  // exec WS 경로(/api/apps/:userid/:appname/exec/ws)만 허용하고,
   // 세션이 없거나 경로가 다르면 소켓을 닫아 거절한다.
   server.on("upgrade", (req, socket, head) => {
     const params = parseExecWsUrl(req.url?.split("?")[0]);

@@ -21,7 +21,7 @@
 
 const { ROLE_ADMIN } = require("../authService");
 
-const EXEC_WS_PATH = /^\/apps\/([^/]+)\/([^/]+)\/exec\/ws$/;
+const EXEC_WS_PATH = /^\/api\/apps\/([^/]+)\/([^/]+)\/exec\/ws$/;
 const HEARTBEAT_MS = 30_000;
 const WS_REASON_MAX = 123;
 

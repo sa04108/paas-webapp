@@ -62,7 +62,7 @@ function createGithubRouter(githubService) {
       }
 
       // 대시보드로 복귀 (앱 생성 화면)
-      return res.redirect("/?github=connected#create");
+      return res.redirect("/create?github=connected");
     } catch (error) {
       return next(error);
     }
