@@ -533,8 +533,9 @@ function renderGithubStatus() {
 }
 
 function connectGithub() {
-  // 최상위 네비게이션으로 설치 페이지 이동 (서버가 GitHub로 302)
-  window.location.href = "/github/connect";
+  // 최상위 네비게이션으로 설치 페이지 이동 (서버가 GitHub로 302).
+  // apiFetch를 타지 않는 의도적 네비게이션이므로 /api prefix를 직접 붙인다.
+  window.location.href = "/api/github/connect";
 }
 
 async function disconnectGithub() {

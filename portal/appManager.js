@@ -44,7 +44,7 @@ function getRunnerPath(scriptName) {
 }
 
 function domainName(userid, appname) {
-  return `${userid}-${appname}.${config.PAAS_DOMAIN}`;
+  return `${userid}-${appname}.apps.${config.PAAS_DOMAIN}`;
 }
 
 // ── 입력값 검증 ───────────────────────────────────────────────────────────────
