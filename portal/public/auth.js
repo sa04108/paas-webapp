@@ -24,7 +24,8 @@ async function apiFetch(path, options = {}) {
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(path, {
+  // 서버 JSON API는 /api 아래에 마운트되어 있으므로 prefix를 여기서 일괄 부여한다.
+  const response = await fetch(`/api${path}`, {
     ...options,
     credentials: "same-origin",
     headers

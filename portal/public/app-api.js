@@ -28,12 +28,13 @@ import {
 } from "./app-utils.js";
 
 // 모든 API 호출의 기반 함수. 응답이 ok: false이거나 HTTP 오류면 예외를 던진다.
+// 서버 JSON API는 /api 아래에 마운트되어 있으므로 prefix를 여기서 일괄 부여한다.
 async function apiFetch(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   if (options.body && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
-  const response = await fetch(path, {
+  const response = await fetch(`/api${path}`, {
     ...options,
     credentials: "same-origin",
     cache: "no-store",
