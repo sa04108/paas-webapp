@@ -9,7 +9,7 @@
  * (빌드는 create.sh에서 railpack build 또는 docker build로 별도 수행)
  *
  * 모든 환경에서 포트를 직접 노출하지 않고 Traefik 리버스 프록시를 경유한다.
- * dev 환경에서는 PAAS_DOMAIN=localhost 설정으로 *.localhost 도메인을 통해 접근한다.
+ * dev 환경에서는 PAAS_DOMAIN=localhost 설정으로 *.apps.localhost 도메인을 통해 접근한다.
  */
 
 const fs = require('node:fs');
@@ -41,7 +41,7 @@ const TLS_ENABLED = !PAAS_DOMAIN.endsWith('localhost');
  */
 function buildCompose({ userid, appname, appDir }) {
   const containerName = `${APP_CONTAINER_PREFIX}-${userid}-${appname}`;
-  const domain = `${userid}-${appname}.${PAAS_DOMAIN}`;
+  const domain = `${userid}-${appname}.apps.${PAAS_DOMAIN}`;
 
   if (!APP_IMAGE) {
     throw new Error('APP_IMAGE 환경변수가 설정되지 않았습니다. create.sh에서 빌드 후 전달해야 합니다.');
