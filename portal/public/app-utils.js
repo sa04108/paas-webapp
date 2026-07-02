@@ -119,10 +119,11 @@ function highlightCreateField(field) {
 
 // 필수 필드 중 비어있는 필드를 순차적으로 shake 처리하고 첫 번째 필드에 포커스한다.
 // 필드 간 딜레이(CREATE_FIELD_SEQUENCE_GAP_MS)를 줘서 시각적으로 구분한다.
+// 저장소는 private 드롭다운 선택 또는 URL 직접 입력 중 하나만 있으면 충족된다.
 function validateCreateForm() {
   const requiredFields = [
     { field: el.appnameInput, isMissing: () => !el.appnameInput.value.trim() },
-    { field: el.repoUrlInput, isMissing: () => !el.repoUrlInput.value.trim() },
+    { field: el.repoUrlInput, isMissing: () => !el.repoSelect.value.trim() && !el.repoUrlInput.value.trim() },
   ];
   clearCreateValidationTimers();
   requiredFields.forEach((item) => clearCreateFieldFeedback(item.field));

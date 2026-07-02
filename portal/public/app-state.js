@@ -41,6 +41,8 @@ export const state = {
   users: [],
   jobs: [], // 진행중 / 최근 완료 job 목록
   jobPollers: new Map(), // Map<jobId, intervalId> — 폴링 핸들 추적
+  github: { configured: false, connected: false },
+  githubRepos: [],
   pendingDeleteUser: null,
   pendingPromoteUser: null,
   user: null,
@@ -97,7 +99,11 @@ export const el = {
   createSubmitBtn: document.getElementById("create-submit-btn"),
   appnameInput: document.getElementById("appname-input"),
   repoUrlInput: document.getElementById("repo-url-input"),
+  repoSelect: document.getElementById("repo-select"),
   repoBranchInput: document.getElementById("repo-branch-input"),
+  githubStatusText: document.getElementById("github-status-text"),
+  githubConnectBtn: document.getElementById("github-connect-btn"),
+  githubDisconnectBtn: document.getElementById("github-disconnect-btn"),
   domainPreview: document.getElementById("domain-preview"),
   domainChip: document.getElementById("domain-chip"),
   limitChip: document.getElementById("limit-chip"),
@@ -235,3 +241,4 @@ export const modalBackdropState = {
 
 // 앱 생성 폼의 shake 애니메이션 타이머 ID 목록 (clearCreateValidationTimers로 일괄 취소)
 export const createValidationTimers = [];
+

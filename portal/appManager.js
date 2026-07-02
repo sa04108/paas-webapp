@@ -307,6 +307,8 @@ async function runRunnerScript(scriptName, args, options = {}) {
       stream: true,
       logTag: safeScriptName,
       onLog: options.onLog,
+      // 비밀값(예: GIT_TOKEN)은 args 로깅(위 console.log)·ps 노출을 피하기 위해 env로만 전달한다.
+      env: options.env ? { ...process.env, ...options.env } : undefined,
     });
     dockerAppsCache.ts = 0; // 실행 후 Docker 갱신을 위해 캐시 무효화
     console.log(`[portal] ${safeScriptName} completed`);

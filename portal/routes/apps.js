@@ -9,6 +9,8 @@
 // =============================================================================
 "use strict";
 
+const fs   = require("node:fs");
+const path = require("node:path");
 const express = require("express");
 const { ROLE_ADMIN } = require("../authService");
 const { AppError, normalizeBoolean, sendOk } = require("../utils");
@@ -36,6 +38,17 @@ const jobStore = require("../jobStore");
 
 const router = express.Router();
 
+// .paas-meta.json에서 installationId를 읽는다. 파일 없거나 파싱 실패 시 빈 문자열 반환.
+function readMetaInstallationId(userid, appname) {
+  try {
+    const metaPath = path.join(config.PAAS_APPS_DIR, userid, appname, ".paas-meta.json");
+    const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
+    return String(meta.installationId || "");
+  } catch {
+    return "";
+  }
+}
+
 // ── 요청 컨텍스트 파싱 ───────────────────────────────────────────────────────
 
 // POST /apps 요청 바디에서 앱 생성에 필요한 필드를 추출하고 검증한다.
@@ -43,9 +56,10 @@ function validateCreateBody(body) {
   if (!body || typeof body !== "object") {
     throw new AppError(400, "Request body is required");
   }
-  const appname  = String(body.appname  || "").trim();
-  const repoUrl  = String(body.repoUrl  || "").trim();
-  const branch   = String(body.branch   || "main").trim() || "main";
+  const appname    = String(body.appname    || "").trim();
+  const repoUrl    = String(body.repoUrl    || "").trim();
+  const branch     = String(body.branch     || "main").trim() || "main";
+  const usePrivate = body.usePrivate === true;
 
   assertAppName(appname);
 
@@ -56,7 +70,7 @@ function validateCreateBody(body) {
     throw new AppError(400, "repoUrl must start with http:// or https://");
   }
 
-  return { appname, repoUrl, branch };
+  return { appname, repoUrl, branch, usePrivate };
 }
 
 // 로그인된 사용자의 userid를 req.auth에서 추출한다.
@@ -103,15 +117,27 @@ async function executeJob(job) {
   try {
     switch (type) {
       case "create": {
-        const { userid, appname, repoUrl, branch } = meta;
-        await runRunnerScript(RUNNER_SCRIPTS.create, [userid, appname, repoUrl, branch], { onLog });
+        const { userid, appname, repoUrl, branch, installationId } = meta;
+        const env = {};
+        if (installationId && _githubService) {
+          // 매 실행 시 fresh installation token을 발급해 env로만 전달 (askpass가 소비)
+          env.GIT_TOKEN = await _githubService.getCloneToken(installationId);
+          // create.sh가 .paas-meta.json에 기록하도록 비밀 아닌 installationId를 전달
+          env.PAAS_INSTALLATION_ID = installationId;
+        }
+        await runRunnerScript(RUNNER_SCRIPTS.create, [userid, appname, repoUrl, branch], { onLog, env });
         const appInfo = await buildAppInfo(userid, appname, null);
         jobStore.finishJob(id, JSON.stringify({ app: appInfo }));
         break;
       }
       case "deploy": {
         const { userid, appname } = meta;
-        await runRunnerScript(RUNNER_SCRIPTS.deploy, [userid, appname], { onLog });
+        const env = {};
+        const installationId = readMetaInstallationId(userid, appname);
+        if (installationId && _githubService) {
+          env.GIT_TOKEN = await _githubService.getCloneToken(installationId);
+        }
+        await runRunnerScript(RUNNER_SCRIPTS.deploy, [userid, appname], { onLog, env });
         if (_onAppDeployedHook) {
           const deployed = await findDockerApp(userid, appname);
           const port = Number(deployed?.port) || 5000;
@@ -170,10 +196,12 @@ jobsRouter.setExecuteJobFn(executeJob);
 let _onAppDeletedHook = null;
 let _onAppDeployedHook = null;
 let _listActiveDomainsForApp = null;
+let _githubService = null;
 
 function setOnAppDeletedHook(fn) { _onAppDeletedHook = fn; }
 function setOnAppDeployedHook(fn) { _onAppDeployedHook = fn; }
 function setListActiveDomainsForApp(fn) { _listActiveDomainsForApp = fn; }
+function setGithubService(svc) { _githubService = svc; }
 
 // ── 앱 CRUD ───────────────────────────────────────────────────────────────────
 
@@ -181,7 +209,15 @@ function setListActiveDomainsForApp(fn) { _listActiveDomainsForApp = fn; }
 router.post("/", async (req, res, next) => {
   try {
     const userid = resolveRequestUserId(req);
-    const { appname, repoUrl, branch } = validateCreateBody(req.body);
+    const { appname, repoUrl, branch, usePrivate } = validateCreateBody(req.body);
+
+    // private 저장소 의도인 경우, 본인 GitHub 설치에서 installationId를 조회한다.
+    let installationId = "";
+    if (usePrivate) {
+      if (!_githubService) throw new AppError(503, "GitHub 연동이 비활성화되어 있습니다.");
+      installationId = String(_githubService.getInstallationId(req.auth.user.id) || "");
+      if (!installationId) throw new AppError(400, "GitHub가 연결되어 있지 않습니다.");
+    }
 
     const { apps: existingApps } = await listDockerApps();
     if (existingApps.length >= config.MAX_TOTAL_APPS) {
@@ -192,7 +228,7 @@ router.post("/", async (req, res, next) => {
       throw new AppError(429, `MAX_APPS_PER_USER exceeded (${config.MAX_APPS_PER_USER})`);
     }
 
-    dispatchJob(res, "create", { userid, appname, repoUrl, branch }, userid);
+    dispatchJob(res, "create", { userid, appname, repoUrl, branch, installationId }, userid);
   } catch (error) {
     return next(error);
   }
@@ -381,5 +417,6 @@ router.executeJob                  = executeJob;
 router.setOnAppDeletedHook         = setOnAppDeletedHook;
 router.setOnAppDeployedHook        = setOnAppDeployedHook;
 router.setListActiveDomainsForApp  = setListActiveDomainsForApp;
+router.setGithubService            = setGithubService;
 
 module.exports = router;

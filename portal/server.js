@@ -25,9 +25,11 @@ const { AppError, sendOk, sendError } = require("./utils");
 const { config, envFilePath, IS_DEV } = require("./config");
 const { ensureBaseDirectories } = require("./appManager");
 const appsRouter = require("./routes/apps");
-const { executeJob, setOnAppDeletedHook, setOnAppDeployedHook, setListActiveDomainsForApp } = require("./routes/apps");
+const { executeJob, setOnAppDeletedHook, setOnAppDeployedHook, setListActiveDomainsForApp, setGithubService } = require("./routes/apps");
 const createUsersRouter = require("./routes/users");
 const createDomainsRouter = require("./routes/domains");
+const createGithubRouter = require("./routes/github");
+const { createGithubService } = require("./githubService");
 const jobsRouter = require("./routes/jobs");
 const jobStore = require("./jobStore");
 const { createDomainManager } = require("./domainManager");
@@ -242,9 +244,24 @@ async function start() {
     createDomainsRouter(domainManager)
   );
 
-  // 매칭되지 않은 /apps, /users, /admin 하위 경로는 404로 처리한다.
-  // domains 라우터 등록 이후에 위치해야 순서가 보장된다.
-  app.use(["/apps", "/users", "/admin"], (_req, res) => sendError(res, 404, "Not found"));
+  // GitHub App 서비스 (private repo 배포)
+  const githubService = createGithubService({
+    config,
+    statements: authService.getStatements(),
+  });
+  setGithubService(githubService);
+
+  // /github 라우터: 세션 검증 + 비밀번호 변경 확인
+  app.use(
+    "/github",
+    authService.requireSessionAuth,
+    authService.requirePasswordUpdated,
+    createGithubRouter(githubService)
+  );
+
+  // 매칭되지 않은 /apps, /users, /admin, /github 하위 경로는 404로 처리한다.
+  // domains·github 라우터 등록 이후에 위치해야 순서가 보장된다.
+  app.use(["/apps", "/users", "/admin", "/github"], (_req, res) => sendError(res, 404, "Not found"));
 
   // jobStore 초기화 및 서버 재시작 복원
   jobStore.init(config.PORTAL_DB_PATH);

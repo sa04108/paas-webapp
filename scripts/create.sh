@@ -58,6 +58,7 @@ trap cleanup_on_failure ERR
 
 mkdir -p "${APP_DIR}/${APP_DATA_SUBDIR}" "${APP_DIR}/${APP_LOGS_SUBDIR}"
 
+setup_git_auth  # GIT_TOKEN이 있으면 private repo 인증 설정 (없으면 무동작)
 echo "[create] repo 복제: ${REPO_URL} (branch: ${BRANCH})"
 git clone --depth 1 --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}/${APP_SOURCE_SUBDIR}"
 
@@ -79,11 +80,13 @@ echo "[create] 앱 메타데이터 기록..."
 REPO_URL="${REPO_URL}" \
 BRANCH="${BRANCH}" \
 RUNTIME_JSON="${RUNTIME_JSON}" \
+INSTALLATION_ID="${PAAS_INSTALLATION_ID:-}" \
 META_PATH="${APP_DIR}/.paas-meta.json" \
 node -e "
 const meta = {
   repoUrl: process.env.REPO_URL,
   branch: process.env.BRANCH,
+  installationId: process.env.INSTALLATION_ID || null,
   createdAt: new Date().toISOString(),
   detectedRuntime: (({ runtime, displayName, icon, dependencies }) => ({ name: runtime, displayName, icon, dependencies }))(JSON.parse(process.env.RUNTIME_JSON))
 };

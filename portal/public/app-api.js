@@ -14,6 +14,7 @@ import { navigateToApp, switchView, updateAuthUi, renderJobIndicator } from "./a
 import {
   canManageApps,
   canManageUsers,
+  escapeHtml,
   formatJobAction,
   formatJobTarget,
   normalizeErrorMessage,
@@ -458,17 +459,25 @@ async function handleCreate(event) {
     throw new Error("로그인 후 비밀번호 변경을 완료해야 앱을 관리할 수 있습니다.");
   }
 
-  const repoUrl = el.repoUrlInput.value.trim();
-  const branch  = el.repoBranchInput.value.trim() || "main";
-  const body    = {
-    appname: el.appnameInput.value.trim(),
-    repoUrl,
-    branch,
-  };
+  const selectedRepo = el.repoSelect.value.trim(); // private 드롭다운 cloneUrl
+  const typedUrl     = el.repoUrlInput.value.trim(); // public URL 직접 입력
+  const branch       = el.repoBranchInput.value.trim() || "main";
+
+  let repoUrl    = "";
+  let usePrivate = false;
+  if (selectedRepo) {
+    repoUrl    = selectedRepo;
+    usePrivate = true;
+  } else if (typedUrl) {
+    repoUrl = typedUrl;
+  }
 
   if (!validateCreateForm()) {
-    throw new Error("appname, repo URL을 입력하세요.");
+    throw new Error("appname과 저장소(선택 또는 URL)를 입력하세요.");
   }
+
+  const body = { appname: el.appnameInput.value.trim(), repoUrl, branch };
+  if (usePrivate) body.usePrivate = true;
 
   const submitBtn = el.createSubmitBtn;
   submitBtn.disabled = true;
@@ -478,11 +487,85 @@ async function handleCreate(event) {
     startJobPolling(data.jobId, `${body.appname}`, "앱 생성");
     el.createForm.reset();
     el.repoBranchInput.value = "main";
+    renderRepoOptions();
     syncDomainPreview();
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = "Create App";
   }
+}
+
+// ── GitHub 연동 ───────────────────────────────────────────────────────────────
+
+async function loadGithubStatus() {
+  if (!canManageApps()) return;
+  try {
+    const data = await apiFetch("/github/status");
+    state.github = { configured: Boolean(data.configured), connected: Boolean(data.connected) };
+  } catch {
+    state.github = { configured: false, connected: false };
+  }
+  renderGithubStatus();
+  if (state.github.connected) {
+    await loadGithubRepos();
+  }
+}
+
+function renderGithubStatus() {
+  const { configured, connected } = state.github;
+  if (!configured) {
+    el.githubStatusText.textContent = "GitHub 연동이 설정되지 않았습니다 (Public 저장소만 가능).";
+    el.githubConnectBtn.hidden = true;
+    el.githubDisconnectBtn.hidden = true;
+    return;
+  }
+  if (connected) {
+    el.githubStatusText.textContent = "GitHub 연결됨";
+    el.githubConnectBtn.hidden = true;
+    el.githubDisconnectBtn.hidden = false;
+  } else {
+    el.githubStatusText.textContent = "GitHub 미연결";
+    el.githubConnectBtn.hidden = false;
+    el.githubDisconnectBtn.hidden = true;
+  }
+}
+
+function connectGithub() {
+  // 최상위 네비게이션으로 설치 페이지 이동 (서버가 GitHub로 302)
+  window.location.href = "/github/connect";
+}
+
+async function disconnectGithub() {
+  await apiFetch("/github/disconnect", { method: "POST" });
+  state.github.connected = false;
+  state.githubRepos = [];
+  renderGithubStatus();
+  renderRepoOptions();
+}
+
+async function loadGithubRepos() {
+  try {
+    const data = await apiFetch("/github/repos");
+    state.githubRepos = data.repos || [];
+  } catch {
+    state.githubRepos = [];
+  }
+  renderRepoOptions();
+}
+
+function renderRepoOptions() {
+  const repos = state.githubRepos;
+  if (!repos.length) {
+    el.repoSelect.disabled = true;
+    el.repoSelect.innerHTML = `<option value="">GitHub를 연결하면 저장소가 표시됩니다</option>`;
+    return;
+  }
+  el.repoSelect.disabled = false;
+  el.repoSelect.innerHTML =
+    `<option value="">저장소를 선택하세요</option>` +
+    repos
+      .map((r) => `<option value="${escapeHtml(r.cloneUrl)}" data-branch="${escapeHtml(r.defaultBranch)}">${escapeHtml(r.fullName)}${r.private ? " 🔒" : ""}</option>`)
+      .join("");
 }
 
 // ── 커스텀 도메인 ─────────────────────────────────────────────────────────────
@@ -533,6 +616,8 @@ export {
   apiFetch,
   cancelJob,
   clearCompletedJobs,
+  connectGithub,
+  disconnectGithub,
   getActionTarget,
   handleCreate,
   handleRequestError,
@@ -540,6 +625,7 @@ export {
   loadApps,
   loadAdminApps,
   loadDetailDomains,
+  loadGithubStatus,
   loadPortalLogs,
   loadAndRecoverJobs,
   loadConfig,

@@ -47,6 +47,17 @@ ensure_base_directories() {
   mkdir -p "${PAAS_APPS_DIR}"
 }
 
+# GIT_TOKEN 환경변수가 있으면 private repo 인증을 위해 git askpass를 설정한다.
+# 토큰을 URL/명령 인자/.git/config 어디에도 남기지 않고 env로만 전달하기 위한 방식이다.
+# public repo(토큰 없음)인 경우 아무 것도 하지 않아 기존 동작을 그대로 유지한다.
+setup_git_auth() {
+  if [[ -n "${GIT_TOKEN:-}" ]]; then
+    export GIT_ASKPASS="${LIB_DIR}/git-askpass.sh"
+    # 토큰이 없거나 잘못된 경우 대화형 프롬프트로 멈추지 않고 즉시 실패하도록 한다.
+    export GIT_TERMINAL_PROMPT=0
+  fi
+}
+
 require_node() {
   if ! command -v node >/dev/null 2>&1; then
     echo "node command is required" >&2

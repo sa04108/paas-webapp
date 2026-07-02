@@ -34,6 +34,15 @@ const config = {
   MAX_APPS_PER_USER:    toPositiveInt(process.env.MAX_APPS_PER_USER, 5),
   MAX_TOTAL_APPS:       toPositiveInt(process.env.MAX_TOTAL_APPS, 20),
   PORTAL_TRUST_PROXY:   normalizeBoolean(process.env.PORTAL_TRUST_PROXY, true),
+
+  // ── GitHub App (private repo 배포) ──────────────────────────────────────
+  GITHUB_APP_ID:      process.env.GITHUB_APP_ID || "",
+  GITHUB_APP_SLUG:    process.env.GITHUB_APP_SLUG || "",
+  GITHUB_APP_CLIENT_ID: process.env.GITHUB_APP_CLIENT_ID || "",
+  // 개인키는 PEM 본문(개행 포함) 또는 파일 경로 중 하나로 주입한다.
+  GITHUB_APP_PRIVATE_KEY:      process.env.GITHUB_APP_PRIVATE_KEY || "",
+  GITHUB_APP_PRIVATE_KEY_PATH: process.env.GITHUB_APP_PRIVATE_KEY_PATH || "",
+  // CLIENT_SECRET, STATE_SECRET은 비밀이므로 config 객체에 두지 않고 githubService가 process.env에서 직접 읽는다.
 };
 
 // =============================================================================

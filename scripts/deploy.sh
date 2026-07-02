@@ -58,6 +58,8 @@ echo "[deploy] app=${USER_ID}/${APP_NAME} started_at=$(date -Is)"
 require_node
 require_railpack
 
+setup_git_auth  # GIT_TOKEN이 있으면 private repo 인증 설정 (clone/pull 양쪽에 적용)
+
 if [[ ! -d "${APP_DIR}/${APP_SOURCE_SUBDIR}" ]]; then
   echo "[deploy] 소스 디렉토리 없음. .paas-meta.json 기반으로 다시 clone 합니다..."
   META_PATH="${APP_DIR}/.paas-meta.json"

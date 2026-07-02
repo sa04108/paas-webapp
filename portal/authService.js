@@ -520,6 +520,14 @@ function createAuthService(options) {
       );
       CREATE INDEX IF NOT EXISTS idx_custom_domains_app
         ON custom_domains(userid, appname);
+      CREATE TABLE IF NOT EXISTS github_installations (
+        id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id                INTEGER NOT NULL UNIQUE,
+        github_installation_id TEXT    NOT NULL,
+        created_at             TEXT    NOT NULL,
+        updated_at             TEXT    NOT NULL,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
     `);
 
     statements.selectUserById = db.prepare(`
@@ -682,6 +690,21 @@ function createAuthService(options) {
       FROM custom_domains
       WHERE status != 'active'
       ORDER BY created_at ASC
+    `);
+
+    // ── github_installations prepared statements ────────────────────────────
+    statements.upsertGithubInstallation = db.prepare(`
+      INSERT INTO github_installations (user_id, github_installation_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET
+        github_installation_id = excluded.github_installation_id,
+        updated_at = excluded.updated_at
+    `);
+    statements.selectGithubInstallationByUserId = db.prepare(`
+      SELECT github_installation_id FROM github_installations WHERE user_id = ?
+    `);
+    statements.deleteGithubInstallationByUserId = db.prepare(`
+      DELETE FROM github_installations WHERE user_id = ?
     `);
 
     const admin = statements.selectUserByUsername.get("admin");

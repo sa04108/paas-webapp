@@ -64,6 +64,8 @@ import {
 import {
   addCustomDomain,
   apiFetch,
+  connectGithub,
+  disconnectGithub,
   getActionTarget,
   handleCreate,
   handleRequestError,
@@ -72,6 +74,7 @@ import {
   loadApps,
   loadAdminApps,
   loadDetailDomains,
+  loadGithubStatus,
   loadPortalLogs,
   loadConfig,
   loadDetailEnv,
@@ -120,6 +123,16 @@ el.appnameInput.addEventListener("input", () => {
   syncDomainPreview();
 });
 el.repoUrlInput.addEventListener("input", () => clearCreateFieldFeedback(el.repoUrlInput));
+
+el.githubConnectBtn?.addEventListener("click", connectGithub);
+el.githubDisconnectBtn?.addEventListener("click", () =>
+  disconnectGithub().catch((e) => setBanner(e.message, "error"))
+);
+// private repo 선택 시 해당 저장소의 기본 브랜치를 브랜치 입력칸에 자동 반영한다.
+el.repoSelect?.addEventListener("change", () => {
+  const opt = el.repoSelect.selectedOptions[0];
+  if (opt?.dataset.branch) el.repoBranchInput.value = opt.dataset.branch;
+});
 
 el.createForm.addEventListener("submit", async (event) => {
   try {
@@ -679,6 +692,14 @@ async function bootstrap() {
   persistUiState();
 
   await refreshDashboardData();
+  await loadGithubStatus();
+
+  // /?github=connected \ubcf5\uadc0 \uc2dc \ubc30\ub108 \uc548\ub0b4
+  if (new URLSearchParams(window.location.search).get("github") === "connected") {
+    setBanner("GitHub \uc5f0\uacb0\uc774 \uc644\ub8cc\ub418\uc5c8\uc2b5\ub2c8\ub2e4.", "success");
+    // \ucffc\ub9ac\uc2a4\ud2b8\ub9c1\uc744 \ud788\uc2a4\ud1a0\ub9ac\uc5d0\uc11c \uc81c\uac70\ud558\uc5ec \uc0c8\ub85c\uace0\uce68 \uc2dc \uc911\ubcf5 \ud45c\uc2dc \ubc29\uc9c0
+    window.history.replaceState(null, "", window.location.pathname);
+  }
 
   // \ub85c\uadf8 \uc790\ub3d9 \uac31\uc2e0 \ud0c0\uc774\uba38\ub294 \ud56d\uc0c1 \ucf1c\uc9c4 \uc0c1\ud0dc\ub85c \uc720\uc9c0\ud55c\ub2e4.
   // \ud0c0\uc774\uba38 \ub0b4\ubd80\uc5d0\uc11c activeView\ub97c \uccb4\ud06c\ud558\ubbc0\ub85c \uc6d0\uce58 \uc54a\ub294 \ube37\uce58\ub294 \ubc1c\uc0dd\ud558\uc9c0 \uc54a\ub294\ub2e4.
