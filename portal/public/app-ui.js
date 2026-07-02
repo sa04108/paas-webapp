@@ -26,7 +26,6 @@ import {
   canManageUsers,
   isLoggedIn,
   isPasswordLocked,
-  persistUiState,
   setAddDomainError,
   setCreateUserError,
   setDeleteUserError,
@@ -34,6 +33,7 @@ import {
   setSettingsError,
 } from "./app-utils.js";
 import { renderUsers, renderJobList } from "./app-render.js";
+import { buildPath } from "./app-router.js";
 
 const uiHandlers = {
   loadDetailEnv: async () => { },
@@ -48,7 +48,9 @@ function configureUiHandlers(handlers = {}) {
   Object.assign(uiHandlers, handlers);
 }
 
-function switchView(viewName, { persist = true } = {}) {
+// 뷰 전환 + URL 동기화. app-detail은 URL에 userid/appname이 필요하므로
+// navigateToApp이 직접 push한다 (updateUrl: false로 호출됨).
+function switchView(viewName, { updateUrl = true } = {}) {
   const nextView = AVAILABLE_VIEWS.includes(viewName) ? viewName : DEFAULT_VIEW;
   state.activeView = nextView;
 
@@ -64,7 +66,12 @@ function switchView(viewName, { persist = true } = {}) {
     item.classList.toggle("active", item.dataset.view === viewKey);
   });
 
-  if (persist) persistUiState();
+  if (updateUrl && nextView !== "app-detail") {
+    const path = buildPath(nextView);
+    if (window.location.pathname !== path) {
+      window.history.pushState(null, "", path);
+    }
+  }
   closeMobileMenu();
 }
 
@@ -116,13 +123,19 @@ function switchAdminTab(tabName) {
 // exec cwd를 초기화하고, 로그를 자동 로드하며 env 데이터를 백그라운드로 미리 로드한다.
 // (loadDetailLogs, loadDetailEnv, initExecCwd는 app-api.js / app-exec.js에 정의되어 있으며,
 //  이 함수는 항상 이벤트 핸들러에서만 호출되므로 실행 시점엔 이미 정의가 완료된다.)
-async function navigateToApp(userid, appname) {
+async function navigateToApp(userid, appname, { updateUrl = true } = {}) {
   uiHandlers.closeExecSocket(); // 이전 앱 소켓 정리
   state.selectedApp = { userid, appname };
   uiHandlers.resetExecForApp();
   el.appDetailAppname.textContent = `${userid} / ${appname}`;
   switchDetailTab(DEFAULT_DETAIL_TAB);
-  switchView("app-detail");
+  switchView("app-detail", { updateUrl: false });
+  if (updateUrl) {
+    const path = buildPath("app-detail", { userid, appname });
+    if (window.location.pathname !== path) {
+      window.history.pushState(null, "", path);
+    }
+  }
   try {
     await uiHandlers.loadDetailLogs();
   } catch (error) {

@@ -7,12 +7,10 @@
 // =============================================================================
 
 import {
-  AVAILABLE_VIEWS,
   CREATE_FIELD_INVALID_CLASS,
   CREATE_FIELD_SEQUENCE_GAP_MS,
   CREATE_FIELD_SHAKE_CLASS,
   CREATE_FIELD_SHAKE_DURATION_MS,
-  UI_STATE_STORAGE_KEY,
   createValidationTimers,
   el,
   state,
@@ -209,39 +207,13 @@ function canManageApps()    { return isLoggedIn() && !isPasswordLocked(); }
 function canManageUsers()   { return canManageApps() && isAdminUser(); }
 function redirectToAuth()   { window.location.replace("/auth"); }
 
-// ── UI 상태 영속성 (sessionStorage) ──────────────────────────────────────────
-
-// 탭/새로고침 시 마지막 뷰를 복원하기 위해 sessionStorage에 현재 뷰를 저장한다.
-function readPersistedUiState() {
-  try {
-    const raw = window.sessionStorage.getItem(UI_STATE_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    const view = AVAILABLE_VIEWS.includes(parsed?.view) ? parsed.view : undefined;
-    return { view };
-  } catch {
-    return {};
-  }
-}
-
-function persistUiState() {
-  try {
-    window.sessionStorage.setItem(
-      UI_STATE_STORAGE_KEY,
-      JSON.stringify({ view: state.activeView })
-    );
-  } catch {
-    // 시크릿 모드 등 스토리지 쓰기 불가 환경에서는 조용히 무시한다.
-  }
-}
-
 // ── 도메인 프리뷰 ─────────────────────────────────────────────────────────────
 
 // 앱 생성 폼의 appname 입력에 따라 예상 도메인 주소를 실시간으로 업데이트한다.
 function syncDomainPreview() {
   const userid  = String(state.user?.username || "").trim() || "owner";
   const appname = el.appnameInput.value.trim() || "appname";
-  el.domainPreview.textContent = `${userid}-${appname}.${state.domain}`;
+  el.domainPreview.textContent = `${userid}-${appname}.${state.appsDomain}`;
 }
 
 // ── 런타임 뱃지 HTML 생성 ────────────────────────────────────────────────────
@@ -299,8 +271,6 @@ export {
   isPasswordLocked,
   normalizeErrorMessage,
   parsePositiveInt,
-  persistUiState,
-  readPersistedUiState,
   redirectToAuth,
   runtimeBadgeHtml,
   setBanner,

@@ -13,14 +13,14 @@
 // ── 모듈 연결 ─────────────────────────────────────────────────────────────────
 
 import { DEFAULT_VIEW, el, state } from "./app-state.js";
+import { parsePath, buildPath } from "./app-router.js";
 import {
   canManageUsers,
   clearCreateFieldFeedback,
+  isAdminUser,
   isPasswordLocked,
   normalizeErrorMessage,
   parsePositiveInt,
-  persistUiState,
-  readPersistedUiState,
   redirectToAuth,
   setAddDomainError,
   setBanner,
@@ -42,6 +42,7 @@ import {
   closeJobListModal,
   closeJobLogModal,
   configureUiHandlers,
+  navigateToApp,
   openAddDomainModal,
   openCreateUserModal,
   openDeleteUserModal,
@@ -668,11 +669,63 @@ document.addEventListener("keydown", (event) => {
   if (!el.jobListModal.hidden) { closeJobListModal(); }
 });
 
+// ── URL 라우팅 ────────────────────────────────────────────────────────────────
+
+// 현재 URL(pathname)을 뷰 상태에 적용한다. 부트스트랩과 popstate에서 호출된다.
+// URL이 뷰의 canonical 경로와 다르면(루트 / , 알 수 없는 경로, 권한 fallback 등)
+// replaceState로 정규화한다 — 히스토리에 잘못된 항목을 남기지 않기 위함이다.
+async function applyRouteFromUrl() {
+  const route = parsePath(window.location.pathname);
+
+  // 알 수 없는 경로 → dashboard
+  if (!route) {
+    switchView(DEFAULT_VIEW, { updateUrl: false });
+    window.history.replaceState(null, "", buildPath(DEFAULT_VIEW));
+    return;
+  }
+
+  if (route.view === "app-detail") {
+    const { userid, appname } = route.params;
+    // 본인 앱 목록에 없으면 진입하지 않는다. (admin은 타 사용자 앱 접근이
+    // 가능하므로 목록 검사를 생략하고 서버 응답에 맡긴다)
+    const known = state.apps.some((a) => a.userid === userid && a.appname === appname);
+    if (!known && !isAdminUser()) {
+      showToast(`앱을 찾을 수 없습니다: ${userid}/${appname}`, "error");
+      switchView(DEFAULT_VIEW, { updateUrl: false });
+      window.history.replaceState(null, "", buildPath(DEFAULT_VIEW));
+      return;
+    }
+    await navigateToApp(userid, appname, { updateUrl: false });
+    return;
+  }
+
+  // 앱 상세를 벗어나는 라우팅이면 exec 소켓을 정리한다.
+  closeExecSocket();
+
+  // admin 전용 뷰 권한 확인
+  if ((route.view === "users" || route.view === "admin-dashboard") && !canManageUsers()) {
+    switchView(DEFAULT_VIEW, { updateUrl: false });
+    window.history.replaceState(null, "", buildPath(DEFAULT_VIEW));
+    return;
+  }
+
+  switchView(route.view, { updateUrl: false });
+  // 루트("/")로 진입한 경우 canonical 경로로 정규화
+  const canonical = buildPath(route.view);
+  if (window.location.pathname !== canonical) {
+    window.history.replaceState(null, "", canonical);
+  }
+}
+
+// 뒤로/앞으로가기: URL → 뷰 동기화
+window.addEventListener("popstate", () => {
+  applyRouteFromUrl().catch(handleRequestError);
+});
+
 // ── 부트스트랩 ────────────────────────────────────────────────────────────────
 
 async function bootstrap() {
-  const persistedUiState = readPersistedUiState();
-  switchView(DEFAULT_VIEW, { persist: false });
+  switchView(DEFAULT_VIEW, { updateUrl: false });
   updateAuthUi();
   await loadConfig();
   syncDomainPreview();
@@ -682,40 +735,36 @@ async function bootstrap() {
     redirectToAuth();
     return;
   }
-
-  // app-detail 뷰는 세션 복원 대상에서 제외한다 (선택된 앱 정보가 없으므로).
-  const restoredView = persistedUiState.view === "app-detail"
-    ? DEFAULT_VIEW
-    : persistedUiState.view;
-  switchView(restoredView || DEFAULT_VIEW, { persist: false });
   updateAuthUi();
-  persistUiState();
 
   await refreshDashboardData();
   await loadGithubStatus();
 
-  // /?github=connected \ubcf5\uadc0 \uc2dc \ubc30\ub108 \uc548\ub0b4
+  // URL이 가리키는 뷰로 진입 (새로고침/딥링크/북마크 복원)
+  await applyRouteFromUrl();
+
+  // /create?github=connected 복귀 시 배너 안내
   if (new URLSearchParams(window.location.search).get("github") === "connected") {
-    setBanner("GitHub \uc5f0\uacb0\uc774 \uc644\ub8cc\ub418\uc5c8\uc2b5\ub2c8\ub2e4.", "success");
-    // \ucffc\ub9ac\uc2a4\ud2b8\ub9c1\uc744 \ud788\uc2a4\ud1a0\ub9ac\uc5d0\uc11c \uc81c\uac70\ud558\uc5ec \uc0c8\ub85c\uace0\uce68 \uc2dc \uc911\ubcf5 \ud45c\uc2dc \ubc29\uc9c0
+    setBanner("GitHub 연결이 완료되었습니다.", "success");
+    // 쿼리스트링을 히스토리에서 제거하여 새로고침 시 중복 표시 방지
     window.history.replaceState(null, "", window.location.pathname);
   }
 
-  // \ub85c\uadf8 \uc790\ub3d9 \uac31\uc2e0 \ud0c0\uc774\uba38\ub294 \ud56d\uc0c1 \ucf1c\uc9c4 \uc0c1\ud0dc\ub85c \uc720\uc9c0\ud55c\ub2e4.
-  // \ud0c0\uc774\uba38 \ub0b4\ubd80\uc5d0\uc11c activeView\ub97c \uccb4\ud06c\ud558\ubbc0\ub85c \uc6d0\uce58 \uc54a\ub294 \ube37\uce58\ub294 \ubc1c\uc0dd\ud558\uc9c0 \uc54a\ub294\ub2e4.
+  // 로그 자동 갱신 타이머는 항상 켜진 상태로 유지한다.
+  // 타이머 내부에서 activeView를 체크하므로 원치 않는 빗치는 발생하지 않는다.
   startDetailLogsAutoRefresh();
   startAdminLogsAutoRefresh();
   syncLogRefreshBtn(el.detailRefreshLogsBtn, true);
   syncLogRefreshBtn(el.adminRefreshPortalLogsBtn, true);
 
-  // \uc0c8\ub85c\uace0\uce68/\uc7ac\ubc29\ubb38 \uc2dc \uc9c4\ud589\uc911 job \ubcf5\uc6d0
+  // 새로고침/재방문 시 진행중 job 복원
   await loadAndRecoverJobs();
 
   if (isPasswordLocked()) {
-    setBanner("\ucd08\uae30 \ube44\ubc00\ubc88\ud638\ub97c \uc6b0\uc0c1\ub2e8 \uc124\uc815\uc5d0\uc11c \ubcc0\uacbd\ud558\uc138\uc694.", "error");
+    setBanner("초기 비밀번호를 우상단 설정에서 변경하세요.", "error");
     return;
   }
-  setBanner("\ub85c\uadf8\uc778 \uc0c1\ud0dc\uac00 \ud655\uc778\ub418\uc5c8\uc2b5\ub2c8\ub2e4.", "success");
+  setBanner("로그인 상태가 확인되었습니다.", "success");
 }
 
 // 페이지 언로드 시 소켓 정리

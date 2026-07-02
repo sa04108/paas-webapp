@@ -53,10 +53,11 @@ async function apiFetch(path, options = {}) {
 
 async function loadConfig() {
   const data = await apiFetch("/config");
-  state.domain      = data.domain  || "my.domain.com";
+  state.domain      = data.domain || "my.domain.com";
+  state.appsDomain  = data.appsDomain || `apps.${state.domain}`;
   state.devMode     = Boolean(data.devMode);
   state.traefikPort = data.traefikPort || null;
-  el.domainChip.textContent = state.domain;
+  el.domainChip.textContent = state.appsDomain;
   el.limitChip.textContent  = `${data.limits.maxAppsPerUser}/${data.limits.maxTotalApps}`;
   el.devModeBadge.hidden = !state.devMode;
   syncDomainPreview();

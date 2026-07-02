@@ -10,7 +10,6 @@
 // ── 자동 갱신 주기 · 뷰 상수 ────────────────────────────────────────────────
 
 export const AUTO_REFRESH_MS = 5000;
-export const UI_STATE_STORAGE_KEY = "portal.uiState";
 export const AVAILABLE_VIEWS = [
   "dashboard",
   "create",
@@ -34,6 +33,7 @@ export const CREATE_FIELD_SHAKE_DURATION_MS = 320; // shake 애니메이션 지�
 
 export const state = {
   domain: "my.domain.com",
+  appsDomain: "apps.my.domain.com",
   devMode: false,
   traefikPort: null,
   apps: [],
