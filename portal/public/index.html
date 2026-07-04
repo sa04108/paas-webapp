@@ -132,20 +132,36 @@
                         <label for="appname-input">App Name</label>
                         <input id="appname-input" name="appname" type="text" placeholder="myapp" required />
 
-                        <div class="github-connect-field">
-                            <span id="github-status-text" class="field-hint">GitHub 연결 상태 확인 중...</span>
-                            <button id="github-connect-btn" class="ghost-btn" type="button" hidden>GitHub 연결</button>
-                            <button id="github-disconnect-btn" class="ghost-btn" type="button" hidden>연결 해제</button>
+                        <span class="field-label">소스 저장소</span>
+                        <div class="repo-source-toggle" role="radiogroup" aria-label="소스 저장소 방식">
+                            <label class="repo-source-option">
+                                <input type="radio" name="repoSource" value="github" checked />
+                                <span class="repo-source-option-label">내 GitHub 저장소</span>
+                            </label>
+                            <label class="repo-source-option">
+                                <input type="radio" name="repoSource" value="url" />
+                                <span class="repo-source-option-label">Public 저장소 URL</span>
+                            </label>
                         </div>
 
-                        <label for="repo-select">Private 저장소 선택</label>
-                        <select id="repo-select" disabled>
-                            <option value="">GitHub를 연결하면 저장소가 표시됩니다</option>
-                        </select>
+                        <div id="repo-source-github-panel" class="repo-source-panel">
+                            <div class="github-connect-field">
+                                <span id="github-status-text" class="field-hint">GitHub 연결 상태 확인 중...</span>
+                                <button id="github-connect-btn" class="ghost-btn" type="button" hidden>GitHub 연결</button>
+                                <button id="github-disconnect-btn" class="ghost-btn" type="button" hidden>연결 해제</button>
+                            </div>
+                            <label for="repo-select">내 GitHub 저장소 선택</label>
+                            <select id="repo-select" disabled>
+                                <option value="">GitHub를 연결하면 저장소가 표시됩니다</option>
+                            </select>
+                            <p class="field-hint">GitHub에서 접근을 허용한 모든 저장소(Public·Private)가 표시됩니다.</p>
+                        </div>
 
-                        <label for="repo-url-input">또는 Public Repository URL 직접 입력</label>
-                        <input id="repo-url-input" name="repoUrl" type="url" placeholder="https://github.com/user/repo" />
-                        <p class="field-hint">Private 저장소는 위에서 선택하고, Public 저장소는 URL을 직접 입력하세요.</p>
+                        <div id="repo-source-url-panel" class="repo-source-panel" hidden>
+                            <label for="repo-url-input">Public Repository URL</label>
+                            <input id="repo-url-input" name="repoUrl" type="url" placeholder="https://github.com/user/repo" />
+                            <p class="field-hint">누구나 접근할 수 있는 Public 저장소의 URL을 입력하세요.</p>
+                        </div>
 
                         <label for="repo-branch-input">Branch</label>
                         <input id="repo-branch-input" name="branch" type="text" placeholder="main" value="main" />

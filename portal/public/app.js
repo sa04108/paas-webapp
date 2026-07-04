@@ -30,6 +30,7 @@ import {
   setSettingsError,
   showToast,
   syncDomainPreview,
+  syncRepoSourcePanels,
 } from "./app-utils.js";
 import {
   bindBackdropClose,
@@ -125,12 +126,18 @@ el.appnameInput.addEventListener("input", () => {
 });
 el.repoUrlInput.addEventListener("input", () => clearCreateFieldFeedback(el.repoUrlInput));
 
+// 소스 저장소 방식(내 GitHub 저장소 / Public URL) 전환 시 해당 입력 패널만 노출한다.
+el.repoSourceRadios.forEach((radio) => {
+  radio.addEventListener("change", syncRepoSourcePanels);
+});
+
 el.githubConnectBtn?.addEventListener("click", connectGithub);
 el.githubDisconnectBtn?.addEventListener("click", () =>
   disconnectGithub().catch((e) => setBanner(e.message, "error"))
 );
-// private repo 선택 시 해당 저장소의 기본 브랜치를 브랜치 입력칸에 자동 반영한다.
+// 저장소 선택 시 해당 저장소의 기본 브랜치를 브랜치 입력칸에 자동 반영한다.
 el.repoSelect?.addEventListener("change", () => {
+  clearCreateFieldFeedback(el.repoSelect);
   const opt = el.repoSelect.selectedOptions[0];
   if (opt?.dataset.branch) el.repoBranchInput.value = opt.dataset.branch;
 });

@@ -115,13 +115,36 @@ function highlightCreateField(field) {
   );
 }
 
+// ── 소스 저장소 방식 (github | url) ──────────────────────────────────────────
+
+// 소스 저장소 토글에서 선택된 방식을 반환한다.
+function getRepoSource() {
+  return el.repoSourceRadios.find((radio) => radio.checked)?.value || "github";
+}
+
+// 선택된 방식을 라디오에 반영한다. (GitHub 연동 미설정 시 url로 강제 전환할 때 사용)
+function setRepoSource(source) {
+  const target = el.repoSourceRadios.find((radio) => radio.value === source);
+  if (target) target.checked = true;
+  syncRepoSourcePanels();
+}
+
+// 선택된 방식의 입력 패널만 표시하고, 숨겨지는 패널의 필드는 오류 표시를 정리한다.
+function syncRepoSourcePanels() {
+  const source = getRepoSource();
+  el.repoSourceGithubPanel.hidden = source !== "github";
+  el.repoSourceUrlPanel.hidden = source !== "url";
+  clearCreateFieldFeedback(source === "github" ? el.repoUrlInput : el.repoSelect);
+}
+
 // 필수 필드 중 비어있는 필드를 순차적으로 shake 처리하고 첫 번째 필드에 포커스한다.
 // 필드 간 딜레이(CREATE_FIELD_SEQUENCE_GAP_MS)를 줘서 시각적으로 구분한다.
-// 저장소는 private 드롭다운 선택 또는 URL 직접 입력 중 하나만 있으면 충족된다.
+// 저장소는 토글에서 선택된 방식(내 GitHub 저장소 / Public URL)의 필드만 검사한다.
 function validateCreateForm() {
+  const repoField = getRepoSource() === "github" ? el.repoSelect : el.repoUrlInput;
   const requiredFields = [
     { field: el.appnameInput, isMissing: () => !el.appnameInput.value.trim() },
-    { field: el.repoUrlInput, isMissing: () => !el.repoSelect.value.trim() && !el.repoUrlInput.value.trim() },
+    { field: repoField, isMissing: () => !repoField.value.trim() },
   ];
   clearCreateValidationTimers();
   requiredFields.forEach((item) => clearCreateFieldFeedback(item.field));
@@ -266,6 +289,7 @@ export {
   formatDate,
   formatJobAction,
   formatJobTarget,
+  getRepoSource,
   isAdminUser,
   isLoggedIn,
   isPasswordLocked,
@@ -279,9 +303,11 @@ export {
   setDeleteUserError,
   setEnvError,
   setPromoteAdminError,
+  setRepoSource,
   setSettingsError,
   showToast,
   statusClass,
   syncDomainPreview,
+  syncRepoSourcePanels,
   validateCreateForm,
 };

@@ -98,6 +98,11 @@ export const el = {
   createForm: document.getElementById("create-form"),
   createSubmitBtn: document.getElementById("create-submit-btn"),
   appnameInput: document.getElementById("appname-input"),
+  repoSourceRadios: Array.from(
+    document.querySelectorAll('#create-form input[name="repoSource"]'),
+  ),
+  repoSourceGithubPanel: document.getElementById("repo-source-github-panel"),
+  repoSourceUrlPanel: document.getElementById("repo-source-url-panel"),
   repoUrlInput: document.getElementById("repo-url-input"),
   repoSelect: document.getElementById("repo-select"),
   repoBranchInput: document.getElementById("repo-branch-input"),

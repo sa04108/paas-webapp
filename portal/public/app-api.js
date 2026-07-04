@@ -17,10 +17,12 @@ import {
   escapeHtml,
   formatJobAction,
   formatJobTarget,
+  getRepoSource,
   normalizeErrorMessage,
   redirectToAuth,
   setBanner,
   setEnvError,
+  setRepoSource,
   setSettingsError,
   showToast,
   syncDomainPreview,
@@ -461,25 +463,18 @@ async function handleCreate(event) {
     throw new Error("로그인 후 비밀번호 변경을 완료해야 앱을 관리할 수 있습니다.");
   }
 
-  const selectedRepo = el.repoSelect.value.trim(); // private 드롭다운 cloneUrl
-  const typedUrl     = el.repoUrlInput.value.trim(); // public URL 직접 입력
-  const branch       = el.repoBranchInput.value.trim() || "main";
-
-  let repoUrl    = "";
-  let usePrivate = false;
-  if (selectedRepo) {
-    repoUrl    = selectedRepo;
-    usePrivate = true;
-  } else if (typedUrl) {
-    repoUrl = typedUrl;
-  }
+  // 토글에서 선택된 방식의 필드만 읽는다. 반대편 필드에 값이 남아 있어도 무시된다.
+  const source  = getRepoSource();
+  const repoUrl = (source === "github" ? el.repoSelect.value : el.repoUrlInput.value).trim();
+  const branch  = el.repoBranchInput.value.trim() || "main";
 
   if (!validateCreateForm()) {
-    throw new Error("appname과 저장소(선택 또는 URL)를 입력하세요.");
+    throw new Error("appname과 저장소를 입력하세요.");
   }
 
   const body = { appname: el.appnameInput.value.trim(), repoUrl, branch };
-  if (usePrivate) body.usePrivate = true;
+  // 내 GitHub 저장소는 installation 토큰으로 clone한다 (Private 접근 허용).
+  if (source === "github") body.usePrivate = true;
 
   const submitBtn = el.createSubmitBtn;
   submitBtn.disabled = true;
@@ -490,6 +485,8 @@ async function handleCreate(event) {
     el.createForm.reset();
     el.repoBranchInput.value = "main";
     renderRepoOptions();
+    // reset이 라디오를 markup 기본값(github)으로 되돌리므로 서버 설정에 맞춰 재조정한다.
+    setRepoSource(state.github.configured ? "github" : "url");
     syncDomainPreview();
   } finally {
     submitBtn.disabled = false;
@@ -516,9 +513,10 @@ async function loadGithubStatus() {
 function renderGithubStatus() {
   const { configured, connected } = state.github;
   if (!configured) {
-    el.githubStatusText.textContent = "GitHub 연동이 설정되지 않았습니다 (Public 저장소만 가능).";
+    el.githubStatusText.textContent = "GitHub 연동이 설정되지 않았습니다. Public 저장소 URL만 사용할 수 있습니다.";
     el.githubConnectBtn.hidden = true;
     el.githubDisconnectBtn.hidden = true;
+    setRepoSource("url"); // 유일하게 유효한 방식으로 전환
     return;
   }
   if (connected) {

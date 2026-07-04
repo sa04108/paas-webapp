@@ -455,6 +455,77 @@ select:focus {
   border-radius: 9px;
 }
 
+/* ── 소스 저장소 방식 토글 ──────────────────────────────────────────────────
+   라디오 두 개를 세그먼트 컨트롤로 렌더링한다. input은 시각적으로만 숨기고
+   포커스·체크 상태는 인접한 label 텍스트(span)에 반영한다. */
+.repo-source-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(33, 72, 110, 0.22);
+  border-radius: 13px;
+  background: rgba(19, 49, 80, 0.06);
+}
+
+.repo-source-option {
+  position: relative;
+  margin: 0;
+}
+
+.repo-source-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.repo-source-option-label {
+  display: block;
+  padding: 9px 12px;
+  border-radius: 10px;
+  text-align: center;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.repo-source-option input:not(:checked) + .repo-source-option-label:hover {
+  color: var(--ink-main);
+}
+
+.repo-source-option input:checked + .repo-source-option-label {
+  background: var(--surface-strong);
+  color: var(--ink-main);
+  box-shadow: 0 4px 14px rgba(22, 52, 80, 0.14);
+}
+
+.repo-source-option input:focus-visible + .repo-source-option-label {
+  box-shadow: 0 0 0 4px rgba(var(--accent-blue-rgb), 0.2);
+}
+
+.repo-source-option input:disabled + .repo-source-option-label {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 선택된 방식의 입력 필드를 감싸는 패널 */
+.repo-source-panel {
+  margin-top: 10px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  background: rgba(249, 252, 255, 0.55);
+}
+
+.repo-source-panel > :first-child {
+  margin-top: 0;
+}
+
 .field-invalid {
   border-color: rgba(var(--danger-rgb), 0.66) !important;
   box-shadow: 0 0 0 4px rgba(var(--danger-rgb), 0.16);
