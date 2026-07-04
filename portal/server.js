@@ -94,11 +94,8 @@ function canAccessDashboardUi(req) {
   return Boolean(authService.resolveSessionAuth(req));
 }
 
-const APP_VERSION = Date.now().toString();
-const APP_VERSION_ETAG = `"${APP_VERSION}"`;
-
-function serveHtmlWithVersion(res, filePath) {
-  const html = fs.readFileSync(filePath, "utf-8").replace(/__APP_VERSION__/g, APP_VERSION);
+function serveHtml(res, filePath) {
+  const html = fs.readFileSync(filePath, "utf-8");
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   return res.send(html);
@@ -110,39 +107,17 @@ const UI_PATHS = ["/", "/index.html", "/dashboard", "/create", "/users", "/admin
 
 app.get(UI_PATHS, (req, res) => {
   if (!canAccessDashboardUi(req)) return res.redirect("/auth");
-  return serveHtmlWithVersion(res, dashboardPagePath);
+  return serveHtml(res, dashboardPagePath);
 });
 
 app.get("/auth", (req, res) => {
   if (canAccessDashboardUi(req)) return res.redirect("/");
-  return serveHtmlWithVersion(res, authPagePath);
+  return serveHtml(res, authPagePath);
 });
 
-// 클라이언트 JS 파일: no-cache + ETag 기반 캐시 제어
-// - 같은 서버 세션: If-None-Match 일치 → 304 (디스크 읽기 없음)
-// - 서버 재시작: ETag 불일치 → 200 + 새 파일
-app.get("/*.js", (req, res, next) => {
-  const filePath = path.join(publicDir, req.path);
-  if (!fs.existsSync(filePath)) {
-    return next();
-  }
-  try {
-    res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("ETag", APP_VERSION_ETAG);
-
-    if (req.headers["if-none-match"] === APP_VERSION_ETAG) {
-      return res.status(304).end();
-    }
-
-    const jsContent = fs.readFileSync(filePath, "utf-8");
-    return res.send(jsContent);
-  } catch (error) {
-    return next(error);
-  }
-});
-
-// 정적 파일 서빙 (index: false 로 자동 index.html 서빙 비활성화 — 위 라우트로 처리)
+// 정적 파일 서빙 (JS/CSS 포함): 파일 mtime+size 기반 ETag + max-age=0 으로
+// 매 요청 재검증 — 파일이 바뀌면 재시작 없이 다음 새로고침에 즉시 반영된다.
+// (index: false 로 자동 index.html 서빙 비활성화 — 위 UI 라우트에서 인증 후 서빙)
 app.use(express.static(publicDir, { index: false }));
 
 // ── 인증 라우트 (/api/auth/login, /api/auth/logout, /api/auth/me, /api/auth/change-password) ──
