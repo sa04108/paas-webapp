@@ -14,6 +14,8 @@ npm start
 - 기본 관리자 계정: `admin / admin` (첫 로그인 후 비밀번호 변경 필수)
 - `.env`가 있으면 루트(`../.env`) 값을 우선 로드합니다.
 - UI 라우트: `/auth`(로그인), `/`(대시보드, 미로그인 시 `/auth`로 리다이렉트)
+- 호스트 분기: 루트 도메인(`{PAAS_DOMAIN}`)은 랜딩 페이지(`public/landing/`), 포털 UI는 `portal.{PAAS_DOMAIN}`에서 서빙됩니다.
+  dev에서도 동일합니다 — 랜딩: `http://localhost:3000`, 포털: `http://portal.localhost:3000`
 
 ## 컨테이너 실행
 

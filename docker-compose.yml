@@ -88,15 +88,12 @@ services:
             - 'traefik.http.routers.portal.entrypoints=websecure'
             - 'traefik.http.routers.portal.tls.certresolver=letsencrypt'
             - 'traefik.http.services.portal.loadbalancer.server.port=${PORTAL_PORT:-3000}'
-            # 루트 도메인 접속 → portal 서브도메인으로 301 (경로 보존)
+            # 루트 도메인: 랜딩 페이지. 포털 컨테이너가 Host 기반으로 랜딩/포털을 분기 서빙한다.
+            # (루트의 포털 UI 딥링크 → portal 서브도메인 301은 Express가 승계 — server.js 참고)
             - 'traefik.http.routers.portal-root.rule=Host(`${PAAS_DOMAIN}`)'
             - 'traefik.http.routers.portal-root.entrypoints=websecure'
             - 'traefik.http.routers.portal-root.tls.certresolver=letsencrypt'
             - 'traefik.http.routers.portal-root.service=portal'
-            - 'traefik.http.routers.portal-root.middlewares=portal-root-redirect'
-            - 'traefik.http.middlewares.portal-root-redirect.redirectregex.regex=^https?://[^/]+/(.*)'
-            - 'traefik.http.middlewares.portal-root-redirect.redirectregex.replacement=https://portal.${PAAS_DOMAIN}/$${1}'
-            - 'traefik.http.middlewares.portal-root-redirect.redirectregex.permanent=true'
 
     buildkit:
         image: moby/buildkit:latest

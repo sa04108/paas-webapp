@@ -57,6 +57,7 @@ const app = express();
 const publicDir = path.join(__dirname, "public");
 const dashboardPagePath = path.join(publicDir, "index.html");
 const authPagePath = path.join(publicDir, "auth.html");
+const landingPagePath = path.join(publicDir, "landing", "index.html");
 
 app.set("trust proxy", config.PORTAL_TRUST_PROXY);
 app.use(express.json({ limit: "1mb" }));
@@ -104,6 +105,36 @@ function serveHtml(res, filePath) {
 // UI 경로(SPA): 어떤 화면이든 index.html을 서빙하고, 실제 뷰 결정은
 // 프론트 라우터(app-router.js)가 pathname을 파싱해 수행한다.
 const UI_PATHS = ["/", "/index.html", "/dashboard", "/create", "/users", "/admin", "/apps/:userid/:appname"];
+
+// ── 루트 도메인(랜딩) 라우팅 ──────────────────────────────────────────────────
+// 도메인 토폴로지: 포털은 portal.{PAAS_DOMAIN}, 루트 도메인({PAAS_DOMAIN})은 랜딩 영역이다.
+// dev에서도 동일하게 동작한다: localhost → 랜딩, portal.localhost → 포털.
+// 정적 자산(/landing/* 포함)과 /api/* 는 호스트와 무관하게 그대로 통과한다.
+
+function isRootDomainRequest(req) {
+  return req.hostname === config.PAAS_DOMAIN;
+}
+
+// Host 헤더의 포트를 보존해 포털 오리진을 만든다. (dev: http://portal.localhost:3000)
+function portalOrigin(req) {
+  const hostPort = (req.headers.host || "").split(":")[1];
+  const portSuffix = hostPort ? `:${hostPort}` : "";
+  return `${req.protocol}://portal.${config.PAAS_DOMAIN}${portSuffix}`;
+}
+
+const landingRouter = express.Router();
+
+landingRouter.get(["/", "/index.html"], (_req, res) => serveHtml(res, landingPagePath));
+
+// 루트 도메인으로 들어온 포털 UI 딥링크(북마크 등)는 포털 서브도메인으로 보낸다.
+// (랜딩 도입 전 Traefik이 수행하던 루트 → 포털 301의 경로 보존 동작을 승계)
+const PORTAL_DEEP_PATHS = UI_PATHS.filter((p) => p !== "/" && p !== "/index.html").concat("/auth");
+
+landingRouter.get(PORTAL_DEEP_PATHS, (req, res) =>
+  res.redirect(301, portalOrigin(req) + req.originalUrl)
+);
+
+app.use((req, res, next) => (isRootDomainRequest(req) ? landingRouter(req, res, next) : next()));
 
 app.get(UI_PATHS, (req, res) => {
   if (!canAccessDashboardUi(req)) return res.redirect("/auth");
