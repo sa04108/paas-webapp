@@ -69,9 +69,11 @@ async function rebuildTraefikConfig(statements) {
       `      service: ${routerKey}-svc`,
       `      middlewares:`,
       `        - ${routerKey}-rewrite-host`,
+      // 고객 도메인은 우리 DNS 존 밖이라 DNS-01(letsencrypt)이 성립하지 않는다.
+      // CNAME 검증 완료 = 트래픽이 이미 이 서버로 온다 → HTTP-01로 즉시 발급 가능.
       ...(IS_DEV ? [] : [
         `      tls:`,
-        `        certResolver: letsencrypt`,
+        `        certResolver: letsencrypt-http`,
       ]),
     );
 

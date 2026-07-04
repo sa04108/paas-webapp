@@ -72,10 +72,9 @@ function buildCompose({ userid, appname, appDir }) {
     `      - ${JSON.stringify(`traefik.http.routers.${containerName}.entrypoints=${TLS_ENABLED ? 'websecure' : 'web'}`)}`,
     `      - ${JSON.stringify(`traefik.http.routers.${containerName}.service=${containerName}`)}`,
     `      - ${JSON.stringify(`traefik.http.routers.${containerName}.middlewares=${containerName}-rewrite-host`)}`,
-    ...(TLS_ENABLED ? [
-      `      - ${JSON.stringify(`traefik.http.routers.${containerName}.tls=true`)}`,
-      `      - ${JSON.stringify(`traefik.http.routers.${containerName}.tls.certresolver=letsencrypt`)}`,
-    ] : []),
+    // TLS 라벨을 명시하지 않는다: websecure 엔트리포인트의 기본 TLS 설정이 적용되어
+    // 선발급된 *.apps 와일드카드 인증서를 공유한다. 라우터에 tls를 선언하면 기본
+    // 설정을 덮어써 앱마다 개별 인증서 발급(수십 초 대기)이 다시 발생한다.
     // 서비스: 컨테이너가 실제로 리스닝하는 포트로 명시적 포워딩
     `      - ${JSON.stringify(`traefik.http.services.${containerName}.loadbalancer.server.port=${containerPort}`)}`,
     // 미들웨어: Host 헤더를 localhost로 재작성 → Vite 등 dev server의 host 검증을 통과시킨다.

@@ -15,7 +15,13 @@ services:
             - '--entrypoints.web.http.redirections.entrypoint.scheme=https'
             # HTTPS
             - '--entrypoints.websecure.address=:443'
+            # 기본 TLS: tls 설정이 없는 라우터(유저 앱)는 아래 도메인의 인증서를 쓴다.
+            # *.apps 와일드카드를 한 번만 발급해 공유하므로 앱 배포 시 개별 발급 대기가 없다.
+            - '--entrypoints.websecure.http.tls.certresolver=letsencrypt'
+            - '--entrypoints.websecure.http.tls.domains[0].main=apps.${PAAS_DOMAIN}'
+            - '--entrypoints.websecure.http.tls.domains[0].sans=*.apps.${PAAS_DOMAIN}'
             # Let's Encrypt ACME (DNS-01 challenge via Cloudflare)
+            # 자체 Cloudflare 존 도메인 전용: 포털·루트·*.apps 와일드카드
             - '--certificatesresolvers.letsencrypt.acme.dnschallenge=true'
             - '--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare'
             - '--certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53'
@@ -25,6 +31,14 @@ services:
             - '--certificatesresolvers.letsencrypt.acme.dnschallenge.delaybeforecheck=30'
             - '--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}'
             - '--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json'
+            # Let's Encrypt ACME (HTTP-01 challenge) — 커스텀 도메인 전용.
+            # 고객 도메인은 우리 Cloudflare 존 밖이라 DNS-01이 성립하지 않는다.
+            # CNAME으로 트래픽이 이미 이 서버로 오므로 inbound 80 검증(HTTP-01)을 쓴다.
+            # (acme.json은 리졸버 이름별로 키가 분리되어 두 리졸버가 공유해도 안전하다)
+            - '--certificatesresolvers.letsencrypt-http.acme.httpchallenge=true'
+            - '--certificatesresolvers.letsencrypt-http.acme.httpchallenge.entrypoint=web'
+            - '--certificatesresolvers.letsencrypt-http.acme.email=${ACME_EMAIL}'
+            - '--certificatesresolvers.letsencrypt-http.acme.storage=/letsencrypt/acme.json'
         environment:
             - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
         ports:
