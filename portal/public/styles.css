@@ -441,6 +441,20 @@ select:focus {
   color: var(--ink-soft);
 }
 
+.github-connect-field {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.github-connect-field .ghost-btn {
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  border-radius: 9px;
+}
+
 .field-invalid {
   border-color: rgba(var(--danger-rgb), 0.66) !important;
   box-shadow: 0 0 0 4px rgba(var(--danger-rgb), 0.16);
