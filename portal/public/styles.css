@@ -1752,6 +1752,13 @@ code {
   overflow: hidden;
 }
 
+/* FitAddon은 터미널 부모의 computed width/height 전체를 가용 공간으로 계산하므로,
+   패딩·보더가 있는 프레임(.exec-terminal-container)과 분리된 순수 마운트 요소를 부모로 둔다.
+   여기에 패딩·보더를 주면 cols가 과대 계산되어 화면 레이어가 스크롤바를 덮는다. */
+.exec-terminal-mount {
+  height: 100%;
+}
+
 /* xterm.js 내부 요소가 컨테이너를 꽉 채우도록 */
 .exec-terminal-container .xterm {
   height: 100%;
