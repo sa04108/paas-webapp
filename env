@@ -1,0 +1,37 @@
+# Domain
+PAAS_DOMAIN=localhost
+
+# Let's Encrypt (ACME) — Traefik이 인증서 발급 시 사용할 이메일
+ACME_EMAIL=your@email.com
+# Cloudflare API Token — DNS-01 challenge용 (Edit zone DNS 권한 필요)
+CF_DNS_API_TOKEN=your-cloudflare-api-token
+
+# Portal
+PORTAL_PORT=3000
+SESSION_COOKIE_NAME=portal_session
+SESSION_TTL_HOURS=168
+PORTAL_COOKIE_SECURE=false
+BCRYPT_ROUNDS=10
+PORTAL_TRUST_PROXY=true
+
+# Container defaults
+DEFAULT_MEM_LIMIT=256m
+DEFAULT_CPU_LIMIT=0.5
+DEFAULT_RESTART_POLICY=unless-stopped
+
+# Docker network
+APP_NETWORK=paas-app
+
+# App limits
+MAX_APPS_PER_USER=5
+MAX_TOTAL_APPS=20
+
+# ── GitHub App (private repo 배포) ──
+# [DEV DUMMY] UI 확인용 더미 값. 실제 연동하려면 GitHub App 자격증명으로 교체할 것.
+# (.env.example 참고 — Callback URL: https://portal.<PAAS_DOMAIN>/api/github/callback)
+GITHUB_APP_ID=123456
+GITHUB_APP_SLUG=dev-dummy-app
+GITHUB_APP_CLIENT_ID=Iv1.devdummy
+GITHUB_APP_CLIENT_SECRET=dev-dummy-client-secret
+GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\ndev-dummy-key-not-a-real-key\n-----END RSA PRIVATE KEY-----"
+GITHUB_STATE_SECRET=dev-dummy-state-secret-for-local-ui-testing
