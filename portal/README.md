@@ -1,8 +1,12 @@
-# Hyunbbai Portal
+# Hyunbbai Portal (legacy Express)
+
+> **런타임은 `../next/` 로 이전되었습니다.**  
+> Docker Compose와 신규 개발은 `next/` (Next.js 풀스택)를 사용하세요.  
+> 이 디렉터리는 레거시 참조용으로 남겨 둡니다.
 
 Express 기반 Portal API + 관리 대시보드입니다.
 
-## 로컬 실행
+## 로컬 실행 (legacy)
 
 ```bash
 cd portal

@@ -60,13 +60,14 @@ services:
                 FROM node:22
                 RUN curl -fsSL https://get.docker.com | sh
                 RUN curl -sSL https://railpack.com/install.sh | sh
-                WORKDIR ${PAAS_ROOT:-/paas}/portal
+                WORKDIR ${PAAS_ROOT:-/paas}/next
         image: paas-portal:local
         container_name: paas-portal
-        working_dir: ${PAAS_ROOT:-/paas}/portal
+        working_dir: ${PAAS_ROOT:-/paas}/next
         # If .env is missing, copy .env.example to bootstrap local runtime config.
         # start/dev is selected by RUN_MODE (development -> dev, otherwise start).
-        command: sh -c "if [ ! -f ${PAAS_ROOT:-/paas}/.env ] && [ -f ${PAAS_ROOT:-/paas}/.env.example ]; then cp ${PAAS_ROOT:-/paas}/.env.example ${PAAS_ROOT:-/paas}/.env; fi; npm ci && if [ \"$$RUN_MODE\" = \"development\" ]; then npm run dev; else npm run start; fi"
+        # production: next build 후 custom server(server.mjs)로 WS/exec 포함 기동.
+        command: sh -c "if [ ! -f ${PAAS_ROOT:-/paas}/.env ] && [ -f ${PAAS_ROOT:-/paas}/.env.example ]; then cp ${PAAS_ROOT:-/paas}/.env.example ${PAAS_ROOT:-/paas}/.env; fi; npm ci && if [ \"$$RUN_MODE\" = \"development\" ]; then npm run dev; else npm run build && npm run start; fi"
         restart: ${DEFAULT_RESTART_POLICY:-unless-stopped}
         init: true
         ports:
@@ -76,7 +77,7 @@ services:
             - BUILDKIT_HOST=tcp://buildkit:1234
         volumes:
             - './:${PAAS_ROOT:-/paas}'
-            - 'portal_node_modules:${PAAS_ROOT:-/paas}/portal/node_modules'
+            - 'portal_node_modules:${PAAS_ROOT:-/paas}/next/node_modules'
             - /var/run/docker.sock:/var/run/docker.sock
         networks:
             - paas-app
@@ -89,7 +90,7 @@ services:
             - 'traefik.http.routers.portal.tls.certresolver=letsencrypt'
             - 'traefik.http.services.portal.loadbalancer.server.port=${PORTAL_PORT:-3000}'
             # 루트 도메인: 랜딩 페이지. 포털 컨테이너가 Host 기반으로 랜딩/포털을 분기 서빙한다.
-            # (루트의 포털 UI 딥링크 → portal 서브도메인 301은 Express가 승계 — server.js 참고)
+            # (루트의 포털 UI 딥링크 → portal 서브도메인 301은 next/proxy.ts 가 승계)
             - 'traefik.http.routers.portal-root.rule=Host(`${PAAS_DOMAIN}`)'
             - 'traefik.http.routers.portal-root.entrypoints=websecure'
             - 'traefik.http.routers.portal-root.tls.certresolver=letsencrypt'

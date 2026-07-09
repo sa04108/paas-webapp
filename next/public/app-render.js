@@ -1,0 +1,361 @@
+// =============================================================================
+// app-render.js - 앱 목록 · 사용자 목록 렌더링
+// =============================================================================
+// 역할:
+//   state.apps, state.users 데이터를 DOM으로 변환한다.
+//   app-utils.js(escapeHtml, statusClass 등)에 의존한다.
+// =============================================================================
+
+import { el, state } from "./app-state.js";
+import {
+  canManageApps,
+  canManageUsers,
+  escapeHtml,
+  formatDate,
+  formatJobAction,
+  formatJobTarget,
+  isLoggedIn,
+  isPasswordLocked,
+  runtimeBadgeHtml,
+  statusClass,
+} from "./app-utils.js";
+
+// ── 앱 카드 목록 렌더링 ───────────────────────────────────────────────────────
+
+function renderApps(apps) {
+  el.appCountChip.textContent = String(apps.length);
+
+  if (!apps.length) {
+    el.emptyState.style.display = "block";
+    if (!isLoggedIn()) {
+      el.emptyState.textContent = "로그인하면 앱 목록을 조회할 수 있습니다.";
+    } else if (isPasswordLocked()) {
+      el.emptyState.textContent = "비밀번호를 변경한 뒤 앱 목록을 조회할 수 있습니다.";
+    } else {
+      el.emptyState.textContent = "앱이 없습니다. 먼저 앱을 생성하세요.";
+    }
+    el.appsContainer.innerHTML = "";
+    return;
+  }
+
+  const actionsDisabled = canManageApps() ? "" : "disabled";
+  el.emptyState.style.display = "none";
+  el.appsContainer.innerHTML = apps.map((appItem) => {
+    const safeUser      = escapeHtml(appItem.userid);
+    const safeApp       = escapeHtml(appItem.appname);
+    const safeRepoUrl   = escapeHtml(appItem.repoUrl || "-");
+    const safeBranch    = escapeHtml(appItem.branch || "main");
+    const rawStatus     = appItem.status || "unknown";
+    const safeStatus    = escapeHtml(rawStatus);
+    const safeCreatedAt = escapeHtml(formatDate(appItem.createdAt));
+    const badgeHtml     = runtimeBadgeHtml(appItem.detectedRuntime);
+
+    // dev 모드에서는 http + Traefik 호스트 포트를 붙인다 (*.localhost 자동 해석).
+    // prod 모드에서는 https (NPM이 443 처리).
+    let domainHtml;
+    if (appItem.domain) {
+      const url = state.devMode && state.traefikPort
+        ? `http://${appItem.domain}:${state.traefikPort}`
+        : `https://${appItem.domain}`;
+      domainHtml = `<a href="${url}" target="_blank" rel="noopener noreferrer">${escapeHtml(appItem.domain)}</a>`;
+    } else {
+      domainHtml = "-";
+    }
+    if (appItem.activeCustomDomains?.length) {
+      const customLinks = appItem.activeCustomDomains
+        .map(d => `<a href="https://${escapeHtml(d.domain)}" target="_blank" rel="noopener noreferrer">${escapeHtml(d.domain)}</a>`)
+        .join(", ");
+      domainHtml += `, ${customLinks}`;
+    }
+
+    return `
+      <article class="app-card" data-userid="${safeUser}" data-appname="${safeApp}">
+        <div class="app-card-head">
+          <div class="app-card-title-row">
+            <button class="app-name-btn" data-action="manage" type="button" ${actionsDisabled}>${safeUser} / ${safeApp}</button>
+            <span class="status-pill ${statusClass(rawStatus)}">${safeStatus}</span>
+            <button class="action-btn app-manage-btn" data-action="manage" type="button" ${actionsDisabled}>관리</button>
+          </div>
+          <div class="app-card-badges">
+            ${badgeHtml}
+          </div>
+        </div>
+        <p class="app-domain">${domainHtml}</p>
+        <p class="app-meta">repo: ${safeRepoUrl} | branch: ${safeBranch} | created: ${safeCreatedAt}</p>
+        <div class="app-actions">
+          <button class="action-btn" data-action="start"  type="button" ${actionsDisabled}>Start</button>
+          <button class="action-btn" data-action="stop"   type="button" ${actionsDisabled}>Stop</button>
+          <button class="action-btn" data-action="deploy" type="button" ${actionsDisabled}>Deploy</button>
+          <button class="action-btn danger" data-action="delete" type="button" ${actionsDisabled}>Delete</button>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+// ── 전체 앱 목록 렌더링 (Admin 전용) ──────────────────────────────────────────
+
+function renderAdminApps(apps) {
+  if (!apps.length) {
+    el.adminEmptyState.style.display = "block";
+    el.adminEmptyState.textContent = "조회된 앱이 없습니다.";
+    el.adminAppsContainer.innerHTML = "";
+    return;
+  }
+
+  el.adminEmptyState.style.display = "none";
+  el.adminAppsContainer.innerHTML = apps.map((appItem) => {
+    const safeUser      = escapeHtml(appItem.userid);
+    const safeApp       = escapeHtml(appItem.appname);
+    const safeRepoUrl   = escapeHtml(appItem.repoUrl || "-");
+    const safeBranch    = escapeHtml(appItem.branch || "main");
+    const rawStatus     = appItem.status || "unknown";
+    const safeStatus    = escapeHtml(rawStatus);
+    const safeCreatedAt = escapeHtml(formatDate(appItem.createdAt));
+    const badgeHtml     = runtimeBadgeHtml(appItem.detectedRuntime);
+
+    let domainHtml;
+    if (appItem.domain) {
+      const url = state.devMode && state.traefikPort
+        ? `http://${appItem.domain}:${state.traefikPort}`
+        : `https://${appItem.domain}`;
+      domainHtml = `<a href="${url}" target="_blank" rel="noopener noreferrer">${escapeHtml(appItem.domain)}</a>`;
+    } else {
+      domainHtml = "-";
+    }
+    if (appItem.activeCustomDomains?.length) {
+      const customLinks = appItem.activeCustomDomains
+        .map(d => `<a href="https://${escapeHtml(d.domain)}" target="_blank" rel="noopener noreferrer">${escapeHtml(d.domain)}</a>`)
+        .join(", ");
+      domainHtml += `, ${customLinks}`;
+    }
+
+    return `
+      <article class="app-card" data-userid="${safeUser}" data-appname="${safeApp}">
+        <div class="app-card-head">
+          <div class="app-card-title-row">
+            <button class="app-name-btn" data-action="manage" type="button">${safeUser} / ${safeApp}</button>
+            <span class="status-pill ${statusClass(rawStatus)}">${safeStatus}</span>
+            <button class="action-btn app-manage-btn" data-action="manage" type="button">관리</button>
+          </div>
+          <div class="app-card-badges">
+            ${badgeHtml}
+          </div>
+        </div>
+        <p class="app-domain">${domainHtml}</p>
+        <p class="app-meta">repo: ${safeRepoUrl} | branch: ${safeBranch} | created: ${safeCreatedAt}</p>
+        <div class="app-actions">
+          <button class="action-btn" data-action="start"  type="button">Start</button>
+          <button class="action-btn" data-action="stop"   type="button">Stop</button>
+          <button class="action-btn" data-action="deploy" type="button">Deploy</button>
+          <button class="action-btn danger" data-action="delete" type="button">Delete</button>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+// ── 사용자 테이블 렌더링 ──────────────────────────────────────────────────────
+
+function renderUsers(users) {
+  if (!canManageUsers()) {
+    el.usersCount.textContent = "0명";
+    el.usersTableBody.innerHTML = "";
+    el.usersEmptyState.hidden = false;
+    el.openCreateUserBtn.disabled = true;
+    if (!isLoggedIn()) {
+      el.usersEmptyState.textContent = "로그인하면 사용자 목록을 조회할 수 있습니다.";
+    } else if (isPasswordLocked()) {
+      el.usersEmptyState.textContent = "비밀번호를 변경한 뒤 사용자 목록을 조회할 수 있습니다.";
+    } else {
+      el.usersEmptyState.textContent = "관리자 계정에서만 사용자 목록을 조회할 수 있습니다.";
+    }
+    return;
+  }
+
+  el.openCreateUserBtn.disabled = false;
+  el.usersCount.textContent = `${users.length}명`;
+
+  if (!users.length) {
+    el.usersTableBody.innerHTML = "";
+    el.usersEmptyState.hidden = false;
+    el.usersEmptyState.textContent = "등록된 사용자가 없습니다.";
+    return;
+  }
+
+  el.usersEmptyState.hidden = true;
+  el.usersTableBody.innerHTML = users.map((item) => {
+    const safeUsername    = escapeHtml(item.username || "-");
+    const isAdmin         = item.isAdmin;
+    const safeRole        = isAdmin ? "Admin" : "User";
+    const safeCreatedAt   = escapeHtml(formatDate(item.createdAt));
+    const safeLastAccessAt = escapeHtml(formatDate(item.lastAccessAt));
+
+    // admin 계정은 삭제/승격 불가 — 보호됨 표시
+    const actionCell = isAdmin
+      ? `<span class="users-protected">보호됨</span>`
+      : `<div class="users-action-group">
+           <button
+             class="action-btn users-promote-btn"
+             data-action="promote-user"
+             data-id="${item.id}"
+             data-username="${safeUsername}"
+             type="button"
+           >Admin 승격</button>
+           <button
+             class="action-btn danger users-remove-btn"
+             data-action="remove-user"
+             data-id="${item.id}"
+             data-username="${safeUsername}"
+             type="button"
+           >제거</button>
+         </div>`;
+
+    return `
+      <tr>
+        <td>${safeUsername}</td>
+        <td><span class="role-badge ${isAdmin ? "role-admin" : "role-user"}">${safeRole}</span></td>
+        <td>${safeCreatedAt}</td>
+        <td>${safeLastAccessAt}</td>
+        <td>${actionCell}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+// ── 작업 목록 테이블 렌더링 ──────────────────────────────────────────────────────
+
+function renderJobList(jobs) {
+  const activeStatuses = new Set(["pending", "running", "done", "interrupted", "failed", "warn"]);
+  const activeJobs = jobs.filter((j) => activeStatuses.has(j.status));
+
+  const table = document.getElementById("job-list-table");
+  if (!activeJobs.length) {
+    el.jobListTbody.innerHTML = "";
+    el.jobListEmpty.hidden = false;
+    table.hidden = true;
+    return;
+  }
+
+  el.jobListEmpty.hidden = true;
+  table.hidden = false;
+
+  el.jobListTbody.innerHTML = activeJobs.map((job) => {
+    const jobName = escapeHtml(formatJobAction(job));
+    const appPart = escapeHtml(formatJobTarget(job) || "-");
+    const rawStatus = job.status;
+    const safeStatus = escapeHtml(rawStatus);
+    
+    let errorReason = "-";
+    const logText = job.error || job.output;
+    if (logText) {
+      const singleLineLog = logText.split('\n')[0];
+      let textClass = "job-neutral-text";
+      if (rawStatus === "failed") textClass = "job-error-text";
+      else if (rawStatus === "warn") textClass = "job-warn-text";
+
+      errorReason = `
+        <div style="display: flex; align-items: center; max-width: 250px;">
+          <span class="${textClass}" style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(singleLineLog)}">${escapeHtml(singleLineLog)}</span>
+          <button class="ghost-btn" data-action="view-job-log" data-id="${job.id}" type="button" style="padding: 2px 6px; margin-left: 4px;" title="전체 로그 보기">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+          </button>
+        </div>
+      `;
+    } else if (rawStatus === "interrupted") {
+       errorReason = `<span class="ink-subtle">서버 재시작으로 중단됨</span>`;
+    }
+
+    let actions = `<span class="ink-subtle">-</span>`;
+    const closeBtnHtml = `
+      <button class="ghost-btn danger-ghost-btn" data-action="cancel-job" data-id="${job.id}" type="button" style="padding: 4px 8px; min-width: auto; height: 28px; display: inline-flex; align-items: center; justify-content: center;" title="목록에서 제거">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+      </button>
+    `;
+
+    if (rawStatus === "interrupted" || rawStatus === "failed") {
+      actions = `
+        <div class="users-action-group">
+          <button class="action-btn" data-action="retry-job" data-id="${job.id}" type="button">재시도</button>
+          ${closeBtnHtml}
+        </div>
+      `;
+    } else if (rawStatus === "done" || rawStatus === "warn") {
+      actions = `
+        <div class="users-action-group">
+          ${closeBtnHtml}
+        </div>
+      `;
+    }
+
+    return `
+      <tr>
+        <td>${jobName}</td>
+        <td>${appPart}</td>
+        <td><span class="status-pill ${statusClass(rawStatus)}">${safeStatus}</span></td>
+        <td class="job-error-cell">${errorReason}</td>
+        <td>${actions}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+// ── 커스텀 도메인 테이블 렌더링 ──────────────────────────────────────────────
+
+function renderDomains(domains) {
+  if (!domains.length) {
+    el.domainsTableWrap.hidden = true;
+    el.domainsEmptyState.hidden = false;
+    return;
+  }
+
+  el.domainsEmptyState.hidden = true;
+  el.domainsTableWrap.hidden = false;
+
+  el.domainsTableBody.innerHTML = domains.map((d) => {
+    const safeDomain = escapeHtml(d.domain);
+    const safeCname  = escapeHtml(d.cnameTarget || "");
+    const status     = d.status || "pending";
+
+    const badgeClass =
+      status === "active"  ? "domain-status-active"  :
+      status === "error"   ? "domain-status-error"   :
+                             "domain-status-pending";
+
+    const statusLabel =
+      status === "active"  ? "Active"  :
+      status === "error"   ? "Error"   :
+                             "Pending";
+
+    return `
+      <tr>
+        <td><span class="domain-type-badge">CNAME</span></td>
+        <td><a href="https://${safeDomain}" target="_blank" rel="noopener noreferrer" class="domain-name">${safeDomain}</a></td>
+        <td>
+          <div class="domain-cname-cell">
+            <code class="domain-cname-target">${safeCname}</code>
+            <button class="ghost-btn domains-copy-btn" data-action="copy-cname"
+              data-cname="${safeCname}" type="button" title="복사"><svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" aria-hidden="true"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button>
+          </div>
+        </td>
+        <td><span class="domain-status-badge ${badgeClass}">${statusLabel}</span></td>
+        <td>
+          <div class="users-action-group">
+            <button class="ghost-btn" data-action="verify-domain"
+              data-id="${d.id}" type="button">Verify</button>
+            <button class="ghost-btn danger-ghost-btn" data-action="remove-domain"
+              data-id="${d.id}" type="button">Remove</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+export {
+  renderApps,
+  renderAdminApps,
+  renderDomains,
+  renderUsers,
+  renderJobList,
+};

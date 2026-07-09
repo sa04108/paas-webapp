@@ -1,0 +1,689 @@
+// =============================================================================
+// authService.js - 포털 인증 및 세션 관리 서비스
+// =============================================================================
+// 역할:
+//   PaaS 포털의 사용자 인증 전반을 담당한다.
+//   - 사용자 계정(admin / user) CRUD
+//   - bcrypt 기반 비밀번호 해싱 및 검증
+//   - 세션 토큰 발급/검증/만료 관리 (httpOnly 쿠키)
+//   - SQLite(better-sqlite3)로 users, sessions 테이블 관리
+//   - 최초 실행 시 bootstrap admin 계정 자동 생성 (admin/admin)
+// =============================================================================
+"use strict";
+
+const path = require("node:path");
+const fs = require("node:fs/promises");
+const crypto = require("node:crypto");
+
+const bcrypt = require("bcryptjs");
+const Database = require("better-sqlite3");
+
+const ROLE_ADMIN = "admin";
+const ROLE_USER = "user";
+const USERNAME_REGEX = /^[a-z][a-z0-9]{2,19}$/;
+const SESSION_TOKEN_PREFIX = "sess";
+
+function normalizeBoolean(value, fallbackValue = false) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    if (value === 1) {
+      return true;
+    }
+    if (value === 0) {
+      return false;
+    }
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["false", "0", "no", "off"].includes(normalized)) {
+      return false;
+    }
+  }
+  return fallbackValue;
+}
+
+function safeEqual(left, right) {
+  const leftBuf = Buffer.from(String(left), "utf8");
+  const rightBuf = Buffer.from(String(right), "utf8");
+  if (leftBuf.length !== rightBuf.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(leftBuf, rightBuf);
+}
+
+function hashSecret(secret) {
+  return crypto.createHash("sha256").update(String(secret)).digest("hex");
+}
+
+function parseStructuredToken(value, prefix) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return null;
+  }
+  const parts = raw.split(".");
+  if (parts.length !== 3 || parts[0] !== prefix) {
+    return null;
+  }
+
+  const id = Number.parseInt(parts[1], 10);
+  const secret = parts[2];
+  if (!Number.isInteger(id) || id <= 0) {
+    return null;
+  }
+  if (!/^[A-Za-z0-9_-]{16,200}$/.test(secret)) {
+    return null;
+  }
+  return { id, secret };
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function parseCookieValue(req, cookieName) {
+  const cookieHeader = String(req.headers.cookie || "");
+  if (!cookieHeader) {
+    return null;
+  }
+  const chunks = cookieHeader.split(";");
+  for (const chunk of chunks) {
+    const [key, ...valueParts] = chunk.trim().split("=");
+    if (!key || !valueParts.length || key !== cookieName) {
+      continue;
+    }
+    const rawValue = valueParts.join("=");
+    try {
+      return decodeURIComponent(rawValue);
+    } catch {
+      return rawValue;
+    }
+  }
+  return null;
+}
+
+function createAuthService(options) {
+  const config = {
+    dbPath: options.dbPath,
+    sessionCookieName: options.sessionCookieName || "portal_session",
+    sessionTtlHours:
+      Number(options.sessionTtlHours) > 0
+        ? Number(options.sessionTtlHours)
+        : 168,
+    cookieSecure: Boolean(options.cookieSecure),
+    bcryptRounds:
+      Number(options.bcryptRounds) > 0 ? Number(options.bcryptRounds) : 10,
+    isDev: Boolean(options.isDev),
+  };
+
+  const AppError = options.AppError;
+
+  if (!config.dbPath) {
+    throw new Error("dbPath is required for createAuthService()");
+  }
+
+  let db = null;
+  const statements = {};
+
+  function toPublicUser(row) {
+    return {
+      id: Number(row.id),
+      username: String(row.username),
+      role: String(row.role || ROLE_ADMIN),
+      mustChangePassword: config.isDev
+        ? false
+        : normalizeBoolean(row.mustChangePassword, false),
+    };
+  }
+
+  function normalizeUserRow(row) {
+    const role = String(row.role || "");
+    return {
+      id: Number(row.id),
+      username: String(row.username || ""),
+      role,
+      isAdmin: role === ROLE_ADMIN,
+      createdAt: row.createdAt || null,
+      lastAccessAt: row.lastAccessAt || null,
+    };
+  }
+
+  function issueSession(userId) {
+    const secret = crypto.randomBytes(32).toString("base64url");
+    const tokenHash = hashSecret(secret);
+    const createdAt = nowIso();
+    const expiresAt = new Date(
+      Date.now() + config.sessionTtlHours * 60 * 60 * 1000,
+    ).toISOString();
+    const result = statements.insertSession.run(
+      Number(userId),
+      tokenHash,
+      createdAt,
+      expiresAt,
+    );
+    const sessionId = Number(result.lastInsertRowid);
+    return {
+      token: `${SESSION_TOKEN_PREFIX}.${sessionId}.${secret}`,
+      sessionId,
+      expiresAt,
+    };
+  }
+
+  const TOUCH_THROTTLE_MS = 5 * 60 * 1000;
+  const touchTimestamps = new Map();
+
+  function throttledTouch(prefix, id, statement) {
+    const key = `${prefix}:${id}`;
+    const now = Date.now();
+    const lastTouch = touchTimestamps.get(key) || 0;
+    if (now - lastTouch < TOUCH_THROTTLE_MS) {
+      return;
+    }
+    touchTimestamps.set(key, now);
+    statement.run(nowIso(), id);
+  }
+
+  function authenticateSession(rawToken) {
+    const parsed = parseStructuredToken(rawToken, SESSION_TOKEN_PREFIX);
+    if (!parsed) {
+      return null;
+    }
+
+    const row = statements.selectSessionWithUserById.get(parsed.id);
+    if (!row || row.revokedAt) {
+      return null;
+    }
+    const expiresAtMs = Date.parse(row.expiresAt);
+    if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
+      statements.revokeSessionById.run(nowIso(), parsed.id);
+      return null;
+    }
+    if (!safeEqual(hashSecret(parsed.secret), row.tokenHash)) {
+      return null;
+    }
+
+    throttledTouch("sess", parsed.id, statements.touchSessionLastUsed);
+    return {
+      method: "session",
+      user: toPublicUser(row),
+      sessionId: parsed.id,
+      sessionExpiresAt: row.expiresAt,
+    };
+  }
+
+  // req는 { headers: { cookie } } 형태만 있으면 되므로 Express Request와
+  // NextRequest 어댑터(HTTP 계층에서 만든 얕은 객체) 양쪽에서 재사용 가능하다.
+  function resolveSessionAuth(req) {
+    const sessionToken = parseCookieValue(req, config.sessionCookieName);
+    if (!sessionToken) {
+      return null;
+    }
+    return authenticateSession(sessionToken);
+  }
+
+  function listUsers() {
+    const rows = statements.listUsersWithLastAccess.all();
+    return rows.map(normalizeUserRow);
+  }
+
+  function createUser(payload) {
+    const username = String(payload?.username || "").trim();
+    const password = String(payload?.password || "");
+    const isAdmin = normalizeBoolean(payload?.isAdmin, false);
+    const role = isAdmin ? ROLE_ADMIN : ROLE_USER;
+
+    if (!USERNAME_REGEX.test(username)) {
+      throw new AppError(
+        400,
+        "Invalid username. Expected /^[a-z][a-z0-9]{2,19}$/",
+      );
+    }
+    if (password.length < 8) {
+      throw new AppError(400, "password must be at least 8 characters");
+    }
+
+    const existing = statements.selectUserByUsername.get(username);
+    if (existing) {
+      throw new AppError(409, "Username already exists");
+    }
+
+    const createdAt = nowIso();
+    const passwordHash = bcrypt.hashSync(password, config.bcryptRounds);
+    try {
+      const result = statements.insertUser.run(
+        username,
+        passwordHash,
+        role,
+        1,
+        createdAt,
+        createdAt,
+      );
+      const userId = Number(result.lastInsertRowid);
+      const createdUser = statements.selectUserById.get(userId);
+      return toPublicUser(createdUser);
+    } catch (error) {
+      if (error?.code === "SQLITE_CONSTRAINT_UNIQUE") {
+        throw new AppError(409, "Username already exists");
+      }
+      throw error;
+    }
+  }
+
+  function deleteUser(payload) {
+    const actorUserId = Number.parseInt(String(payload?.actorUserId || ""), 10);
+    const targetUserId = Number.parseInt(
+      String(payload?.targetUserId || ""),
+      10,
+    );
+    const currentPassword = String(payload?.currentPassword || "");
+
+    if (!Number.isInteger(actorUserId) || actorUserId <= 0) {
+      throw new AppError(401, "Unauthorized");
+    }
+    if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+      throw new AppError(400, "Invalid user id");
+    }
+    if (!currentPassword) {
+      throw new AppError(400, "currentPassword is required");
+    }
+
+    const actor = statements.selectUserById.get(actorUserId);
+    if (!actor) {
+      throw new AppError(401, "Unauthorized");
+    }
+    if (!bcrypt.compareSync(currentPassword, actor.passwordHash)) {
+      throw new AppError(401, "Current password is incorrect");
+    }
+
+    const target = statements.selectUserById.get(targetUserId);
+    if (!target) {
+      throw new AppError(404, "User not found");
+    }
+    if (String(target.role || ROLE_USER) === ROLE_ADMIN) {
+      throw new AppError(403, "Admin users cannot be removed");
+    }
+
+    const result = statements.deleteUserById.run(targetUserId);
+    if (!result.changes) {
+      throw new AppError(404, "User not found");
+    }
+
+    return {
+      id: Number(target.id),
+      username: String(target.username || ""),
+      deleted: true,
+    };
+  }
+
+  function updateUserRole({ actorUserId, targetUserId }) {
+    const actor = statements.selectUserById.get(actorUserId);
+    if (!actor || actor.role !== ROLE_ADMIN) {
+      throw new AppError(403, "Forbidden: only admin can change roles");
+    }
+    const target = statements.selectUserById.get(targetUserId);
+    if (!target) {
+      throw new AppError(404, "User not found");
+    }
+    if (Number(actor.id) === Number(target.id)) {
+      throw new AppError(400, "Cannot modify your own role");
+    }
+    if (target.role === ROLE_ADMIN) {
+      throw new AppError(400, "User is already an admin");
+    }
+    const updatedAt = nowIso();
+    statements.promoteUserToAdmin.run(updatedAt, Number(target.id));
+    const updatedUser = statements.selectUserById.get(Number(target.id));
+    return toPublicUser(updatedUser);
+  }
+
+  // ── 프레임워크 독립적 인증 동작 ──────────────────────────────────────────────
+  // Express Router가 아닌 순수 함수로 노출한다. HTTP 어댑터(Next.js Route Handler 등)가
+  // 이 함수들을 호출한 뒤 자신의 응답/쿠키 API로 결과를 내려준다.
+
+  function login({ username, password }) {
+    const trimmedUsername = String(username || "").trim();
+    const rawPassword = String(password || "");
+    if (!USERNAME_REGEX.test(trimmedUsername)) {
+      throw new AppError(400, "Invalid username. Expected /^[a-z][a-z0-9]{2,19}$/");
+    }
+    if (!rawPassword) {
+      throw new AppError(400, "Password is required");
+    }
+
+    const user = statements.selectUserByUsername.get(trimmedUsername);
+    if (!user || !bcrypt.compareSync(rawPassword, user.passwordHash)) {
+      throw new AppError(401, "Invalid credentials");
+    }
+
+    const session = issueSession(user.id);
+    return { user: toPublicUser(user), session };
+  }
+
+  function logout(rawToken) {
+    const parsed = parseStructuredToken(rawToken, SESSION_TOKEN_PREFIX);
+    if (parsed) {
+      statements.revokeSessionById.run(nowIso(), parsed.id);
+    }
+  }
+
+  function changePassword({ userId, currentPassword, newPassword }) {
+    const current = String(currentPassword || "");
+    const next = String(newPassword || "");
+    if (!current || !next) {
+      throw new AppError(400, "currentPassword and newPassword are required");
+    }
+    if (next.length < 8) {
+      throw new AppError(400, "newPassword must be at least 8 characters");
+    }
+
+    const currentUser = statements.selectUserById.get(userId);
+    if (!currentUser) {
+      throw new AppError(401, "Unauthorized");
+    }
+    if (!bcrypt.compareSync(current, currentUser.passwordHash)) {
+      throw new AppError(401, "Current password is incorrect");
+    }
+    if (bcrypt.compareSync(next, currentUser.passwordHash)) {
+      throw new AppError(400, "newPassword must be different from current password");
+    }
+
+    const updatedAt = nowIso();
+    const nextHash = bcrypt.hashSync(next, config.bcryptRounds);
+    statements.updateUserPassword.run(nextHash, updatedAt, userId);
+    statements.revokeSessionsByUserId.run(updatedAt, userId);
+
+    const session = issueSession(userId);
+    const updatedUser = statements.selectUserById.get(userId);
+    return { user: toPublicUser(updatedUser), session };
+  }
+
+  async function init() {
+    await fs.mkdir(path.dirname(config.dbPath), { recursive: true });
+    db = new Database(config.dbPath);
+    db.pragma("journal_mode = WAL");
+    db.pragma("foreign_keys = ON");
+    db.pragma("busy_timeout = 5000");
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT '${ROLE_ADMIN}',
+        must_change_password INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        token_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        last_used_at TEXT,
+        revoked_at TEXT,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);
+      CREATE TABLE IF NOT EXISTS custom_domains (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        userid      TEXT    NOT NULL,
+        appname     TEXT    NOT NULL,
+        domain      TEXT    NOT NULL UNIQUE,
+        target TEXT   NOT NULL,
+        port        INTEGER NOT NULL DEFAULT 5000,
+        status      TEXT    NOT NULL DEFAULT 'pending',
+        verified_at TEXT,
+        created_at  TEXT    NOT NULL,
+        updated_at  TEXT    NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_custom_domains_app
+        ON custom_domains(userid, appname);
+      CREATE TABLE IF NOT EXISTS github_installations (
+        id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id                INTEGER NOT NULL UNIQUE,
+        github_installation_id TEXT    NOT NULL,
+        created_at             TEXT    NOT NULL,
+        updated_at             TEXT    NOT NULL,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+
+    statements.selectUserById = db.prepare(`
+      SELECT
+        id,
+        username,
+        password_hash AS passwordHash,
+        role,
+        must_change_password AS mustChangePassword
+      FROM users
+      WHERE id = ?
+    `);
+    statements.selectUserByUsername = db.prepare(`
+      SELECT
+        id,
+        username,
+        password_hash AS passwordHash,
+        role,
+        must_change_password AS mustChangePassword
+      FROM users
+      WHERE username = ?
+    `);
+    statements.insertUser = db.prepare(`
+      INSERT INTO users (
+        username,
+        password_hash,
+        role,
+        must_change_password,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    statements.updateUserPassword = db.prepare(`
+      UPDATE users
+      SET password_hash = ?, must_change_password = 0, updated_at = ?
+      WHERE id = ?
+    `);
+    statements.insertSession = db.prepare(`
+      INSERT INTO sessions (
+        user_id,
+        token_hash,
+        created_at,
+        expires_at
+      )
+      VALUES (?, ?, ?, ?)
+    `);
+    statements.selectSessionWithUserById = db.prepare(`
+      SELECT
+        s.id,
+        s.token_hash AS tokenHash,
+        s.expires_at AS expiresAt,
+        s.revoked_at AS revokedAt,
+        u.id AS id,
+        u.username,
+        u.role,
+        u.must_change_password AS mustChangePassword
+      FROM sessions s
+      INNER JOIN users u ON u.id = s.user_id
+      WHERE s.id = ?
+    `);
+    statements.touchSessionLastUsed = db.prepare(`
+      UPDATE sessions
+      SET last_used_at = ?
+      WHERE id = ?
+    `);
+    statements.revokeSessionById = db.prepare(`
+      UPDATE sessions
+      SET revoked_at = ?
+      WHERE id = ? AND revoked_at IS NULL
+    `);
+    statements.revokeSessionsByUserId = db.prepare(`
+      UPDATE sessions
+      SET revoked_at = ?
+      WHERE user_id = ? AND revoked_at IS NULL
+    `);
+    statements.revokeExpiredSessions = db.prepare(`
+      UPDATE sessions
+      SET revoked_at = ?
+      WHERE revoked_at IS NULL AND expires_at <= ?
+    `);
+    statements.listUsersWithLastAccess = db.prepare(`
+      SELECT
+        u.id,
+        u.username,
+        u.role,
+        u.created_at AS createdAt,
+        MAX(COALESCE(s.last_used_at, s.created_at)) AS lastAccessAt
+      FROM users u
+      LEFT JOIN sessions s ON s.user_id = u.id
+      GROUP BY
+        u.id,
+        u.username,
+        u.role,
+        u.created_at
+      ORDER BY
+        CASE WHEN u.role = '${ROLE_ADMIN}' THEN 0 ELSE 1 END ASC,
+        u.created_at ASC,
+        u.id ASC
+    `);
+    statements.deleteUserById = db.prepare(`
+      DELETE FROM users
+      WHERE id = ?
+    `);
+    statements.promoteUserToAdmin = db.prepare(`
+      UPDATE users SET role = '${ROLE_ADMIN}', updated_at = ? WHERE id = ?
+    `);
+
+    // ── custom_domains prepared statements ──────────────────────────────────
+    statements.insertCustomDomain = db.prepare(`
+      INSERT INTO custom_domains (userid, appname, domain, target, port, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
+    `);
+    statements.selectCustomDomainsByApp = db.prepare(`
+      SELECT id, userid, appname, domain, target AS cnameTarget, port,
+             status, verified_at AS verifiedAt, created_at AS createdAt, updated_at AS updatedAt
+      FROM custom_domains
+      WHERE userid = ? AND appname = ?
+      ORDER BY created_at ASC
+    `);
+    statements.selectCustomDomainById = db.prepare(`
+      SELECT id, userid, appname, domain, target AS cnameTarget, port,
+             status, verified_at AS verifiedAt, created_at AS createdAt, updated_at AS updatedAt
+      FROM custom_domains WHERE id = ?
+    `);
+    statements.selectCustomDomainByDomain = db.prepare(`
+      SELECT id, userid, appname, domain, target AS cnameTarget, port,
+             status, verified_at AS verifiedAt, created_at AS createdAt, updated_at AS updatedAt
+      FROM custom_domains WHERE domain = ?
+    `);
+    statements.updateCustomDomainStatus = db.prepare(`
+      UPDATE custom_domains SET status = ?, verified_at = ?, updated_at = ? WHERE id = ?
+    `);
+    statements.updateCustomDomainPort = db.prepare(`
+      UPDATE custom_domains SET port = ?, updated_at = ? WHERE userid = ? AND appname = ?
+    `);
+    statements.deleteCustomDomainById = db.prepare(`
+      DELETE FROM custom_domains WHERE id = ?
+    `);
+    statements.deleteCustomDomainsByApp = db.prepare(`
+      DELETE FROM custom_domains WHERE userid = ? AND appname = ?
+    `);
+    statements.listAllActiveCustomDomains = db.prepare(`
+      SELECT id, userid, appname, domain, target AS cnameTarget, port,
+             status, verified_at AS verifiedAt, created_at AS createdAt, updated_at AS updatedAt
+      FROM custom_domains
+      WHERE status = 'active'
+      ORDER BY userid, appname, created_at ASC
+    `);
+    statements.selectActiveCustomDomainsByApp = db.prepare(`
+      SELECT id, userid, appname, domain, target AS cnameTarget, port,
+             status, verified_at AS verifiedAt, created_at AS createdAt, updated_at AS updatedAt
+      FROM custom_domains
+      WHERE userid = ? AND appname = ? AND status = 'active'
+      ORDER BY created_at ASC
+    `);
+    statements.selectAllNonActiveDomains = db.prepare(`
+      SELECT id, userid, appname, domain, target AS cnameTarget, port,
+             status, verified_at AS verifiedAt, created_at AS createdAt, updated_at AS updatedAt
+      FROM custom_domains
+      WHERE status != 'active'
+      ORDER BY created_at ASC
+    `);
+
+    // ── github_installations prepared statements ────────────────────────────
+    statements.upsertGithubInstallation = db.prepare(`
+      INSERT INTO github_installations (user_id, github_installation_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET
+        github_installation_id = excluded.github_installation_id,
+        updated_at = excluded.updated_at
+    `);
+    statements.selectGithubInstallationByUserId = db.prepare(`
+      SELECT github_installation_id FROM github_installations WHERE user_id = ?
+    `);
+    statements.deleteGithubInstallationByUserId = db.prepare(`
+      DELETE FROM github_installations WHERE user_id = ?
+    `);
+
+    const admin = statements.selectUserByUsername.get("admin");
+    if (!admin) {
+      const createdAt = nowIso();
+      const hash = bcrypt.hashSync("admin", config.bcryptRounds);
+      statements.insertUser.run(
+        "admin",
+        hash,
+        ROLE_ADMIN,
+        1,
+        createdAt,
+        createdAt,
+      );
+      console.warn("[portal] bootstrap admin created: id=admin, pw=admin");
+    }
+
+    const now = nowIso();
+    statements.revokeExpiredSessions.run(now, now);
+  }
+
+  function getPublicConfig() {
+    return {
+      sessionCookieName: config.sessionCookieName,
+    };
+  }
+
+  // HTTP 어댑터(next/lib/portal/http.ts)가 쿠키를 직접 설정/해제할 때 필요한
+  // 세션 쿠키 속성을 노출한다. 값 자체(config)는 이 모듈만 소유한다.
+  function getSessionCookieOptions() {
+    return {
+      name: config.sessionCookieName,
+      secure: config.cookieSecure,
+    };
+  }
+
+  return {
+    init,
+    resolveSessionAuth,
+    login,
+    logout,
+    changePassword,
+    listUsers,
+    createUser,
+    deleteUser,
+    updateUserRole,
+    getPublicConfig,
+    getSessionCookieOptions,
+    getDbPath: () => config.dbPath,
+    getDb: () => db,
+    getStatements: () => statements,
+  };
+}
+
+module.exports = {
+  createAuthService,
+  ROLE_ADMIN,
+  ROLE_USER,
+};
