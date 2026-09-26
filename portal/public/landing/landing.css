@@ -6,8 +6,7 @@
    ============================================================================= */
 
 :root {
-  --bg-base: #f2f7f4;
-  --bg-wash: #eef4fb;
+  --bg-base: #f4f5f7;
   --ink-main: #17273b;
   --ink-subtle: #4f667f;
   --ink-soft: #6d8096;
@@ -15,8 +14,8 @@
   --accent-blue: #2a86f1;
   --accent-teal-rgb: 14, 165, 140;
   --accent-blue-rgb: 42, 134, 241;
-  --surface: rgba(255, 255, 255, 0.78);
-  --surface-strong: rgba(255, 255, 255, 0.9);
+  --surface: #fff;
+  --surface-strong: #fff;
   --surface-border: rgba(19, 49, 80, 0.12);
   --surface-border-strong: rgba(19, 49, 80, 0.2);
   --radius-xl: 28px;
@@ -47,23 +46,7 @@ body {
   min-height: 100vh;
   color: var(--ink-main);
   font-family: var(--font-body);
-  background:
-    radial-gradient(circle at 8% 16%, rgba(var(--accent-teal-rgb), 0.17), transparent 40%),
-    radial-gradient(circle at 86% 9%, rgba(var(--accent-blue-rgb), 0.16), transparent 34%),
-    linear-gradient(160deg, var(--bg-base), var(--bg-wash));
-}
-
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(rgba(91, 123, 155, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(91, 123, 155, 0.08) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: radial-gradient(circle at 50% 28%, black, transparent 75%);
-  opacity: 0.45;
+  background: var(--bg-base);
 }
 
 a:focus-visible,
@@ -71,61 +54,6 @@ a:focus-visible,
   outline: 3px solid rgba(var(--accent-blue-rgb), 0.55);
   outline-offset: 3px;
   border-radius: 6px;
-}
-
-/* ── 배경 오브 (포털과 동일한 분위기) ── */
-
-.mesh-layer {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(2px);
-  opacity: 0.55;
-}
-
-.orb-a {
-  width: 340px;
-  height: 340px;
-  left: -110px;
-  top: 220px;
-  background: radial-gradient(circle at 35% 35%, rgba(var(--accent-teal-rgb), 0.42), transparent 68%);
-  animation: drift-a 14s ease-in-out infinite alternate;
-}
-
-.orb-b {
-  width: 280px;
-  height: 280px;
-  right: 8%;
-  top: 84px;
-  background: radial-gradient(circle at 50% 40%, rgba(var(--accent-blue-rgb), 0.34), transparent 70%);
-  animation: drift-b 12s ease-in-out infinite alternate;
-}
-
-.orb-c {
-  width: 300px;
-  height: 300px;
-  right: -80px;
-  bottom: -40px;
-  background: radial-gradient(circle at 40% 50%, rgba(var(--accent-teal-rgb), 0.32), transparent 72%);
-  animation: drift-c 16s ease-in-out infinite alternate;
-}
-
-@keyframes drift-a {
-  to { transform: translate(40px, -30px); }
-}
-
-@keyframes drift-b {
-  to { transform: translate(-30px, 36px); }
-}
-
-@keyframes drift-c {
-  to { transform: translate(-36px, -24px); }
 }
 
 /* ── 레이아웃 ── */
@@ -585,16 +513,6 @@ a:focus-visible,
   backdrop-filter: blur(14px);
 }
 
-.closing-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 14% 0%, rgba(var(--accent-teal-rgb), 0.14), transparent 42%),
-    radial-gradient(circle at 88% 100%, rgba(var(--accent-blue-rgb), 0.13), transparent 46%);
-}
-
 .closing-card > * {
   position: relative;
 }
@@ -685,7 +603,6 @@ a:focus-visible,
     scroll-behavior: auto;
   }
 
-  .orb,
   .hero-copy > *,
   .deploy-card,
   .term-line,

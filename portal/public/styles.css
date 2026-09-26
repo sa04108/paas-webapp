@@ -1,13 +1,12 @@
 :root {
-  --bg-base: #f2f7f4;
-  --bg-wash: #eef4fb;
+  --bg-base: #f4f5f7;
   --ink-main: #17273b;
   --ink-subtle: #4f667f;
   --ink-soft: #6d8096;
   --accent-blue-rgb: 42, 134, 241;
   --danger-rgb: 206, 77, 77;
-  --surface: rgba(255, 255, 255, 0.78);
-  --surface-strong: rgba(255, 255, 255, 0.9);
+  --surface: #fff;
+  --surface-strong: #fff;
   --surface-border: rgba(19, 49, 80, 0.12);
   --surface-border-strong: rgba(19, 49, 80, 0.2);
   --accent-teal: #0ea58c;
@@ -44,68 +43,11 @@ body {
   min-height: 100vh;
   color: var(--ink-main);
   font-family: "Manrope", "Noto Sans KR", sans-serif;
-  background:
-    radial-gradient(circle at 8% 16%, rgba(14, 165, 140, 0.17), transparent 40%),
-    radial-gradient(circle at 86% 9%, rgba(42, 134, 241, 0.16), transparent 34%),
-    linear-gradient(160deg, var(--bg-base), var(--bg-wash));
+  background: var(--bg-base);
 }
 
 body.modal-open {
   overflow: hidden;
-}
-
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(rgba(91, 123, 155, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(91, 123, 155, 0.08) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: radial-gradient(circle at 50% 28%, black, transparent 75%);
-  opacity: 0.45;
-}
-
-.mesh-layer {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(2px);
-  opacity: 0.55;
-}
-
-.orb-a {
-  width: 340px;
-  height: 340px;
-  left: -110px;
-  top: 220px;
-  background: radial-gradient(circle at 35% 35%, rgba(14, 165, 140, 0.42), transparent 68%);
-  animation: drift-a 14s ease-in-out infinite alternate;
-}
-
-.orb-b {
-  width: 280px;
-  height: 280px;
-  right: 8%;
-  top: 84px;
-  background: radial-gradient(circle at 50% 40%, rgba(42, 134, 241, 0.34), transparent 70%);
-  animation: drift-b 12s ease-in-out infinite alternate;
-}
-
-.orb-c {
-  width: 300px;
-  height: 300px;
-  right: -80px;
-  bottom: -40px;
-  background: radial-gradient(circle at 40% 50%, rgba(14, 165, 140, 0.32), transparent 72%);
-  animation: drift-c 16s ease-in-out infinite alternate;
 }
 
 /* ── GNB (horizontal top bar) ── */
@@ -1420,36 +1362,6 @@ html[lang="en"] .app-card-title-row {
 
   80% {
     transform: translateX(3px);
-  }
-}
-
-@keyframes drift-a {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-
-  to {
-    transform: translate3d(22px, -14px, 0);
-  }
-}
-
-@keyframes drift-b {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-
-  to {
-    transform: translate3d(-20px, 18px, 0);
-  }
-}
-
-@keyframes drift-c {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-
-  to {
-    transform: translate3d(-14px, -16px, 0);
   }
 }
 
