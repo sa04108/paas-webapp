@@ -28,11 +28,11 @@ function renderApps(apps) {
   if (!apps.length) {
     el.emptyState.style.display = "block";
     if (!isLoggedIn()) {
-      el.emptyState.textContent = "로그인하면 앱 목록을 조회할 수 있습니다.";
+      el.emptyState.textContent = "Log in to view your apps.";
     } else if (isPasswordLocked()) {
-      el.emptyState.textContent = "비밀번호를 변경한 뒤 앱 목록을 조회할 수 있습니다.";
+      el.emptyState.textContent = "Change your password to view your apps.";
     } else {
-      el.emptyState.textContent = "앱이 없습니다. 먼저 앱을 생성하세요.";
+      el.emptyState.textContent = "No apps yet. Create an app to get started.";
     }
     el.appsContainer.innerHTML = "";
     return;
@@ -74,7 +74,7 @@ function renderApps(apps) {
           <div class="app-card-title-row">
             <button class="app-name-btn" data-action="manage" type="button" ${actionsDisabled}>${safeUser} / ${safeApp}</button>
             <span class="status-pill ${statusClass(rawStatus)}">${safeStatus}</span>
-            <button class="action-btn app-manage-btn" data-action="manage" type="button" ${actionsDisabled}>관리</button>
+            <button class="action-btn app-manage-btn" data-action="manage" type="button" ${actionsDisabled}>Manage</button>
           </div>
           <div class="app-card-badges">
             ${badgeHtml}
@@ -98,7 +98,7 @@ function renderApps(apps) {
 function renderAdminApps(apps) {
   if (!apps.length) {
     el.adminEmptyState.style.display = "block";
-    el.adminEmptyState.textContent = "조회된 앱이 없습니다.";
+    el.adminEmptyState.textContent = "No apps found.";
     el.adminAppsContainer.innerHTML = "";
     return;
   }
@@ -136,7 +136,7 @@ function renderAdminApps(apps) {
           <div class="app-card-title-row">
             <button class="app-name-btn" data-action="manage" type="button">${safeUser} / ${safeApp}</button>
             <span class="status-pill ${statusClass(rawStatus)}">${safeStatus}</span>
-            <button class="action-btn app-manage-btn" data-action="manage" type="button">관리</button>
+            <button class="action-btn app-manage-btn" data-action="manage" type="button">Manage</button>
           </div>
           <div class="app-card-badges">
             ${badgeHtml}
@@ -159,27 +159,27 @@ function renderAdminApps(apps) {
 
 function renderUsers(users) {
   if (!canManageUsers()) {
-    el.usersCount.textContent = "0명";
+    el.usersCount.textContent = "Users: 0";
     el.usersTableBody.innerHTML = "";
     el.usersEmptyState.hidden = false;
     el.openCreateUserBtn.disabled = true;
     if (!isLoggedIn()) {
-      el.usersEmptyState.textContent = "로그인하면 사용자 목록을 조회할 수 있습니다.";
+      el.usersEmptyState.textContent = "Log in to view users.";
     } else if (isPasswordLocked()) {
-      el.usersEmptyState.textContent = "비밀번호를 변경한 뒤 사용자 목록을 조회할 수 있습니다.";
+      el.usersEmptyState.textContent = "Change your password to view users.";
     } else {
-      el.usersEmptyState.textContent = "관리자 계정에서만 사용자 목록을 조회할 수 있습니다.";
+      el.usersEmptyState.textContent = "Only administrators can view users.";
     }
     return;
   }
 
   el.openCreateUserBtn.disabled = false;
-  el.usersCount.textContent = `${users.length}명`;
+  el.usersCount.textContent = `Users: ${users.length}`;
 
   if (!users.length) {
     el.usersTableBody.innerHTML = "";
     el.usersEmptyState.hidden = false;
-    el.usersEmptyState.textContent = "등록된 사용자가 없습니다.";
+    el.usersEmptyState.textContent = "No users registered.";
     return;
   }
 
@@ -193,7 +193,7 @@ function renderUsers(users) {
 
     // admin 계정은 삭제/승격 불가 — 보호됨 표시
     const actionCell = isAdmin
-      ? `<span class="users-protected">보호됨</span>`
+      ? `<span class="users-protected">Protected</span>`
       : `<div class="users-action-group">
            <button
              class="action-btn users-promote-btn"
@@ -201,14 +201,14 @@ function renderUsers(users) {
              data-id="${item.id}"
              data-username="${safeUsername}"
              type="button"
-           >Admin 승격</button>
+           >Promote to Admin</button>
            <button
              class="action-btn danger users-remove-btn"
              data-action="remove-user"
              data-id="${item.id}"
              data-username="${safeUsername}"
              type="button"
-           >제거</button>
+           >Remove</button>
          </div>`;
 
     return `
@@ -257,18 +257,18 @@ function renderJobList(jobs) {
       errorReason = `
         <div style="display: flex; align-items: center; max-width: 250px;">
           <span class="${textClass}" style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(singleLineLog)}">${escapeHtml(singleLineLog)}</span>
-          <button class="ghost-btn" data-action="view-job-log" data-id="${job.id}" type="button" style="padding: 2px 6px; margin-left: 4px;" title="전체 로그 보기">
+          <button class="ghost-btn" data-action="view-job-log" data-id="${job.id}" type="button" style="padding: 2px 6px; margin-left: 4px;" title="View full logs">
             <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
           </button>
         </div>
       `;
     } else if (rawStatus === "interrupted") {
-       errorReason = `<span class="ink-subtle">서버 재시작으로 중단됨</span>`;
+       errorReason = `<span class="ink-subtle">Interrupted by a server restart</span>`;
     }
 
     let actions = `<span class="ink-subtle">-</span>`;
     const closeBtnHtml = `
-      <button class="ghost-btn danger-ghost-btn" data-action="cancel-job" data-id="${job.id}" type="button" style="padding: 4px 8px; min-width: auto; height: 28px; display: inline-flex; align-items: center; justify-content: center;" title="목록에서 제거">
+      <button class="ghost-btn danger-ghost-btn" data-action="cancel-job" data-id="${job.id}" type="button" style="padding: 4px 8px; min-width: auto; height: 28px; display: inline-flex; align-items: center; justify-content: center;" title="Remove from list">
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
       </button>
     `;
@@ -276,7 +276,7 @@ function renderJobList(jobs) {
     if (rawStatus === "interrupted" || rawStatus === "failed") {
       actions = `
         <div class="users-action-group">
-          <button class="action-btn" data-action="retry-job" data-id="${job.id}" type="button">재시도</button>
+          <button class="action-btn" data-action="retry-job" data-id="${job.id}" type="button">Retry</button>
           ${closeBtnHtml}
         </div>
       `;
@@ -335,7 +335,7 @@ function renderDomains(domains) {
           <div class="domain-cname-cell">
             <code class="domain-cname-target">${safeCname}</code>
             <button class="ghost-btn domains-copy-btn" data-action="copy-cname"
-              data-cname="${safeCname}" type="button" title="복사"><svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" aria-hidden="true"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button>
+              data-cname="${safeCname}" type="button" title="Copy"><svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" aria-hidden="true"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button>
           </div>
         </td>
         <td><span class="domain-status-badge ${badgeClass}">${statusLabel}</span></td>

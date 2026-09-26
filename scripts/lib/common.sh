@@ -72,7 +72,7 @@ require_node() {
 validate_user_id() {
   local user_id="$1"
   if [[ ! "${user_id}" =~ ^[A-Za-z0-9]{3,20}$ ]]; then
-    echo "사용자 ID는 영문 대소문자 및 숫자 조합으로 3자 이상 20자 이하여야 합니다." >&2
+    echo "User ID must be 3–20 characters and contain only letters and digits." >&2
     exit 1
   fi
 }
@@ -80,7 +80,7 @@ validate_user_id() {
 validate_app_name() {
   local app_name="$1"
   if [[ ! "${app_name}" =~ ^[A-Za-z0-9-]{3,30}$ ]]; then
-    echo "앱 이름은 영문 대소문자, 숫자, 하이픈(-) 조합으로 3자 이상 30자 이하여야 합니다." >&2
+    echo "App name must be 3–30 characters and contain only letters, digits, and hyphens (-)." >&2
     exit 1
   fi
 }
@@ -117,7 +117,7 @@ app_container_name() {
 
 require_railpack() {
   if ! command -v railpack > /dev/null 2>&1; then
-    echo "[common] railpack이 설치되어 있지 않습니다. 컨테이너 이미지에 railpack을 포함시켜 주세요." >&2
+    echo "[common] railpack is not installed. Include railpack in the container image." >&2
     return 1
   fi
 }

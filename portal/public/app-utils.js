@@ -58,7 +58,7 @@ function setBanner(message, type = "info") {
 
 // API 에러 객체의 메시지를 UI 표시용 문자열로 정규화한다.
 // "AppError: ..." 접두사를 제거하고 빈 메시지는 fallback으로 대체한다.
-function normalizeErrorMessage(error, fallback = "요청 중 오류가 발생했습니다.") {
+function normalizeErrorMessage(error, fallback = "An error occurred while processing the request.") {
   const raw = String(error?.message || "").trim();
   if (!raw) return fallback;
   return raw.replace(/^AppError:\s*/i, "");
@@ -211,14 +211,14 @@ function formatJobTarget(job) {
 // Job 객체에서 표시용 작업 이름(한글)을 추출한다.
 function formatJobAction(job) {
   const typeMap = {
-    create: "앱 생성",
-    deploy: "재배포",
-    delete: "앱 삭제",
-    start:  "시작",
-    stop:   "중지",
-    "env-restart": "환경변수 재시작",
+    create: "Create App",
+    deploy: "Redeploy",
+    delete: "Delete App",
+    start:  "Start",
+    stop:   "Stop",
+    "env-restart": "Restart with Updated Environment Variables",
   };
-  return typeMap[job.type] || String(job.type || "작업");
+  return typeMap[job.type] || String(job.type || "Job");
 }
 
 // ── 인증 상태 확인 ────────────────────────────────────────────────────────────

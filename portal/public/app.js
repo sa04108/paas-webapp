@@ -102,7 +102,7 @@ import {
 function syncLogRefreshBtn(btn, isAuto) {
   if (!btn) return;
   btn.dataset.auto = String(isAuto);
-  btn.querySelector(".refresh-label").textContent = isAuto ? "Auto" : "새로고침";
+  btn.querySelector(".refresh-label").textContent = isAuto ? "Auto" : "Refresh";
 }
 
 configureUiHandlers({
@@ -207,21 +207,21 @@ el.addDomainForm.addEventListener("submit", async (event) => {
   setAddDomainError("");
   const domain = el.addDomainInput.value.trim().toLowerCase();
   if (!domain) {
-    setAddDomainError("도메인을 입력하세요.");
+    setAddDomainError("Enter a domain.");
     return;
   }
   el.submitAddDomainBtn.disabled = true;
-  el.submitAddDomainBtn.textContent = "추가 중...";
+  el.submitAddDomainBtn.textContent = "Adding...";
   try {
     await addCustomDomain(domain);
     closeAddDomainModal();
     await loadDetailDomains();
-    showToast(`도메인 추가 완료: ${domain}`, "success");
+    showToast(`Domain added: ${domain}`, "success");
   } catch (error) {
-    setAddDomainError(normalizeErrorMessage(error, "도메인 추가 중 오류가 발생했습니다."));
+    setAddDomainError(normalizeErrorMessage(error, "An error occurred while adding the domain."));
   } finally {
     el.submitAddDomainBtn.disabled = false;
-    el.submitAddDomainBtn.textContent = "추가";
+    el.submitAddDomainBtn.textContent = "Add";
   }
 });
 
@@ -236,8 +236,8 @@ el.detailPanelDomains.addEventListener("click", async (event) => {
       const updated = await verifyCustomDomain(id);
       await loadDetailDomains();
       const msg = updated?.status === "active"
-        ? `인증 완료: ${updated.domain}`
-        : "CNAME이 아직 설정되지 않았습니다. DNS 전파 후 다시 시도하세요.";
+        ? `Verified: ${updated.domain}`
+        : "The CNAME record is not configured yet. Try again after DNS propagation.";
       showToast(msg, updated?.status === "active" ? "success" : "error");
     } catch (error) {
       await handleRequestError(error);
@@ -252,7 +252,7 @@ el.detailPanelDomains.addEventListener("click", async (event) => {
     const cname = copyCnameBtn.dataset.cname;
     if (!cname) return;
     navigator.clipboard.writeText(cname).then(() => {
-      showToast("CNAME 타겟 복사 완료", "success");
+      showToast("CNAME target copied", "success");
     }).catch(() => { });
     return;
   }
@@ -261,11 +261,11 @@ el.detailPanelDomains.addEventListener("click", async (event) => {
   if (removeBtn) {
     const id = Number.parseInt(removeBtn.dataset.id, 10);
     if (!id) return;
-    if (!window.confirm("이 도메인을 제거하시겠습니까?")) return;
+    if (!window.confirm("Remove this domain?")) return;
     try {
       await removeCustomDomain(id);
       await loadDetailDomains();
-      showToast("도메인이 제거되었습니다.", "success");
+      showToast("The domain has been removed.", "success");
     } catch (error) {
       await handleRequestError(error);
     }
@@ -322,7 +322,7 @@ el.passwordForm.addEventListener("submit", async (event) => {
     const newPassword = el.newPasswordInput.value;
     const newPasswordConfirm = el.newPasswordConfirmInput.value;
     if (newPassword !== newPasswordConfirm) {
-      setSettingsError("새 비밀번호와 비밀번호 확인이 일치하지 않습니다.");
+      setSettingsError("The new password and confirmation do not match.");
       el.newPasswordConfirmInput.focus();
       return;
     }
@@ -337,7 +337,7 @@ el.passwordForm.addEventListener("submit", async (event) => {
     updateAuthUi();
     closeSettingsModal();
     await refreshDashboardData();
-    showToast("비밀번호 변경이 완료되었습니다.", "success");
+    showToast("Your password has been changed.", "success");
     setBanner("", "none");
   } catch (error) {
     await handleSettingsModalError(error);
@@ -362,7 +362,7 @@ el.refreshBtn.addEventListener("click", async () => {
   try {
     await loadApps();
     await loadUsers();
-    setBanner("데이터 갱신 완료", "success");
+    setBanner("Data refreshed", "success");
   } catch (error) {
     await handleRequestError(error);
   }
@@ -394,7 +394,7 @@ if (el.adminRefreshAppsBtn) {
   el.adminRefreshAppsBtn.addEventListener("click", async () => {
     try {
       await loadAdminApps();
-      setBanner("전체 앱 목록 갱신 완료", "success");
+      setBanner("All apps refreshed", "success");
     } catch (error) {
       await handleRequestError(error);
     }
@@ -447,7 +447,7 @@ el.createUserForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   setCreateUserError("");
   if (!canManageUsers()) {
-    setCreateUserError("관리자 계정에서만 사용자 추가가 가능합니다.");
+    setCreateUserError("Only administrators can add users.");
     return;
   }
   const username = el.createUsernameInput.value.trim();
@@ -455,15 +455,15 @@ el.createUserForm.addEventListener("submit", async (event) => {
   const passwordConfirm = el.createPasswordConfirmInput.value;
   const roleValue = el.createUserRoleInput.value;
   if (!username || !password || !passwordConfirm) {
-    setCreateUserError("username, password, password confirm을 입력하세요.");
+    setCreateUserError("Enter a username, password, and password confirmation.");
     return;
   }
   if (password !== passwordConfirm) {
-    setCreateUserError("password와 password confirm이 일치하지 않습니다.");
+    setCreateUserError("The password and confirmation do not match.");
     return;
   }
   if (password.length < 8) {
-    setCreateUserError("password는 8자 이상이어야 합니다.");
+    setCreateUserError("The password must be at least 8 characters long.");
     return;
   }
   try {
@@ -474,13 +474,13 @@ el.createUserForm.addEventListener("submit", async (event) => {
     });
     closeCreateUserModal({ resetForm: true });
     await loadUsers();
-    showToast(`사용자 생성 완료: ${data.user.username}`, "success");
+    showToast(`User created: ${data.user.username}`, "success");
   } catch (error) {
     if (error?.status === 401 || error?.status === 403) {
       await handleRequestError(error);
       return;
     }
-    setCreateUserError(normalizeErrorMessage(error, "사용자 생성 중 오류가 발생했습니다."));
+    setCreateUserError(normalizeErrorMessage(error, "An error occurred while creating the user."));
   }
 });
 
@@ -501,16 +501,16 @@ el.deleteUserForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   setDeleteUserError("");
   if (!canManageUsers()) {
-    setDeleteUserError("관리자 계정에서만 사용자 제거가 가능합니다.");
+    setDeleteUserError("Only administrators can remove users.");
     return;
   }
   if (!state.pendingDeleteUser?.id) {
-    setDeleteUserError("제거할 사용자를 다시 선택하세요.");
+    setDeleteUserError("Select the user to remove again.");
     return;
   }
   const currentPassword = el.deleteUserPasswordInput.value;
   if (!currentPassword) {
-    setDeleteUserError("현재 admin 비밀번호를 입력하세요.");
+    setDeleteUserError("Enter your current admin password.");
     return;
   }
   try {
@@ -521,9 +521,9 @@ el.deleteUserForm.addEventListener("submit", async (event) => {
     });
     closeDeleteUserModal({ resetForm: true });
     await loadUsers();
-    showToast(`사용자 제거 완료: ${targetUser.username}`, "success");
+    showToast(`User removed: ${targetUser.username}`, "success");
   } catch (error) {
-    const message = normalizeErrorMessage(error, "사용자 제거 중 오류가 발생했습니다.");
+    const message = normalizeErrorMessage(error, "An error occurred while removing the user.");
     const isCurrentPasswordMismatch =
       error?.status === 401 && /^current password is incorrect$/i.test(message);
     if (error?.status === 401 && !isCurrentPasswordMismatch) {
@@ -550,11 +550,11 @@ bindBackdropClose(el.promoteAdminModal, "promoteAdmin", closePromoteAdminModal);
 el.submitPromoteAdminBtn.addEventListener("click", async () => {
   setPromoteAdminError("");
   if (!canManageUsers()) {
-    setPromoteAdminError("관리자 계정에서만 권한을 변경할 수 있습니다.");
+    setPromoteAdminError("Only administrators can change roles.");
     return;
   }
   if (!state.pendingPromoteUser?.id) {
-    setPromoteAdminError("대상 사용자를 다시 선택하세요.");
+    setPromoteAdminError("Select the target user again.");
     return;
   }
   el.submitPromoteAdminBtn.disabled = true;
@@ -563,13 +563,13 @@ el.submitPromoteAdminBtn.addEventListener("click", async () => {
     const data = await apiFetch(`/users/${targetUser.id}/role`, { method: "PATCH" });
     closePromoteAdminModal();
     await loadUsers();
-    showToast(`${data.user.username} 사용자가 Admin으로 승격되었습니다.`, "success");
+    showToast(`${data.user.username} has been promoted to Admin.`, "success");
   } catch (error) {
     if (error?.status === 401 || error?.status === 403) {
       await handleRequestError(error);
       return;
     }
-    setPromoteAdminError(normalizeErrorMessage(error, "권한 변경 중 오류가 발생했습니다."));
+    setPromoteAdminError(normalizeErrorMessage(error, "An error occurred while changing the role."));
   } finally {
     el.submitPromoteAdminBtn.disabled = false;
   }
@@ -630,14 +630,14 @@ el.jobListTbody.addEventListener("click", async (event) => {
     if (id) {
       const job = state.jobs.find((j) => j.id === id);
       if (job) {
-        openJobLogModal(job.error || job.output || "내용 없음");
+        openJobLogModal(job.error || job.output || "No content");
       }
     }
   }
 });
 
 el.clearCompletedJobsBtn.addEventListener("click", async () => {
-  if (!window.confirm("모든 완료된 작업 내역을 지우시겠습니까?")) return;
+  if (!window.confirm("Clear all completed jobs?")) return;
   try {
     await clearCompletedJobs();
   } catch (error) {
@@ -654,12 +654,12 @@ bindBackdropClose(el.jobLogModal, "jobLog", closeJobLogModal);
 
 el.copyJobLogBtn.addEventListener("click", async () => {
   const text = el.jobLogContent.textContent;
-  if (!text || text === "내용 없음") return;
+  if (!text || text === "No content") return;
   try {
     await navigator.clipboard.writeText(text);
-    showToast("로그 내용이 클립보드에 복사되었습니다.", "success");
+    showToast("Logs copied to the clipboard.", "success");
   } catch (error) {
-    showToast("클립보드 복사에 실패했습니다.", "error");
+    showToast("Failed to copy to the clipboard.", "error");
   }
 });
 
@@ -697,7 +697,7 @@ async function applyRouteFromUrl() {
     // 가능하므로 목록 검사를 생략하고 서버 응답에 맡긴다)
     const known = state.apps.some((a) => a.userid === userid && a.appname === appname);
     if (!known && !isAdminUser()) {
-      showToast(`앱을 찾을 수 없습니다: ${userid}/${appname}`, "error");
+      showToast(`App not found: ${userid}/${appname}`, "error");
       switchView(DEFAULT_VIEW, { updateUrl: false });
       window.history.replaceState(null, "", buildPath(DEFAULT_VIEW));
       return;
@@ -752,7 +752,7 @@ async function bootstrap() {
 
   // /create?github=connected 복귀 시 배너 안내
   if (new URLSearchParams(window.location.search).get("github") === "connected") {
-    setBanner("GitHub 연결이 완료되었습니다.", "success");
+    setBanner("GitHub connected successfully.", "success");
     // 쿼리스트링을 히스토리에서 제거하여 새로고침 시 중복 표시 방지
     window.history.replaceState(null, "", window.location.pathname);
   }
@@ -768,10 +768,10 @@ async function bootstrap() {
   await loadAndRecoverJobs();
 
   if (isPasswordLocked()) {
-    setBanner("초기 비밀번호를 우상단 설정에서 변경하세요.", "error");
+    setBanner("Change your initial password in Settings at the top right.", "error");
     return;
   }
-  setBanner("로그인 상태가 확인되었습니다.", "success");
+  setBanner("You are logged in.", "success");
 }
 
 // 페이지 언로드 시 소켓 정리

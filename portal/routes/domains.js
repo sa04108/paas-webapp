@@ -51,7 +51,7 @@ function createDomainsRouter(domainManager) {
       const { userid, appname } = await resolveAppContext(req);
 
       const domain = String(req.body?.domain || "").trim().toLowerCase();
-      if (!domain) throw new AppError(400, "domain은 필수 입력값입니다.");
+      if (!domain) throw new AppError(400, "domain is required.");
 
       // 현재 실행 중인 컨테이너에서 포트 정보 조회
       const dockerApp = await findDockerApp(userid, appname);
@@ -69,7 +69,7 @@ function createDomainsRouter(domainManager) {
     try {
       const { userid, appname } = await resolveAppContext(req);
       const id = Number.parseInt(req.params.id, 10);
-      if (!Number.isInteger(id) || id <= 0) throw new AppError(400, "유효하지 않은 도메인 ID입니다.");
+      if (!Number.isInteger(id) || id <= 0) throw new AppError(400, "Invalid domain ID.");
 
       domainManager.removeDomain(id, userid, appname);
       return sendOk(res, { deleted: true });
@@ -83,7 +83,7 @@ function createDomainsRouter(domainManager) {
     try {
       const { userid, appname } = await resolveAppContext(req);
       const id = Number.parseInt(req.params.id, 10);
-      if (!Number.isInteger(id) || id <= 0) throw new AppError(400, "유효하지 않은 도메인 ID입니다.");
+      if (!Number.isInteger(id) || id <= 0) throw new AppError(400, "Invalid domain ID.");
 
       const updated = await domainManager.verifyDomain(id, userid, appname);
       return sendOk(res, { domain: updated });

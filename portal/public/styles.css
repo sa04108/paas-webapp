@@ -1163,6 +1163,10 @@ code {
   gap: 8px;
 }
 
+html[lang="en"] .app-card-title-row {
+  padding-right: 96px;
+}
+
 .app-name {
   margin: 0;
   font-family: "Space Grotesk", "Noto Sans KR", sans-serif;

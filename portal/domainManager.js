@@ -173,7 +173,7 @@ function createDomainManager({ statements }) {
   function addDomain(userid, appname, domain, port) {
     // FQDN 검증
     if (!FQDN_REGEX.test(domain)) {
-      throw new AppError(400, "유효하지 않은 도메인 형식입니다.");
+      throw new AppError(400, "Invalid domain format.");
     }
 
     // 플랫폼 도메인 등록 차단
@@ -186,9 +186,9 @@ function createDomainManager({ statements }) {
     const existing = statements.selectCustomDomainByDomain.get(domain);
     if (existing) {
       if (existing.userid === userid && existing.appname === appname) {
-        throw new AppError(409, "이미 이 앱에 등록된 도메인입니다.");
+        throw new AppError(409, "This domain is already registered to this app.");
       }
-      throw new AppError(409, "다른 앱에 이미 등록된 도메인입니다.");
+      throw new AppError(409, "This domain is already registered to another app.");
     }
 
     const cnameTarget = generateCnameTarget(appname);
@@ -209,20 +209,20 @@ function createDomainManager({ statements }) {
   function removeDomain(id, userid, appname) {
     const row = statements.selectCustomDomainById.get(id);
     if (!row || row.userid !== userid || row.appname !== appname) {
-      throw new AppError(404, "도메인을 찾을 수 없습니다.");
+      throw new AppError(404, "Domain not found.");
     }
     statements.deleteCustomDomainById.run(id);
 
     // fire-and-forget — 실패해도 도메인 삭제 자체는 성공으로 처리
     rebuildTraefikConfig(statements).catch((err) =>
-      console.error("[domainManager] rebuildTraefikConfig 실패:", err),
+      console.error("[domainManager] rebuildTraefikConfig failed:", err),
     );
   }
 
   async function verifyDomain(id, userid, appname) {
     const row = statements.selectCustomDomainById.get(id);
     if (!row || row.userid !== userid || row.appname !== appname) {
-      throw new AppError(404, "도메인을 찾을 수 없습니다.");
+      throw new AppError(404, "Domain not found.");
     }
 
     const now = nowIso();
@@ -267,7 +267,7 @@ function createDomainManager({ statements }) {
     statements.deleteCustomDomainsByApp.run(userid, appname);
     rebuildTraefikConfig(statements).catch((err) =>
       console.error(
-        "[domainManager] removeAppDomains 후 rebuildTraefikConfig 실패:",
+        "[domainManager] rebuildTraefikConfig failed after removeAppDomains:",
         err,
       ),
     );

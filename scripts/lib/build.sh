@@ -19,13 +19,13 @@ build_app_image() {
   local image_name="$2"
 
   if [[ -f "${src_dir}/Dockerfile" ]]; then
-    echo "[build] 사용자 Dockerfile 감지 → docker build 사용"
+    echo "[build] User Dockerfile detected; using docker build"
     docker build \
       -t "${image_name}" \
       -f "${src_dir}/Dockerfile" \
       "${src_dir}"
   else
-    echo "[build] railpack build 사용"
+    echo "[build] Using railpack build"
     (cd "${src_dir}" && railpack build . --name "${image_name}")
   fi
 }

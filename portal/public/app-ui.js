@@ -243,7 +243,7 @@ function openDeleteUserModal(targetUser) {
   setDeleteUserError("");
   el.deleteUserUsernameInput.value = state.user.username;
   el.deleteUserPasswordInput.value = "";
-  el.deleteUserTarget.textContent = `'${state.pendingDeleteUser.username}' 사용자를 제거합니다.`;
+  el.deleteUserTarget.textContent = `Remove user '${state.pendingDeleteUser.username}'.`;
   el.deleteUserModal.hidden = false;
   syncModalOpenState();
   el.deleteUserPasswordInput.focus();
@@ -256,7 +256,7 @@ function closeDeleteUserModal({ resetForm = false } = {}) {
   if (resetForm) {
     state.pendingDeleteUser = null;
     el.deleteUserPasswordInput.value = "";
-    el.deleteUserTarget.textContent = "삭제할 사용자를 확인하세요.";
+    el.deleteUserTarget.textContent = "Confirm the user to remove.";
   }
   syncModalOpenState();
 }
@@ -270,7 +270,7 @@ function openPromoteAdminModal(targetUser) {
   modalBackdropState.promoteAdmin = false;
   setPromoteAdminError("");
   el.promoteAdminTarget.textContent =
-    `'${state.pendingPromoteUser.username}' 사용자를 Admin으로 승격합니다.`;
+    `Promote '${state.pendingPromoteUser.username}' to Admin.`;
   el.promoteAdminModal.hidden = false;
   syncModalOpenState();
   el.submitPromoteAdminBtn.focus();
@@ -302,7 +302,7 @@ function closeJobListModal() {
 
 function openJobLogModal(logText) {
   modalBackdropState.jobLog = false;
-  el.jobLogContent.textContent = logText || "내용 없음";
+  el.jobLogContent.textContent = logText || "No content";
   el.jobLogModal.hidden = false;
   syncModalOpenState();
 }
@@ -319,7 +319,7 @@ function closeJobLogModal() {
 // (stopAutoRefresh는 app-api.js에 정의되어 있으며, 런타임에만 호출된다.)
 function updateAuthUi() {
   if (!isLoggedIn()) {
-    el.authState.textContent = "인증 필요";
+    el.authState.textContent = "Login required";
     el.logoutBtn.hidden = true;
     el.settingsBtn.hidden = true;
     el.jobListBtn.hidden = true;
@@ -339,7 +339,7 @@ function updateAuthUi() {
     return;
   }
 
-  const suffix = isPasswordLocked() ? " | 비밀번호 변경 필요" : "";
+  const suffix = isPasswordLocked() ? " | Password change required" : "";
   el.authState.textContent = `${state.user.username} (${state.user.role})${suffix}`;
   el.logoutBtn.hidden = false;
   el.settingsBtn.hidden = false;
@@ -385,17 +385,17 @@ function renderJobIndicator(jobs) {
   if (activeJobs.length > 0) {
     parts.push(
       `<span class="job-spinner">⏳</span> ` +
-      `${activeJobs.length}개 작업 진행 중`
+      `Jobs in progress: ${activeJobs.length}`
     );
   }
   if (alertJobs.length > 0) {
     parts.push(
-      `<span class="job-alert">⚠️ ${alertJobs.length}개 작업 중단 / 실패` +
-      ` — <button class="job-retry-all-btn" data-action="retry-all">재시도</button>` +
-      ` <button class="job-view-list-btn ghost-btn" style="padding: 2px 8px; margin-left:8px;" data-action="view-list">목록 보기</button></span>`
+      `<span class="job-alert">⚠️ Interrupted / failed jobs: ${alertJobs.length}` +
+      ` — <button class="job-retry-all-btn" data-action="retry-all">Retry</button>` +
+      ` <button class="job-view-list-btn ghost-btn" style="padding: 2px 8px; margin-left:8px;" data-action="view-list">View list</button></span>`
     );
   } else if (activeJobs.length > 0) {
-    parts.push(`<button class="job-view-list-btn ghost-btn" style="padding: 2px 8px; margin-left:8px;" data-action="view-list">목록 보기</button>`);
+    parts.push(`<button class="job-view-list-btn ghost-btn" style="padding: 2px 8px; margin-left:8px;" data-action="view-list">View list</button>`);
   }
 
   indicator.innerHTML = parts.join(" &nbsp;|&nbsp; ");

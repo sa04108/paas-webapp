@@ -122,13 +122,13 @@ function createGithubService({ config, statements, now = () => Date.now() }) {
 
   function assertConfigured() {
     if (!configured) {
-      throw new AppError(503, "GitHub App이 설정되지 않았습니다. 운영자에게 문의하세요.");
+      throw new AppError(503, "GitHub App is not configured. Contact the administrator.");
     }
   }
 
   async function githubApi(pathname, { method = "GET", token, jwt } = {}) {
     if (!jwt && !token) {
-      throw new Error("githubApi: jwt 또는 token이 필요합니다");
+      throw new Error("githubApi: jwt or token is required");
     }
     const res = await fetch(`${GITHUB_API}${pathname}`, {
       method,
@@ -144,10 +144,10 @@ function createGithubService({ config, statements, now = () => Date.now() }) {
     try {
       json = text ? JSON.parse(text) : {};
     } catch {
-      throw new AppError(502, `GitHub API ${pathname} 응답 파싱 실패`);
+      throw new AppError(502, `Failed to parse GitHub API ${pathname} response`);
     }
     if (!res.ok) {
-      throw new AppError(res.status === 404 ? 404 : 502, `GitHub API ${pathname} 실패 (${res.status})`);
+      throw new AppError(res.status === 404 ? 404 : 502, `GitHub API ${pathname} failed (${res.status})`);
     }
     return json;
   }
@@ -178,7 +178,7 @@ function createGithubService({ config, statements, now = () => Date.now() }) {
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok || !json.access_token) {
-      throw new AppError(502, "GitHub OAuth 토큰 교환에 실패했습니다.");
+      throw new AppError(502, "Failed to exchange the GitHub OAuth token.");
     }
     return json.access_token;
   }

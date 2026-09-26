@@ -59,17 +59,17 @@ el.loginForm.addEventListener("submit", async (event) => {
     const username = el.loginUsernameInput.value.trim();
     const password = el.loginPasswordInput.value;
     if (!username || !password) {
-      throw new Error("로그인 ID와 비밀번호를 입력하세요.");
+      throw new Error("Enter your login ID and password.");
     }
 
-    setBanner("로그인 중...", "info");
+    setBanner("Logging in...", "info");
     await apiFetch("/auth/login", {
       method: "POST",
       body: JSON.stringify({ username, password })
     });
     window.location.replace("/");
   } catch (error) {
-    setBanner(error.message || "로그인에 실패했습니다.", "error");
+    setBanner(error.message || "Login failed.", "error");
   }
 });
 
@@ -81,5 +81,5 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error) => {
-  setBanner(error.message || "초기화 중 오류가 발생했습니다.", "error");
+  setBanner(error.message || "An error occurred during initialization.", "error");
 });

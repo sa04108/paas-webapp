@@ -44,7 +44,7 @@ function buildCompose({ userid, appname, appDir }) {
   const domain = `${userid}-${appname}.apps.${PAAS_DOMAIN}`;
 
   if (!APP_IMAGE) {
-    throw new Error('APP_IMAGE 환경변수가 설정되지 않았습니다. create.sh에서 빌드 후 전달해야 합니다.');
+    throw new Error('APP_IMAGE environment variable is not set. It must be provided after building in create.sh.');
   }
 
   const containerPort = DEFAULT_CONTAINER_PORT;
@@ -116,9 +116,9 @@ const composePath = path.join(appDir, APP_COMPOSE_FILE);
 try {
   const { content, containerPort } = buildCompose({ userid, appname, appDir });
   fs.writeFileSync(composePath, content);
-  process.stdout.write(`[generate-compose] 생성 완료: ${composePath}\n`);
-  process.stdout.write(`[generate-compose] 컨테이너 포트: ${containerPort}\n`);
+  process.stdout.write(`[generate-compose] Created: ${composePath}\n`);
+  process.stdout.write(`[generate-compose] Container port: ${containerPort}\n`);
 } catch (e) {
-  process.stderr.write(`docker-compose.yml 생성 실패: ${e.message}\n`);
+  process.stderr.write(`Failed to create docker-compose.yml: ${e.message}\n`);
   process.exit(1);
 }

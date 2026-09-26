@@ -93,7 +93,7 @@ async function loadApps() {
   state.apps = data.apps || [];
   renderApps(state.apps);
   if (data.hasLabelErrors) {
-    setBanner("컨테이너 중 일부의 라벨이 누락되어 대시보드에서 제외되었습니다. 관리자에게 문의하세요.", "error");
+    setBanner("Some containers are missing labels and have been excluded from the dashboard. Contact an administrator.", "error");
   }
 }
 
@@ -134,7 +134,7 @@ async function loadPortalLogs() {
     const data = await apiFetch(`/admin/portal-logs?lines=${lines}`);
     el.adminPortalLogsOutput.textContent = data.logs || "(empty)";
   } catch (error) {
-    el.adminPortalLogsOutput.textContent = "포털 로그를 불러오지 못했습니다.";
+    el.adminPortalLogsOutput.textContent = "Failed to load portal logs.";
   }
 }
 
@@ -216,13 +216,13 @@ function pollJob(jobId, options = {}) {
         const target = appLabel || formatJobTarget(job) || job.id;
 
         if (job.status === "done") {
-          showToast(`✅ ${action} 완료: ${target}`, "success");
+          showToast(`✅ ${action} completed: ${target}`, "success");
           onDone?.(job);
         } else {
           const reason = job.status === "interrupted"
-            ? "서버 재시작으로 중단됨"
-            : (job.error || "오류 발생");
-          showToast(`❌ ${action} 실패: ${target} — ${reason}`, "error", 8000);
+            ? "Interrupted by a server restart"
+            : (job.error || "An error occurred");
+          showToast(`❌ ${action} failed: ${target} — ${reason}`, "error", 8000);
           onFail?.(job);
         }
         // 앱 목록 갱신 (job 완료 후 상태 반영 — 어드민 목록 포함)
@@ -266,7 +266,7 @@ async function loadAndRecoverJobs() {
  * 202 응답으로 jobId를 받아 즉시 폴링을 시작하는 헬퍼.
  */
 function startJobPolling(jobId, appLabel, actionLabel) {
-  showToast(`${actionLabel} 시작: ${appLabel} — 진행 중...`, "info", 3000);
+  showToast(`${actionLabel} started: ${appLabel} — In progress...`, "info", 3000);
 
   // state.jobs에 낙관적으로 pending job 추가
   state.jobs.unshift({
@@ -294,8 +294,8 @@ async function retryJob(jobId) {
   const data = await apiFetch(`/jobs/${jobId}/retry`, { method: "POST" });
   const label = _getJobTargetLabel(jobId);
 
-  pollJob(jobId, { actionLabel: "재시도" });
-  showToast(`재시도 요청됨: ${label}`, "info");
+  pollJob(jobId, { actionLabel: "Retry" });
+  showToast(`Retry requested: ${label}`, "info");
   return data;
 }
 
@@ -304,7 +304,7 @@ async function retryJob(jobId) {
  */
 async function clearCompletedJobs() {
   const data = await apiFetch("/jobs", { method: "DELETE" });
-  showToast("완료된 작업 기록이 지워졌습니다.", "success");
+  showToast("Completed job history cleared.", "success");
 
   state.jobs = state.jobs.filter((j) => j.status === "pending" || j.status === "running");
   renderJobIndicator(state.jobs);
@@ -318,7 +318,7 @@ async function clearCompletedJobs() {
 async function cancelJob(jobId) {
   const data = await apiFetch(`/jobs/${jobId}/cancel`, { method: "POST" });
   const label = _getJobTargetLabel(jobId);
-  showToast(`✅ 작업 제거 완료: ${label}`, "success");
+  showToast(`✅ Job removed: ${label}`, "success");
 
   // 상태 배열에서 직접 제거
   state.jobs = state.jobs.filter((j) => j.id !== jobId);
@@ -338,7 +338,7 @@ async function handleRequestError(error) {
     renderUsers([]);
     updateAuthUi();
     stopAutoRefresh();
-    setBanner("세션이 만료되었습니다. 로그인 페이지로 이동합니다.", "error");
+    setBanner("Your session has expired. Redirecting to the login page.", "error");
     redirectToAuth();
     return;
   }
@@ -346,7 +346,7 @@ async function handleRequestError(error) {
 }
 
 async function handleSettingsModalError(error) {
-  const message = normalizeErrorMessage(error, "설정 변경 중 오류가 발생했습니다.");
+  const message = normalizeErrorMessage(error, "An error occurred while updating settings.");
   const isCurrentPasswordMismatch =
     error?.status === 401 && /^current password is incorrect$/i.test(message);
   if (error?.status === 401 && !isCurrentPasswordMismatch) {
@@ -370,7 +370,7 @@ function getActionTarget(button) {
 
 async function performAction(target) {
   if (!canManageApps()) {
-    throw new Error("앱 관리를 위해 로그인 상태와 비밀번호 변경 상태를 확인하세요.");
+    throw new Error("Make sure you are logged in and have changed your initial password to manage apps.");
   }
 
   const { userid, appname, action } = target;
@@ -383,14 +383,14 @@ async function performAction(target) {
 
   if (action === "delete") {
     const keepData    = el.keepDataInput?.checked ?? false;
-    const shouldDelete = window.confirm(`${appLabel} 앱을 삭제합니다.`);
+    const shouldDelete = window.confirm(`Delete app ${appLabel}?`);
     if (!shouldDelete) return;
 
     const data = await apiFetch(`/apps/${userid}/${appname}`, {
       method: "DELETE",
       body: JSON.stringify({ keepData }),
     });
-    startJobPolling(data.jobId, appLabel, "삭제");
+    startJobPolling(data.jobId, appLabel, "Delete");
 
     if (state.selectedApp?.userid === userid && state.selectedApp?.appname === appname) {
       state.selectedApp = null;
@@ -402,7 +402,7 @@ async function performAction(target) {
   const validActions = ["start", "stop", "deploy"];
   if (!validActions.includes(action)) return;
 
-  const actionLabels = { start: "시작", stop: "중지", deploy: "재배포" };
+  const actionLabels = { start: "Start", stop: "Stop", deploy: "Redeploy" };
   const data = await apiFetch(`/apps/${userid}/${appname}/${action}`, { method: "POST" });
   startJobPolling(data.jobId, appLabel, actionLabels[action] || action);
 }
@@ -437,21 +437,21 @@ async function saveDetailEnv() {
   const { userid, appname } = state.selectedApp;
   const envContent = el.detailEnvTextarea.value;
   el.detailEnvSaveBtn.disabled = true;
-  el.detailEnvSaveBtn.textContent = "저장 중...";
+  el.detailEnvSaveBtn.textContent = "Saving...";
   try {
     const result = await apiFetch(`/apps/${userid}/${appname}/env`, {
       method: "PUT",
       body: JSON.stringify({ env: envContent }),
     });
     if (result.jobId) {
-      startJobPolling(result.jobId, `${userid}/${appname}`, "환경변수 재시작");
+      startJobPolling(result.jobId, `${userid}/${appname}`, "Restart with Updated Environment Variables");
     }
-    showToast(`환경변수 저장 완료: ${userid}/${appname}`, "success");
+    showToast(`Environment variables saved: ${userid}/${appname}`, "success");
   } catch (error) {
-    setEnvError(normalizeErrorMessage(error, "환경변수 저장 중 오류가 발생했습니다."));
+    setEnvError(normalizeErrorMessage(error, "An error occurred while saving environment variables."));
   } finally {
     el.detailEnvSaveBtn.disabled = false;
-    el.detailEnvSaveBtn.textContent = "저장 및 재시작";
+    el.detailEnvSaveBtn.textContent = "Save and Restart";
   }
 }
 
@@ -460,7 +460,7 @@ async function saveDetailEnv() {
 async function handleCreate(event) {
   event.preventDefault();
   if (!canManageApps()) {
-    throw new Error("로그인 후 비밀번호 변경을 완료해야 앱을 관리할 수 있습니다.");
+    throw new Error("Log in and change your initial password to manage apps.");
   }
 
   // 토글에서 선택된 방식의 필드만 읽는다. 반대편 필드에 값이 남아 있어도 무시된다.
@@ -469,7 +469,7 @@ async function handleCreate(event) {
   const branch  = el.repoBranchInput.value.trim() || "main";
 
   if (!validateCreateForm()) {
-    throw new Error("appname과 저장소를 입력하세요.");
+    throw new Error("Enter an app name and repository.");
   }
 
   const body = { appname: el.appnameInput.value.trim(), repoUrl, branch };
@@ -478,10 +478,10 @@ async function handleCreate(event) {
 
   const submitBtn = el.createSubmitBtn;
   submitBtn.disabled = true;
-  submitBtn.textContent = "요청 중...";
+  submitBtn.textContent = "Submitting...";
   try {
     const data = await apiFetch("/apps", { method: "POST", body: JSON.stringify(body) });
-    startJobPolling(data.jobId, `${body.appname}`, "앱 생성");
+    startJobPolling(data.jobId, `${body.appname}`, "Create App");
     el.createForm.reset();
     el.repoBranchInput.value = "main";
     renderRepoOptions();
@@ -513,18 +513,18 @@ async function loadGithubStatus() {
 function renderGithubStatus() {
   const { configured, connected } = state.github;
   if (!configured) {
-    el.githubStatusText.textContent = "GitHub 연동이 설정되지 않았습니다. Public 저장소 URL만 사용할 수 있습니다.";
+    el.githubStatusText.textContent = "GitHub integration is not configured. Only public repository URLs are available.";
     el.githubConnectBtn.hidden = true;
     el.githubDisconnectBtn.hidden = true;
     setRepoSource("url"); // 유일하게 유효한 방식으로 전환
     return;
   }
   if (connected) {
-    el.githubStatusText.textContent = "GitHub 연결됨";
+    el.githubStatusText.textContent = "GitHub connected";
     el.githubConnectBtn.hidden = true;
     el.githubDisconnectBtn.hidden = false;
   } else {
-    el.githubStatusText.textContent = "GitHub 미연결";
+    el.githubStatusText.textContent = "GitHub not connected";
     el.githubConnectBtn.hidden = false;
     el.githubDisconnectBtn.hidden = true;
   }
@@ -558,12 +558,12 @@ function renderRepoOptions() {
   const repos = state.githubRepos;
   if (!repos.length) {
     el.repoSelect.disabled = true;
-    el.repoSelect.innerHTML = `<option value="">GitHub를 연결하면 저장소가 표시됩니다</option>`;
+    el.repoSelect.innerHTML = `<option value="">Connect GitHub to view repositories</option>`;
     return;
   }
   el.repoSelect.disabled = false;
   el.repoSelect.innerHTML =
-    `<option value="">저장소를 선택하세요</option>` +
+    `<option value="">Select a repository</option>` +
     repos
       .map((r) => `<option value="${escapeHtml(r.cloneUrl)}" data-branch="${escapeHtml(r.defaultBranch)}">${escapeHtml(r.fullName)}${r.private ? " 🔒" : ""}</option>`)
       .join("");

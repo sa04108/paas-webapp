@@ -45,13 +45,13 @@ APP_DIR="$(app_dir_for "${USER_ID}" "${APP_NAME}")"
 COMPOSE_FILE="$(app_compose_file_path "${APP_DIR}")"
 
 if [[ -e "${APP_DIR}" ]]; then
-  echo "[create] [info] 앱 경로가 이미 존재합니다. 기존 소스를 덮어씌웁니다: ${USER_ID}/${APP_NAME}"
+  echo "[create] [info] App directory already exists. Replacing existing source: ${USER_ID}/${APP_NAME}"
   rm -rf "${APP_DIR}/${APP_SOURCE_SUBDIR}"
 fi
 
 # app 소스 디렉토리 복제 실패 시 정리 (메타데이터 및 기타 구조 보존을 위해 app 폴더 전체 대신 소스코드만 삭제)
 cleanup_on_failure() {
-  echo "[create] 실패 — 생성 중간 상태 정리 (소스 디렉토리만 삭제): ${APP_DIR}/${APP_SOURCE_SUBDIR}" >&2
+  echo "[create] Failed — cleaning up partial creation (removing source directory only): ${APP_DIR}/${APP_SOURCE_SUBDIR}" >&2
   rm -rf "${APP_DIR}/${APP_SOURCE_SUBDIR}"
 }
 trap cleanup_on_failure ERR
@@ -59,24 +59,24 @@ trap cleanup_on_failure ERR
 mkdir -p "${APP_DIR}/${APP_DATA_SUBDIR}" "${APP_DIR}/${APP_LOGS_SUBDIR}"
 
 setup_git_auth  # GIT_TOKEN이 있으면 private repo 인증 설정 (없으면 무동작)
-echo "[create] repo 복제: ${REPO_URL} (branch: ${BRANCH})"
+echo "[create] Cloning repository: ${REPO_URL} (branch: ${BRANCH})"
 git clone --depth 1 --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}/${APP_SOURCE_SUBDIR}"
 
 require_node
 require_railpack
 
-echo "[create] 런타임 감지 중..."
+echo "[create] Detecting runtime..."
 RUNTIME_JSON="$(node "${DETECT_RUNTIME_TOOL}" "${APP_DIR}/${APP_SOURCE_SUBDIR}")"
 DISPLAY_NAME="$(node -e "console.log(JSON.parse(process.argv[1]).displayName)" "${RUNTIME_JSON}")"
-echo "[create] 감지된 런타임: ${DISPLAY_NAME}"
+echo "[create] Detected runtime: ${DISPLAY_NAME}"
 
 APP_IMAGE="$(app_image_name "${USER_ID}" "${APP_NAME}")"
 build_app_image "${APP_DIR}/${APP_SOURCE_SUBDIR}" "${APP_IMAGE}"
 
-echo "[create] docker-compose.yml 생성 중..."
+echo "[create] Generating docker-compose.yml..."
 generate_app_compose "${USER_ID}" "${APP_NAME}" "${APP_IMAGE}"
 
-echo "[create] 앱 메타데이터 기록..."
+echo "[create] Writing app metadata..."
 REPO_URL="${REPO_URL}" \
 BRANCH="${BRANCH}" \
 RUNTIME_JSON="${RUNTIME_JSON}" \
@@ -95,7 +95,7 @@ require('fs').writeFileSync(process.env.META_PATH, JSON.stringify(meta, null, 2)
 
 # 기동 (이미 빌드된 이미지를 사용)
 mkdir -p "$(app_log_dir_for "${APP_DIR}")"
-echo "[create] 컨테이너 기동 중..."
+echo "[create] Starting container..."
 docker compose -f "${COMPOSE_FILE}" up -d 2>&1 | tee -a "${APP_DIR}/${APP_LOGS_SUBDIR}/create.log"
 
 # echo "[create] 소스 디렉토리 유지 (deploy 목적)..."
@@ -104,4 +104,4 @@ docker compose -f "${COMPOSE_FILE}" up -d 2>&1 | tee -a "${APP_DIR}/${APP_LOGS_S
 # 성공 시 trap 해제
 trap - ERR
 
-echo "[create] 완료: ${USER_ID}/${APP_NAME} repo=${REPO_URL} runtime=${DISPLAY_NAME}"
+echo "[create] Complete: ${USER_ID}/${APP_NAME} repo=${REPO_URL} runtime=${DISPLAY_NAME}"

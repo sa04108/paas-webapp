@@ -214,9 +214,9 @@ router.post("/", async (req, res, next) => {
     // private 저장소 의도인 경우, 본인 GitHub 설치에서 installationId를 조회한다.
     let installationId = "";
     if (usePrivate) {
-      if (!_githubService) throw new AppError(503, "GitHub 연동이 비활성화되어 있습니다.");
+      if (!_githubService) throw new AppError(503, "GitHub integration is disabled.");
       installationId = String(_githubService.getInstallationId(req.auth.user.id) || "");
-      if (!installationId) throw new AppError(400, "GitHub가 연결되어 있지 않습니다.");
+      if (!installationId) throw new AppError(400, "GitHub is not connected.");
     }
 
     const { apps: existingApps } = await listDockerApps();

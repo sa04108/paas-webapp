@@ -61,43 +61,43 @@ require_railpack
 setup_git_auth  # GIT_TOKEN이 있으면 private repo 인증 설정 (clone/pull 양쪽에 적용)
 
 if [[ ! -d "${APP_DIR}/${APP_SOURCE_SUBDIR}" ]]; then
-  echo "[deploy] 소스 디렉토리 없음. .paas-meta.json 기반으로 다시 clone 합니다..."
+  echo "[deploy] Source directory not found. Cloning again using .paas-meta.json..."
   META_PATH="${APP_DIR}/.paas-meta.json"
   if [[ ! -f "${META_PATH}" ]]; then
-    echo "[deploy] 메타데이터 파일 없음: ${META_PATH}" >&2
+    echo "[deploy] Metadata file not found: ${META_PATH}" >&2
     exit 1
   fi
   REPO_URL=$(node -p "try { require('${META_PATH}').repoUrl } catch(e) { '' }")
   BRANCH=$(node -p "try { require('${META_PATH}').branch || 'main' } catch(e) { 'main' }")
   
   if [[ -z "${REPO_URL}" || "${REPO_URL}" == "undefined" ]]; then
-    echo "[deploy] 메타데이터에 repoUrl 이 없습니다." >&2
+    echo "[deploy] repoUrl is missing from metadata." >&2
     exit 1
   fi
   
-  echo "[deploy] repo 복제: ${REPO_URL} (branch: ${BRANCH})"
+  echo "[deploy] Cloning repository: ${REPO_URL} (branch: ${BRANCH})"
   git clone --depth 1 --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}/${APP_SOURCE_SUBDIR}"
 else
-  echo "[deploy] 최신 코드 반영 중 (git pull)..."
+  echo "[deploy] Pulling latest code (git pull)..."
   git -C "${APP_DIR}/${APP_SOURCE_SUBDIR}" pull
 fi
 
-echo "[deploy] 런타임 재감지 중..."
+echo "[deploy] Detecting runtime again..."
 RUNTIME_JSON="$(node "${DETECT_RUNTIME_TOOL}" "${APP_DIR}/${APP_SOURCE_SUBDIR}")"
 DISPLAY_NAME="$(node -e "console.log(JSON.parse(process.argv[1]).displayName)" "${RUNTIME_JSON}")"
-echo "[deploy] 감지된 런타임: ${DISPLAY_NAME}"
+echo "[deploy] Detected runtime: ${DISPLAY_NAME}"
 
 APP_IMAGE="$(app_image_name "${USER_ID}" "${APP_NAME}")"
 build_app_image "${APP_DIR}/${APP_SOURCE_SUBDIR}" "${APP_IMAGE}"
 
-echo "[deploy] docker-compose.yml 재생성 중..."
+echo "[deploy] Regenerating docker-compose.yml..."
 generate_app_compose "${USER_ID}" "${APP_NAME}" "${APP_IMAGE}"
 
-echo "[deploy] 컨테이너 재기동 중..."
+echo "[deploy] Restarting container..."
 docker compose -f "${COMPOSE_FILE}" down
 docker compose -f "${COMPOSE_FILE}" up -d
 
-echo "[deploy] 빌드 후 dangling 이미지 정리..."
+echo "[deploy] Cleaning up dangling images after build..."
 docker image prune -f || true
 
 TARGET_CONTAINER="$(app_container_name "${USER_ID}" "${APP_NAME}")"

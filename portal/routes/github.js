@@ -51,14 +51,14 @@ function createGithubRouter(githubService) {
       const code = String(req.query.code || "");
       const state = String(req.query.state || "");
       const installationId = String(req.query.installation_id || "").trim();
-      if (!code || !installationId) throw new AppError(400, "code 또는 installation_id가 없습니다.");
+      if (!code || !installationId) throw new AppError(400, "code or installation_id is missing.");
 
       const result = await githubService.completeInstall({ code, state, installationId });
-      if (!result) throw new AppError(400, "유효하지 않은 설치 요청입니다. (state/소유 검증 실패)");
+      if (!result) throw new AppError(400, "Invalid installation request. (state/ownership validation failed)");
 
       // 설치한 본인과 로그인 세션이 일치하는지 확인 (state의 uid == 현재 세션 user)
       if (result.userId !== req.auth.user.id) {
-        throw new AppError(403, "설치 요청과 로그인 사용자가 일치하지 않습니다.");
+        throw new AppError(403, "The installation request does not match the logged-in user.");
       }
 
       // 대시보드로 복귀 (앱 생성 화면)

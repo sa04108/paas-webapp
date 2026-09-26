@@ -153,7 +153,7 @@ function detect(appDir) {
   try {
     pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
   } catch (e) {
-    throw new Error('package.json 파싱 실패: ' + e.message);
+    throw new Error('Failed to parse package.json: ' + e.message);
   }
 
   const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
@@ -223,6 +223,6 @@ try {
   const result = detect(path.resolve(appDir));
   process.stdout.write(JSON.stringify(result) + '\n');
 } catch (e) {
-  process.stderr.write('런타임 감지 실패: ' + e.message + '\n');
+  process.stderr.write('Runtime detection failed: ' + e.message + '\n');
   process.exit(1);
 }
