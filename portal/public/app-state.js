@@ -182,6 +182,8 @@ export const el = {
   detailEnvTextarea: document.getElementById("detail-env-textarea"),
   detailEnvError: document.getElementById("detail-env-error"),
   detailEnvSaveBtn: document.getElementById("detail-env-save-btn"),
+  detailRuntimeRedeployWarning: document.getElementById("detail-runtime-redeploy-warning"),
+  detailBuildRedeployWarning: document.getElementById("detail-build-redeploy-warning"),
   detailBuildOptions: document.getElementById("detail-build-options"),
   detailBuildModeRadios: Array.from(document.querySelectorAll('#detail-build-options input[name="detailBuildMode"]')),
   detailBuildRepositoryPanel: document.getElementById("detail-build-repository-panel"),

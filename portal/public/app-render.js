@@ -28,6 +28,12 @@ function appSettingsButton(safeUser, safeApp, disabled = "") {
   </button>`;
 }
 
+function redeployWarningHtml(required) {
+  return required
+    ? '<p class="config-redeploy-warning" role="status" aria-live="polite">Configuration changes are saved. Redeploy this app to apply them.</p>'
+    : "";
+}
+
 // ── 앱 카드 목록 렌더링 ───────────────────────────────────────────────────────
 
 function renderApps(apps) {
@@ -103,6 +109,7 @@ function renderApps(apps) {
         </div>
         <p class="app-domain">${domainHtml}</p>
         <p class="app-meta">repo: ${safeRepoUrl} | branch: ${safeBranch} | created: ${safeCreatedAt}</p>
+        ${redeployWarningHtml(appItem.redeployRequired)}
         ${servicesHtml}
         <div class="app-actions">
           <button class="action-btn" data-action="start"  type="button" ${actionsDisabled}>Start</button>
@@ -166,6 +173,7 @@ function renderAdminApps(apps) {
         </div>
         <p class="app-domain">${domainHtml}</p>
         <p class="app-meta">repo: ${safeRepoUrl} | branch: ${safeBranch} | created: ${safeCreatedAt}</p>
+        ${redeployWarningHtml(appItem.redeployRequired)}
         <div class="app-actions">
           <button class="action-btn" data-action="start"  type="button">Start</button>
           <button class="action-btn" data-action="stop"   type="button">Stop</button>
@@ -176,6 +184,18 @@ function renderAdminApps(apps) {
     `;
   }).join("");
 }
+
+document.addEventListener("app-config-updated", (event) => {
+  const { userid, appname, redeployRequired, pendingConfigChanges } = event.detail || {};
+  if (!userid || !appname || !pendingConfigChanges) return;
+  const apply = (apps) => apps.map((app) => app.userid === userid && app.appname === appname
+    ? { ...app, redeployRequired: Boolean(redeployRequired), pendingConfigChanges }
+    : app);
+  state.apps = apply(state.apps);
+  state.adminApps = apply(state.adminApps);
+  renderApps(state.apps);
+  renderAdminApps(state.adminApps);
+});
 
 // ── 사용자 테이블 렌더링 ──────────────────────────────────────────────────────
 

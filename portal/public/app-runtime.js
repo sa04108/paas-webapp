@@ -13,6 +13,7 @@ let runtimeErrorAppKey = "";
 let currentRuntime = { mode: "single" };
 let currentAppInfo = null;
 let currentAppInfoKey = "";
+let runtimeRedeployRequired = false;
 
 const SERVICE_NAME_PATTERN = /^[a-z][a-z0-9-]{0,39}$/;
 
@@ -82,6 +83,17 @@ function getRuntimePayload() {
 
 function selectedKey() {
   return state.selectedApp ? `${state.selectedApp.userid}/${state.selectedApp.appname}` : "";
+}
+
+function setRuntimeRedeployWarning(value) {
+  runtimeRedeployRequired = Boolean(value);
+  el.detailRuntimeRedeployWarning.hidden = !runtimeRedeployRequired;
+}
+
+function syncRuntimeWarningFromApps() {
+  const key = selectedKey();
+  const app = [...state.apps, ...state.adminApps].find((item) => `${item.userid}/${item.appname}` === key);
+  if (app?.pendingConfigChanges) setRuntimeRedeployWarning(app.pendingConfigChanges.runtime);
 }
 
 function syncDetail() {
@@ -164,6 +176,7 @@ async function loadDetailRuntime() {
   const id = ++requestId;
   loaded = false;
   saving = false;
+  setRuntimeRedeployWarning(false);
   el.detailRuntimeOptions.disabled = true;
   el.detailRuntimeStatus.textContent = "Loading runtime settings…";
   setServiceOptions();
@@ -180,6 +193,7 @@ async function loadDetailRuntime() {
     ]);
     if (id !== requestId || key !== selectedKey()) return;
     applyRuntime(data.runtime);
+    setRuntimeRedeployWarning(data.pendingConfigChanges?.runtime);
     setServiceOptions(data.runtime || { mode: "single" }, appData?.app || null);
     loaded = true;
     el.detailRuntimeOptions.disabled = false;
@@ -220,10 +234,15 @@ async function saveDetailRuntime() {
   el.detailRuntimeStatus.textContent = "Saving…";
   syncDetail();
   try {
-    await apiFetch(`/apps/${encodeURIComponent(userid)}/${encodeURIComponent(appname)}/runtime`, {
+    const result = await apiFetch(`/apps/${encodeURIComponent(userid)}/${encodeURIComponent(appname)}/runtime`, {
       method: "PUT", body: JSON.stringify({ runtime }),
     });
     if (id !== requestId || key !== selectedKey()) return;
+    setRuntimeRedeployWarning(result.pendingConfigChanges?.runtime);
+    document.dispatchEvent(new CustomEvent("app-config-updated", { detail: {
+      userid, appname, redeployRequired: result.redeployRequired,
+      pendingConfigChanges: result.pendingConfigChanges,
+    } }));
     serverError = "";
     setServiceOptions(runtime);
     el.detailRuntimeStatus.textContent = "Runtime settings saved. Changes apply on the next deployment.";
@@ -254,7 +273,10 @@ function initRuntime(fetcher) {
   el.detailRuntimeWebService.addEventListener("input", onDetailEdit);
   el.detailExecService.addEventListener("change", () => { provisionalExecDefault = false; });
   document.addEventListener("app-list-updated", () => {
-    if (state.selectedApp) setServiceOptions();
+    if (state.selectedApp) {
+      setServiceOptions();
+      syncRuntimeWarningFromApps();
+    }
   });
   el.detailRuntimeSaveBtn.addEventListener("click", saveDetailRuntime);
   syncCreate();

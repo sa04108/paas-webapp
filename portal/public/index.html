@@ -353,18 +353,21 @@
                     <div class="panel-head">
                         <h3>Settings</h3>
                     </div>
-                    <p class="env-help">
-                        Enter one environment variable per line in <code>KEY=VALUE</code> format.<br>
-                        Saving automatically restarts the container.
-                    </p>
-                    <textarea id="detail-env-textarea" class="env-textarea"
-                        placeholder="NODE_ENV=production&#10;API_KEY=your-key-here&#10;DATABASE_URL=postgres://..."
-                        spellcheck="false"></textarea>
-                    <p id="detail-env-error" class="modal-error" role="alert" hidden></p>
-                    <div class="env-actions">
-                        <button id="detail-env-save-btn" class="primary-btn env-save-btn" type="button">Save and
-                            Restart</button>
-                    </div>
+                    <section class="settings-build" aria-labelledby="detail-env-title">
+                        <h4 id="detail-env-title">Environment variables</h4>
+                        <p class="env-help">
+                            Enter one environment variable per line in <code>KEY=VALUE</code> format.<br>
+                            Saving automatically restarts the container.
+                        </p>
+                        <textarea id="detail-env-textarea" class="env-textarea"
+                            placeholder="NODE_ENV=production&#10;API_KEY=your-key-here&#10;DATABASE_URL=postgres://..."
+                            spellcheck="false"></textarea>
+                        <p id="detail-env-error" class="modal-error" role="alert" hidden></p>
+                        <div class="env-actions">
+                            <button id="detail-env-save-btn" class="primary-btn env-save-btn" type="button">Save and
+                                Restart</button>
+                        </div>
+                    </section>
                     <div class="settings-separator"></div>
                     <section class="settings-build" aria-labelledby="detail-runtime-title">
                         <h4 id="detail-runtime-title">Runtime configuration</h4>
@@ -403,6 +406,7 @@
                         </fieldset>
                         <p id="detail-runtime-error" class="modal-error" role="alert" hidden></p>
                         <div class="env-actions"><button id="detail-runtime-save-btn" class="primary-btn env-save-btn" type="button" disabled>Save runtime settings</button></div>
+                        <p id="detail-runtime-redeploy-warning" class="config-redeploy-warning" role="status" aria-live="polite" hidden>Runtime configuration has changed. Redeploy this app to apply it.</p>
                     </section>
                     <div class="settings-separator"></div>
                     <section class="settings-build" aria-labelledby="detail-build-title">
@@ -434,6 +438,7 @@
                         </fieldset>
                         <p id="detail-build-error" class="modal-error" role="alert" hidden></p>
                         <div class="env-actions"><button id="detail-build-save-btn" class="primary-btn env-save-btn" type="button" disabled>Save build settings</button></div>
+                        <p id="detail-build-redeploy-warning" class="config-redeploy-warning" role="status" aria-live="polite" hidden>Build configuration has changed. Redeploy this app to apply it.</p>
                     </section>
                     <div class="settings-separator"></div>
                     <div class="settings-danger-zone">

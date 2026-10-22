@@ -47,6 +47,8 @@ const { listRootDockerfiles } = require("../repositoryFiles");
 const { normalizeCreateEnv } = require("../appEnvironment");
 const appReadiness = require("../appReadiness");
 const { normalizeRuntime } = require("../composeConfig");
+const { withDeploymentBaseline, deploymentStatus } = require("../../scripts/lib/deployment-config");
+const { confirmDeployment } = require("../../scripts/lib/compose-project");
 
 const router = express.Router();
 
@@ -170,7 +172,7 @@ async function runJob(job) {
     switch (type) {
       case "create": {
         const { userid, appname, repoUrl, branch, installationId, build, runtime } = meta;
-        const env = {};
+        const env = { PAAS_DEFER_CONFIG_CONFIRMATION: "1" };
         const initialEnv = jobStore.getJobEnvironment(id);
         if (initialEnv !== undefined) {
           const appDir = path.join(config.PAAS_APPS_DIR, userid, appname);
@@ -197,13 +199,14 @@ async function runJob(job) {
           await fs.promises.rm(inputDir, { recursive: true, force: true });
         }
         await appReadiness.waitUntilReady(userid, appname, readinessGeneration, onLog);
+        confirmDeployment(userid, appname);
         const appInfo = await buildAppInfo(userid, appname, null);
         jobStore.finishJob(id, JSON.stringify({ app: appInfo }));
         break;
       }
       case "deploy": {
         const { userid, appname } = meta;
-        const env = {};
+        const env = { PAAS_DEFER_CONFIG_CONFIRMATION: "1" };
         const installationId = readMetaInstallationId(userid, appname);
         if (installationId && _githubService) {
           env.GIT_TOKEN = await _githubService.getCloneToken(installationId);
@@ -215,6 +218,7 @@ async function runJob(job) {
           _onAppDeployedHook(userid, appname, port);
         }
         await appReadiness.waitUntilReady(userid, appname, readinessGeneration, onLog);
+        confirmDeployment(userid, appname);
         jobStore.finishJob(id, "deployed");
         break;
       }
@@ -503,7 +507,7 @@ router.get("/:userid/:appname/runtime", async (req, res, next) => {
   try {
     const { appDir } = await resolveAppRequestContext(req);
     const metadata = await readBuildMetadata(appDir);
-    return sendOk(res, { runtime: normalizeRuntime(metadata.runtime) });
+    return sendOk(res, { runtime: normalizeRuntime(metadata.runtime), ...deploymentStatus(metadata) });
   } catch (error) { next(error); }
 });
 
@@ -515,13 +519,15 @@ router.put("/:userid/:appname/runtime", async (req, res, next) => {
       if (!req.body || !Object.hasOwn(req.body, "runtime")) throw new Error("runtime is required");
       runtime = normalizeRuntime(req.body.runtime);
     } catch (error) { throw new AppError(400, error.message); }
-    await withAppQueue(userid, appname, async () => {
+    const status = await withAppQueue(userid, appname, async () => {
       const appDir = await ensureAppExists(userid, appname);
       const metadata = await readBuildMetadata(appDir);
-      saveAppMetadata(path.join(appDir, ".paas-meta.json"), { ...metadata, runtime }, metadata.build);
+      const updated = { ...withDeploymentBaseline(metadata), runtime };
+      saveAppMetadata(path.join(appDir, ".paas-meta.json"), updated, metadata.build);
       dockerAppsCache.ts = 0;
+      return deploymentStatus(updated);
     });
-    return sendOk(res, { saved: true, runtime });
+    return sendOk(res, { saved: true, runtime, ...status });
   } catch (error) { next(error); }
 });
 
@@ -542,6 +548,7 @@ router.get("/:userid/:appname/build", async (req, res, next) => {
     const metadata = await readBuildMetadata(appDir);
     return sendOk(res, {
       build: normalizeBuildConfig(metadata.build),
+      ...deploymentStatus(metadata),
       repoUrl: metadata.repoUrl || "",
       branch: metadata.branch || "main",
     });
@@ -560,12 +567,15 @@ router.put("/:userid/:appname/build", async (req, res, next) => {
     } catch (error) {
       throw new AppError(400, error.message);
     }
-    await withAppQueue(userid, appname, async () => {
+    const status = await withAppQueue(userid, appname, async () => {
       const appDir = await ensureAppExists(userid, appname);
       const metadata = await readBuildMetadata(appDir);
-      saveAppMetadata(path.join(appDir, ".paas-meta.json"), metadata, build);
+      const updated = { ...withDeploymentBaseline(metadata), build };
+      saveAppMetadata(path.join(appDir, ".paas-meta.json"), updated, build);
+      dockerAppsCache.ts = 0;
+      return deploymentStatus(updated);
     });
-    return sendOk(res, { saved: true, build });
+    return sendOk(res, { saved: true, build, ...status });
   } catch (error) {
     return next(error);
   }
