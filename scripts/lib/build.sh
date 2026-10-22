@@ -13,16 +13,32 @@ app_image_name() {
 }
 
 # build_app_image <src_dir> <image_name>
-# → src_dir에 Dockerfile이 있으면 docker build, 없으면 railpack build.
+# → 루트의 Dockerfile을 우선하고, 없으면 이름에 Dockerfile이 포함된 첫 파일을 빌드한다.
+# → 후보는 바이트순으로 선택하며, 후보가 없을 때만 railpack build를 사용한다.
 build_app_image() {
   local src_dir="$1"
   local image_name="$2"
+  local dockerfile_path=""
+  local candidate_path=""
+  local candidate_name=""
 
   if [[ -f "${src_dir}/Dockerfile" ]]; then
-    echo "[build] User Dockerfile detected; using docker build"
+    dockerfile_path="${src_dir}/Dockerfile"
+  else
+    while IFS= read -r -d '' candidate_path; do
+      candidate_name="${candidate_path##*/}"
+      if [[ "${candidate_name}" =~ Dockerfile ]]; then
+        dockerfile_path="${candidate_path}"
+        break
+      fi
+    done < <(find "${src_dir}" -mindepth 1 -maxdepth 1 -type f -print0 | LC_ALL=C sort -z)
+  fi
+
+  if [[ -n "${dockerfile_path}" ]]; then
+    echo "[build] User Dockerfile detected at ${dockerfile_path}; using docker build"
     docker build \
       -t "${image_name}" \
-      -f "${src_dir}/Dockerfile" \
+      -f "${dockerfile_path}" \
       "${src_dir}"
   else
     echo "[build] Using railpack build"
