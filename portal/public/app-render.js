@@ -245,27 +245,9 @@ function renderJobList(jobs) {
     const appPart = escapeHtml(formatJobTarget(job) || "-");
     const rawStatus = job.status;
     const safeStatus = escapeHtml(rawStatus);
-    
-    let errorReason = "";
-    const logText = job.error || job.output;
-    if (logText) {
-      const singleLineLog = logText.split('\n')[0];
-      let textClass = "job-neutral-text";
-      if (rawStatus === "failed") textClass = "job-error-text";
-      else if (rawStatus === "warn") textClass = "job-warn-text";
-
-      errorReason = `
-        <div style="display: flex; align-items: center; max-width: 250px;">
-          <span class="${textClass}" style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(singleLineLog)}">${escapeHtml(singleLineLog)}</span>
-        </div>
-      `;
-    } else if (rawStatus === "interrupted") {
-       errorReason = `<span class="ink-subtle">Interrupted by a server restart</span>`;
-    }
-
     const isActive = rawStatus === "pending" || rawStatus === "running";
-    errorReason += `
-      <button class="ghost-btn" data-action="view-job-log" data-id="${escapeHtml(job.id)}" type="button">
+    const logButton = `
+      <button class="ghost-btn job-log-btn" data-action="view-job-log" data-id="${escapeHtml(job.id)}" type="button">
         ${isActive ? "Live logs" : "View logs"}
       </button>`;
 
@@ -296,7 +278,7 @@ function renderJobList(jobs) {
         <td>${jobName}</td>
         <td>${appPart}</td>
         <td><span class="status-pill ${statusClass(rawStatus)}">${safeStatus}</span></td>
-        <td class="job-error-cell">${errorReason}</td>
+        <td>${logButton}</td>
         <td>${actions}</td>
       </tr>
     `;
