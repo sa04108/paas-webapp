@@ -5,7 +5,7 @@ Hyunbbai PaaS is a self-hosted platform for deploying GitHub repositories as Doc
 ## Features
 
 - Deploy a public GitHub repository by providing its URL, application name, and branch; the default branch is `main`.
-- Build compatible projects automatically with Railpack, or use a `Dockerfile` from the repository root.
+- Build compatible projects automatically with Railpack, or use a root-level file whose name contains `Dockerfile`, such as `Dockerfile.ktx-worker`.
 - Start, stop, redeploy, and delete applications from the dashboard.
 - Inspect container logs with automatic refresh and open an interactive browser terminal.
 - Edit application environment variables and recreate the container to apply them.
@@ -28,7 +28,9 @@ The management experience takes inspiration from Portainer: users can inspect ap
 
 ### Turn repository source into an image with Railpack
 
-When a repository has no root-level `Dockerfile`, the platform runs `railpack build . --name <image>` against the cloned source. Railpack detects supported projects and produces a container image, removing the need to write platform-specific build configuration for conventional applications. A repository-provided `Dockerfile` takes precedence and is built with `docker build`.
+The platform first looks for a root-level `Dockerfile`. If it is absent, it selects the first root-level regular file whose name contains the case-sensitive string `Dockerfile`, including hidden files, in bytewise filename order. The selected file is logged and built with `docker build -f <file>` using the repository root as the build context. Subdirectories are not searched. A failed Docker build is reported without falling back to Railpack.
+
+When no matching file exists, the platform runs `railpack build . --name <image>` against the cloned source. Railpack detects supported projects and produces a container image, removing the need to write platform-specific build configuration for conventional applications.
 
 The portal's runtime detector provides Node.js framework and dependency badges for the UI; Railpack performs the actual automatic build detection. Successful deployment still requires a supported project with a working startup command and an HTTP server listening on `0.0.0.0:5000` (the platform supplies `PORT=5000`).
 
