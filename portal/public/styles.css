@@ -1236,12 +1236,14 @@ html[lang="en"] .app-card-title-row {
 }
 
 .status-stopped,
+.status-unhealthy,
 .status-not-found {
   --status-pill-bg: rgba(var(--danger-rgb), 0.14);
   --status-pill-border: rgba(var(--danger-rgb), 0.3);
   --status-pill-color: #9a3737;
 }
 
+.status-starting,
 .status-created,
 .status-restarting {
   --status-pill-bg: rgba(181, 130, 18, 0.16);
@@ -2461,12 +2463,14 @@ html[data-theme="dark"] .domain-status-active {
 }
 
 html[data-theme="dark"] .status-stopped,
+html[data-theme="dark"] .status-unhealthy,
 html[data-theme="dark"] .status-not-found,
 html[data-theme="dark"] .domain-status-error {
   --status-pill-color: #ffb6b6;
   color: #ffb6b6;
 }
 
+html[data-theme="dark"] .status-starting,
 html[data-theme="dark"] .status-created,
 html[data-theme="dark"] .status-restarting,
 html[data-theme="dark"] .domain-status-pending,

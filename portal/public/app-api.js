@@ -76,6 +76,7 @@ async function loadSession() {
   } catch (error) {
     if (error.status === 401) {
       state.user = null;
+      stopAppStatusRefresh(true);
       updateAuthUi();
       syncDomainPreview();
       return false;
@@ -88,11 +89,13 @@ async function loadApps() {
   if (!canManageApps()) {
     state.apps = [];
     renderApps([]);
+    syncAppStatusRefresh();
     return;
   }
   const data = await apiFetch("/apps");
   state.apps = data.apps || [];
   renderApps(state.apps);
+  syncAppStatusRefresh();
   if (data.hasLabelErrors) {
     setBanner("Some containers are missing labels and have been excluded from the dashboard. Contact an administrator.", "error");
   }
@@ -124,7 +127,64 @@ async function loadAdminApps() {
   const data = await apiFetch("/apps?all=true");
   state.adminApps = data.apps || [];
   renderAdminApps(state.adminApps);
+  syncAppStatusRefresh();
 }
+
+// 도메인 준비 작업이나 아직 준비되지 않은 앱이 있을 때만 앱 상태를 갱신한다.
+const APP_STATUS_JOB_TYPES = new Set(["create", "deploy", "start", "env-restart"]);
+let appStatusRefreshTimer = null;
+let appStatusRefreshInFlight = false;
+let appStatusRefreshStopped = false;
+
+function hasAppReadinessWork() {
+  const hasActiveLifecycleJob = state.jobs.some((job) =>
+    APP_STATUS_JOB_TYPES.has(job.type) && (job.status === "pending" || job.status === "running")
+  );
+  const hasWaitingApp = [...state.apps, ...state.adminApps].some((app) =>
+    app.status === "starting" || app.status === "unhealthy"
+  );
+  return hasActiveLifecycleJob || hasWaitingApp;
+}
+
+function stopAppStatusRefresh(permanent = false) {
+  if (appStatusRefreshTimer) clearInterval(appStatusRefreshTimer);
+  appStatusRefreshTimer = null;
+  if (permanent) appStatusRefreshStopped = true;
+}
+
+function syncAppStatusRefresh() {
+  if (appStatusRefreshStopped || !canManageApps() || document.hidden || !hasAppReadinessWork()) {
+    stopAppStatusRefresh();
+    return;
+  }
+  if (appStatusRefreshTimer) return;
+
+  appStatusRefreshTimer = setInterval(refreshTrackedAppStatuses, AUTO_REFRESH_MS);
+}
+
+async function refreshTrackedAppStatuses() {
+  if (appStatusRefreshInFlight || appStatusRefreshStopped || document.hidden) return;
+  if (!canManageApps() || !hasAppReadinessWork()) {
+    syncAppStatusRefresh();
+    return;
+  }
+
+  appStatusRefreshInFlight = true;
+  try {
+    await loadApps();
+    if (state.user?.role === "admin") await loadAdminApps();
+  } catch (error) {
+    if (error.status === 401) stopAppStatusRefresh(true);
+  } finally {
+    appStatusRefreshInFlight = false;
+    syncAppStatusRefresh();
+  }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopAppStatusRefresh();
+  else syncAppStatusRefresh();
+});
 
 async function loadPortalLogs() {
   if (!canManageApps() || state.user?.role !== "admin") return;
@@ -208,6 +268,7 @@ function pollJob(jobId, options = {}) {
       else state.jobs.unshift(job);
 
       renderJobIndicator(state.jobs);
+      syncAppStatusRefresh();
 
       if (TERMINAL_STATUSES.has(job.status)) {
         clearInterval(intervalId);
@@ -233,6 +294,7 @@ function pollJob(jobId, options = {}) {
       if (error.status === 401) {
         clearInterval(intervalId);
         state.jobPollers.delete(jobId);
+        stopAppStatusRefresh(true);
       }
       // 그 외 네트워크 오류는 다음 interval에서 재시도
     }
@@ -251,6 +313,7 @@ async function loadAndRecoverJobs() {
     const data = await apiFetch("/jobs");
     state.jobs = data.jobs || [];
     renderJobIndicator(state.jobs);
+    syncAppStatusRefresh();
 
     // active 상태인 job에 대해 폴링 재개
     for (const job of state.jobs) {
@@ -266,16 +329,18 @@ async function loadAndRecoverJobs() {
 /**
  * 202 응답으로 jobId를 받아 즉시 폴링을 시작하는 헬퍼.
  */
-function startJobPolling(jobId, appLabel, actionLabel) {
+function startJobPolling(jobId, appLabel, actionLabel, jobType = "unknown") {
   showToast(`${actionLabel} started: ${appLabel} — In progress...`, "info", 3000);
 
   // state.jobs에 낙관적으로 pending job 추가
   state.jobs.unshift({
     id: jobId, status: "pending",
-    type: "unknown", userid: state.user?.username,
+    type: jobType, userid: state.user?.username,
     meta: {}, createdAt: Date.now(),
   });
   renderJobIndicator(state.jobs);
+  syncAppStatusRefresh();
+  if (APP_STATUS_JOB_TYPES.has(jobType)) void refreshTrackedAppStatuses();
 
   pollJob(jobId, { actionLabel, appLabel });
 }
@@ -294,6 +359,12 @@ function _getJobTargetLabel(jobId) {
 async function retryJob(jobId) {
   const data = await apiFetch(`/jobs/${jobId}/retry`, { method: "POST" });
   const label = _getJobTargetLabel(jobId);
+
+  const jobIndex = state.jobs.findIndex((job) => job.id === jobId);
+  if (jobIndex >= 0) state.jobs[jobIndex] = { ...state.jobs[jobIndex], status: "pending" };
+  renderJobIndicator(state.jobs);
+  syncAppStatusRefresh();
+  void refreshTrackedAppStatuses();
 
   pollJob(jobId, { actionLabel: "Retry" });
   showToast(`Retry requested: ${label}`, "info");
@@ -405,7 +476,7 @@ async function performAction(target) {
 
   const actionLabels = { start: "Start", stop: "Stop", deploy: "Redeploy" };
   const data = await apiFetch(`/apps/${userid}/${appname}/${action}`, { method: "POST" });
-  startJobPolling(data.jobId, appLabel, actionLabels[action] || action);
+  startJobPolling(data.jobId, appLabel, actionLabels[action] || action, action);
 }
 
 // ── 앱 관리 > Logs ────────────────────────────────────────────────────────────
@@ -445,7 +516,7 @@ async function saveDetailEnv() {
       body: JSON.stringify({ env: envContent }),
     });
     if (result.jobId) {
-      startJobPolling(result.jobId, `${userid}/${appname}`, "Restart with Updated Environment Variables");
+      startJobPolling(result.jobId, `${userid}/${appname}`, "Restart with Updated Environment Variables", "env-restart");
     }
     showToast(`Environment variables saved: ${userid}/${appname}`, "success");
   } catch (error) {
@@ -485,7 +556,7 @@ async function handleCreate(event) {
   submitBtn.textContent = "Submitting...";
   try {
     const data = await apiFetch("/apps", { method: "POST", body: JSON.stringify(body) });
-    startJobPolling(data.jobId, `${body.appname}`, "Create App");
+    startJobPolling(data.jobId, `${body.appname}`, "Create App", "create");
     el.createForm.reset();
     resetBuildOptions();
     el.repoBranchInput.value = "main";
@@ -618,6 +689,7 @@ function stopAutoRefresh() {
   }
   stopDetailLogsAutoRefresh();
   stopAdminLogsAutoRefresh();
+  stopAppStatusRefresh(true);
 }
 
 export {

@@ -13,6 +13,7 @@ const { AppError, sendOk, sendError } = require("../utils");
 const { RUNNER_SCRIPTS } = require("../config");
 const { runRunnerScript } = require("../appManager");
 const jobStore = require("../jobStore");
+const appReadiness = require("../appReadiness");
 
 const router = express.Router();
 
@@ -176,6 +177,7 @@ router.post("/:id/cancel", resolveJob, async (req, res, next) => {
       const { userid, appname } = job.meta;
       try {
         await runRunnerScript(RUNNER_SCRIPTS.delete, [userid, appname]);
+        appReadiness.remove(userid, appname);
       } catch (err) {
         console.error(`[jobs] cleanup failed during cancel for ${job.id}:`, err);
         // 클린업 중 오류가 발생해도 job 삭제는 진행한다.

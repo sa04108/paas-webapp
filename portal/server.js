@@ -32,6 +32,7 @@ const createGithubRouter = require("./routes/github");
 const { createGithubService } = require("./githubService");
 const jobsRouter = require("./routes/jobs");
 const jobStore = require("./jobStore");
+const appReadiness = require("./appReadiness");
 const { createDomainManager } = require("./domainManager");
 const { WebSocketServer } = require("ws");
 const { createExecWsHandler, parseExecWsUrl } = require("./routes/exec-ws");
@@ -285,6 +286,7 @@ async function start() {
 
   // jobStore 초기화 및 서버 재시작 복원
   jobStore.init(config.PORTAL_DB_PATH);
+  appReadiness.init(config.PORTAL_DB_PATH);
   await jobStore.recoverOnStartup(executeJob);
 
   // ── WebSocket 서버 (exec 스트리밍) ─────────────────────────────────────────

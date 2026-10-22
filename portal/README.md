@@ -19,7 +19,7 @@ npm start
 
 ## 컨테이너 실행
 
-- Portal을 컨테이너로 띄우는 경우 `bash`와 `docker` CLI가 이미지에 있어야 앱 생성/배포 스크립트가 동작합니다.
+- Portal을 컨테이너로 띄우는 경우 `bash`, `docker`, `curl` CLI가 이미지에 있어야 앱 생성/배포 및 도메인 준비 상태 검사가 동작합니다.
 - 이 저장소의 루트 `docker-compose.yml`은 `dockerfile_inline`으로 해당 도구를 함께 설치합니다.
 - 앱 컨테이너 제어를 위해 `/var/run/docker.sock` 마운트가 필요합니다.
 
@@ -74,6 +74,15 @@ npm start
 - `POST /apps/:userid/:appname/deploy`
 - `DELETE /apps/:userid/:appname`
 - `GET /apps/:userid/:appname/logs?lines=<n>` (`1..1000`, 기본 120)
+
+### 앱 준비 상태
+
+- Portal의 생성·재배포·시작·환경변수 변경 후 재시작 작업은 할당된 기본 도메인의 `/` 경로에서 HTTP **200**을 확인한 뒤 완료됩니다. 프로덕션은 HTTPS 인증서를 검증하고, 개발 모드는 HTTP와 `TRAEFIK_HOST_PORT`를 사용합니다. 다른 도메인으로의 리다이렉트는 따라가지 않습니다.
+- Docker 컨테이너가 실행 중이어도 검사 전에는 `starting`, 확인 제한 시간 이후에는 `unhealthy`, HTTP 200 확인 후에는 `running`으로 표시합니다. 컨테이너의 `stopped`·`restarting` 상태가 우선합니다.
+- 기본 제한 시간은 120초(`APP_HEALTH_TIMEOUT_SECS`), 검사 간격은 2초(`APP_HEALTH_INTERVAL_MS=2000`), 요청별 제한 시간은 5초(`APP_HEALTH_REQUEST_TIMEOUT_MS=5000`)입니다. 빌드 시간은 준비 상태 제한 시간에 포함하지 않습니다.
+- 제한 시간 초과는 작업 실패로 기록되며 Jobs 로그에서 검사 결과를 볼 수 있습니다. 이후에도 앱 목록을 조회하면 `unhealthy` 앱을 재검사하므로 늦게 HTTP 200이 반환되어도 `running`으로 전환됩니다. 대시보드와 관리자 목록은 준비 중이거나 비정상인 앱의 상태를 자동 갱신합니다.
+- 준비 상태는 SQLite에 저장됩니다. Portal이 검사 중 재시작되면 성공으로 간주하지 않고 재검사하며, 새 배포는 이전 검사 결과를 초기화합니다. 이 기능은 배포 직후 준비 상태를 확인하며, 확인이 끝난 앱을 계속 감시하는 기능은 아닙니다.
+- `docker-compose.dev.yml`은 `APP_HEALTH_DEV_ORIGIN=http://traefik:80`을 지정합니다. Portal 컨테이너 내부에서도 앱 도메인의 Host 헤더를 유지한 채 개발용 Traefik에 접속합니다.
 
 ### 사용자 관리
 

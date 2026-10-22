@@ -12,6 +12,7 @@
 const fs   = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
+const { randomUUID } = require("node:crypto");
 const express = require("express");
 const { ROLE_ADMIN } = require("../authService");
 const { AppError, normalizeBoolean, sendOk } = require("../utils");
@@ -39,6 +40,7 @@ const jobStore = require("../jobStore");
 const { normalizeBuildConfig, saveAppMetadata } = require("../../scripts/lib/build-config");
 const { listRootDockerfiles } = require("../repositoryFiles");
 const { normalizeCreateEnv } = require("../appEnvironment");
+const appReadiness = require("../appReadiness");
 
 const router = express.Router();
 
@@ -145,7 +147,10 @@ async function runJob(job) {
   const onLog = (line) => jobStore.appendLog(id, line);
 
   jobStore.startJob(id);
+  const requiresReadiness = ["create", "deploy", "start", "env-restart"].includes(type);
+  const readinessGeneration = randomUUID();
   try {
+    if (requiresReadiness) appReadiness.begin(meta.userid, meta.appname, readinessGeneration);
     switch (type) {
       case "create": {
         const { userid, appname, repoUrl, branch, installationId, build } = meta;
@@ -172,6 +177,7 @@ async function runJob(job) {
         } finally {
           await fs.promises.rm(inputDir, { recursive: true, force: true });
         }
+        await appReadiness.waitUntilReady(userid, appname, readinessGeneration, onLog);
         const appInfo = await buildAppInfo(userid, appname, null);
         jobStore.finishJob(id, JSON.stringify({ app: appInfo }));
         break;
@@ -189,6 +195,7 @@ async function runJob(job) {
           const port = Number(deployed?.port) || 5000;
           _onAppDeployedHook(userid, appname, port);
         }
+        await appReadiness.waitUntilReady(userid, appname, readinessGeneration, onLog);
         jobStore.finishJob(id, "deployed");
         break;
       }
@@ -197,13 +204,15 @@ async function runJob(job) {
         const args = [userid, appname];
         if (keepData) args.push("--keep-data");
         await runRunnerScript(RUNNER_SCRIPTS.delete, args, { onLog });
+        appReadiness.remove(userid, appname);
         if (_onAppDeletedHook) _onAppDeletedHook(userid, appname);
         jobStore.finishJob(id, "deleted");
         break;
       }
       case "start": {
-        const { appDir } = meta;
+        const { userid, appname, appDir } = meta;
         const result = await runDockerCompose(appDir, ["up", "-d"]);
+        await appReadiness.waitUntilReady(userid, appname, readinessGeneration, onLog);
         const status = await getDockerContainerStatus(appDir);
         jobStore.finishJob(id, JSON.stringify({ status: normalizeStatus(status) }));
         break;
@@ -211,12 +220,14 @@ async function runJob(job) {
       case "stop": {
         const { appDir } = meta;
         await runDockerCompose(appDir, ["stop"]);
+        appReadiness.remove(meta.userid, meta.appname);
         jobStore.finishJob(id, "stopped");
         break;
       }
       case "env-restart": {
-        const { appDir } = meta;
+        const { userid, appname, appDir } = meta;
         await runDockerCompose(appDir, ["up", "-d", "--force-recreate"]);
+        await appReadiness.waitUntilReady(userid, appname, readinessGeneration, onLog);
         jobStore.finishJob(id, "restarted");
         break;
       }
@@ -224,6 +235,7 @@ async function runJob(job) {
         throw new AppError(500, `Unknown job type: ${type}`);
     }
   } catch (error) {
+    if (requiresReadiness) appReadiness.fail(meta.userid, meta.appname, readinessGeneration);
     const message = error instanceof AppError
       ? error.message
       : (error.message || "Unknown error");
