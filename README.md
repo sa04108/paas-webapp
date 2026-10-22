@@ -275,3 +275,9 @@ npm test
 ```
 
 Additional documentation: [GitHub App setup](docs/github-app-setup.md), [security review](docs/security-threats.md), and [GitHub Actions deployment design notes](docs/github-actions-deploy.md).
+
+## UI tooling
+
+The Layout MCP configuration is in `.codex/config.toml`, with portal design context in `.layout/layout.md`. The upstream [Layout CLI](https://github.com/uselayout/cli) currently publishes as `@layoutdesign/context`; this project pins version `0.19.0`. Start its stdio server with `npx --yes @layoutdesign/context@0.19.0 serve` through your MCP client.
+
+In the managed cloud environment, global Codex configuration is read-only. Use the prepared `/workspace/.tools/codex-with-layout` launcher to enable Layout for a Codex CLI session without changing the managed configuration. Reload the MCP client after changing its project configuration.
