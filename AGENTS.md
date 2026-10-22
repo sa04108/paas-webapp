@@ -39,6 +39,7 @@ These instructions apply repository-wide.
 - Before editing, inspect `git status --short --branch`, `git worktree list`, and recent commits. Preserve pre-existing changes, including staged changes; never overwrite them or include them in your commits.
 - Before the first edit, create a descriptive task branch if on `main`, an unrelated branch, or a detached HEAD. Use a separate branch and worktree for concurrent editing tasks or when the existing checkout must be preserved.
 - Base new independent tasks on freshly fetched remote `main`; if unavailable, use local `main` and report the limitation. Related subagent work must use the root's agreed task snapshot, including required parent changes.
-- Commit each complete unit with related tests and documentation only after required verification passes. If verification fails or is blocked, do not commit; report the cause.
+- Commit each complete unit with related documentation only after required verification passes. If verification fails or is blocked, do not commit; report the cause.
+- Do not commit or push test code unless the user explicitly requests it.
 - Stage only task-owned changes by explicit path or hunk, and inspect the entire staged diff before committing.
 - After committing, push when the remote and authentication are available, setting upstream for new branches. If pushing is unavailable or fails, preserve the commit and report why.
