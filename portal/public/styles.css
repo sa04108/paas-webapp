@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light;
   --bg-base: #f4f5f7;
   --ink-main: #17273b;
   --ink-subtle: #4f667f;
@@ -227,6 +228,13 @@ body.modal-open {
 .gnb-logout-btn {
   font-size: 0.8rem;
   padding: 7px 12px;
+}
+
+.gnb-logout-icon {
+  display: none;
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
 }
 
 .dev-mode-badge {
@@ -2101,4 +2109,316 @@ a.domain-name:hover {
 .danger-ghost-btn:hover {
   background: rgba(var(--danger-rgb), 0.08);
   border-color: rgba(var(--danger-rgb), 0.6);
+}
+
+/* ── 테마 설정 ── */
+
+.theme-toggle-btn .theme-icon-sun {
+  display: none;
+}
+
+.theme-toggle-btn .theme-icon-moon {
+  display: block;
+}
+
+html[data-theme="dark"] .theme-toggle-btn .theme-icon-sun {
+  display: block;
+}
+
+html[data-theme="dark"] .theme-toggle-btn .theme-icon-moon {
+  display: none;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-base: #111923;
+  --ink-main: #e4edf6;
+  --ink-subtle: #b0c0d1;
+  --ink-soft: #91a4b8;
+  --accent-blue-rgb: 91, 165, 255;
+  --danger-rgb: 239, 111, 111;
+  --surface: #192431;
+  --surface-strong: #202e3d;
+  --surface-border: rgba(177, 202, 226, 0.15);
+  --surface-border-strong: rgba(177, 202, 226, 0.22);
+  --accent-teal: #51c8b1;
+  --accent-blue: #5ba5ff;
+  --danger: #ef6f6f;
+  --shadow-lg: 0 26px 70px rgba(0, 0, 0, 0.34);
+  --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+
+html[data-theme="dark"] body {
+  background: var(--bg-base);
+}
+
+html[data-theme="dark"] .gnb {
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.28);
+}
+
+html[data-theme="dark"] .gnb-item.active,
+html[data-theme="dark"] .tab-btn.active {
+  color: #c7e0ff;
+}
+
+html[data-theme="dark"] .gnb-item.admin-menu {
+  color: #ffab82;
+}
+
+html[data-theme="dark"] .gnb-item.admin-menu:hover,
+html[data-theme="dark"] .gnb-item.admin-menu.active {
+  color: #ffc1a2;
+}
+
+html[data-theme="dark"] .auth-state,
+html[data-theme="dark"] .tab-btn,
+html[data-theme="dark"] .repo-source-panel,
+html[data-theme="dark"] .chip,
+html[data-theme="dark"] .users-table-wrap,
+html[data-theme="dark"] .job-indicator {
+  background-color: var(--surface-strong);
+  border-color: var(--surface-border-strong);
+  color: var(--ink-subtle);
+}
+
+html[data-theme="dark"] input[type="text"],
+html[data-theme="dark"] input[type="password"],
+html[data-theme="dark"] input[type="number"],
+html[data-theme="dark"] input[type="url"],
+html[data-theme="dark"] select,
+html[data-theme="dark"] .env-textarea {
+  background: #131e29;
+  border-color: var(--surface-border-strong);
+  color: var(--ink-main);
+}
+
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: #8094a9;
+}
+
+html[data-theme="dark"] .repo-source-toggle {
+  background: rgba(0, 0, 0, 0.2);
+  border-color: var(--surface-border-strong);
+}
+
+html[data-theme="dark"] .repo-source-option input:checked + .repo-source-option-label {
+  background: #314457;
+  color: var(--ink-main);
+}
+
+html[data-theme="dark"] .ghost-btn,
+html[data-theme="dark"] .action-btn,
+html[data-theme="dark"] .icon-btn,
+html[data-theme="dark"] .job-retry-all-btn {
+  color: #c5e0ff;
+}
+
+html[data-theme="dark"] .primary-btn {
+  color: #062c28;
+  border-color: rgba(125, 231, 205, 0.62);
+  background: linear-gradient(120deg, #68d9bd, #77cff0);
+  box-shadow: 0 10px 24px rgba(58, 196, 166, 0.2);
+}
+
+html[data-theme="dark"] .primary-btn:hover {
+  background: linear-gradient(120deg, #79e5c9, #8bd8f4);
+  box-shadow: 0 14px 28px rgba(58, 196, 166, 0.26);
+}
+
+html[data-theme="dark"] .status-banner.info,
+html[data-theme="dark"] .toast.info {
+  --status-banner-color: #c2ddff;
+  color: #c2ddff;
+}
+
+html[data-theme="dark"] .status-banner.success,
+html[data-theme="dark"] .toast.success {
+  --status-banner-color: #8ce0cd;
+  color: #8ce0cd;
+}
+
+html[data-theme="dark"] .status-banner.error,
+html[data-theme="dark"] .toast.error,
+html[data-theme="dark"] .modal-error {
+  --status-banner-color: #ffb6b6;
+  color: #ffb6b6;
+}
+
+html[data-theme="dark"] .tab-row,
+html[data-theme="dark"] .control-section {
+  border-color: var(--surface-border-strong);
+}
+
+html[data-theme="dark"] .job-retry-all-btn {
+  color: #c5e0ff;
+}
+
+html[data-theme="dark"] .warning-section p,
+html[data-theme="dark"] .job-alert,
+html[data-theme="dark"] .action-btn.danger,
+html[data-theme="dark"] .modal-error {
+  color: #ffb6b6;
+}
+
+html[data-theme="dark"] .users-table th {
+  background: rgba(var(--accent-blue-rgb), 0.12);
+}
+
+html[data-theme="dark"] .users-table th,
+html[data-theme="dark"] .users-table td,
+html[data-theme="dark"] #job-list-table tbody tr {
+  border-color: var(--surface-border);
+}
+
+html[data-theme="dark"] .app-card {
+  border-color: var(--surface-border-strong);
+  background: linear-gradient(145deg, #1d2a38, #18232f);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+}
+
+html[data-theme="dark"] .app-domain,
+html[data-theme="dark"] .users-count,
+html[data-theme="dark"] .app-branch-badge,
+html[data-theme="dark"] code,
+html[data-theme="dark"] .domain-type-badge {
+  color: #a9ceff;
+}
+
+html[data-theme="dark"] .role-badge.role-admin {
+  background: rgba(81, 200, 177, 0.16);
+  border-color: rgba(81, 200, 177, 0.34);
+  color: #8ce0cd;
+}
+
+html[data-theme="dark"] .role-badge.role-user {
+  background: rgba(var(--accent-blue-rgb), 0.14);
+  border-color: rgba(var(--accent-blue-rgb), 0.3);
+  color: #b6d7ff;
+}
+
+html[data-theme="dark"] .danger-ghost-btn,
+html[data-theme="dark"] .danger-ghost-btn:hover {
+  color: #ffb6b6;
+}
+
+html[data-theme="dark"] .promote-warning-desc {
+  color: #ffb6b6 !important;
+}
+
+html[data-theme="dark"] .promote-warning-icon {
+  fill: #ff8989;
+}
+
+html[data-theme="dark"] .field-invalid {
+  border-color: rgba(var(--danger-rgb), 0.82) !important;
+  box-shadow: 0 0 0 4px rgba(var(--danger-rgb), 0.2);
+}
+
+html[data-theme="dark"] .status-running,
+html[data-theme="dark"] .domain-status-active {
+  --status-pill-color: #8ce0cd;
+  color: #8ce0cd;
+}
+
+html[data-theme="dark"] .status-stopped,
+html[data-theme="dark"] .status-not-found,
+html[data-theme="dark"] .domain-status-error {
+  --status-pill-color: #ffb6b6;
+  color: #ffb6b6;
+}
+
+html[data-theme="dark"] .status-created,
+html[data-theme="dark"] .status-restarting,
+html[data-theme="dark"] .domain-status-pending,
+html[data-theme="dark"] .dev-mode-badge {
+  --status-pill-color: #f2d38b;
+  color: #f2d38b;
+}
+
+html[data-theme="dark"] .status-docker-unavailable,
+html[data-theme="dark"] .status-unknown {
+  --status-pill-color: #bdcde0;
+  color: #bdcde0;
+}
+
+html[data-theme="dark"] .modal-backdrop {
+  background: rgba(0, 0, 0, 0.66);
+}
+
+html[data-theme="dark"] .domain-name,
+html[data-theme="dark"] .domain-cname-target,
+html[data-theme="dark"] .domains-cname-value {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+html[data-theme="dark"] .runtime-badge.express {
+  background: #263746;
+  border-color: #41576b;
+  color: #9ccfff;
+}
+
+@media (max-width: 480px) {
+  .gnb {
+    gap: 4px;
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .gnb-left {
+    gap: 4px;
+  }
+
+  .gnb-brand {
+    margin-right: 0;
+  }
+
+  .gnb-right {
+    gap: 5px;
+  }
+
+  .dev-mode-badge {
+    display: none !important;
+  }
+
+  .gnb-right .icon-btn,
+  .gnb .gnb-hamburger {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+  }
+
+  .gnb-logout-btn {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .gnb-logout-label {
+    display: none;
+  }
+
+  .gnb-logout-icon {
+    display: block;
+  }
+}
+
+@media (min-width: 861px) and (max-width: 1200px) {
+  .gnb-brand-text,
+  .gnb-item span {
+    display: none;
+  }
+
+  .gnb-item {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+}
+
+html[data-theme="dark"] .theme-toggle-btn {
+  color: #f2d38b;
 }

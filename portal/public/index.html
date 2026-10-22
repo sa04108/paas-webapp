@@ -5,6 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hyunbbai Portal</title>
+    <script src="/theme.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -73,8 +74,22 @@
                         d="M19.14 12.94a7.8 7.8 0 0 0 .05-.94 7.8 7.8 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.2 7.2 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54a7.2 7.2 0 0 0-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.8 7.8 0 0 0-.05.94 7.8 7.8 0 0 0 .05.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.39 1.04.7 1.62.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54c.58-.24 1.12-.55 1.62-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58Z" />
                 </svg>
             </button>
-            <button id="logout-btn" class="ghost-btn gnb-logout-btn" type="button" hidden>
-                Log Out
+            <button id="theme-toggle-btn" class="icon-btn theme-toggle-btn" type="button" aria-label="Dark theme"
+                aria-pressed="false" title="Switch to dark theme">
+                <svg class="theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M20.99 12.97A9 9 0 0 1 11.03 3.01a9 9 0 1 0 9.96 9.96Z" />
+                </svg>
+                <svg class="theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="4" />
+                    <path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                </svg>
+            </button>
+            <button id="logout-btn" class="ghost-btn gnb-logout-btn" type="button" aria-label="Log out" hidden>
+                <span class="gnb-logout-label">Log Out</span>
+                <svg class="gnb-logout-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M10 17v3H4V4h6v3h2V2H2v20h10v-5h-2zm6.59-10.59L15.17 7.83 18.34 11H8v2h10.34l-3.17 3.17 1.42 1.42L22.17 12l-5.58-5.59Z" />
+                </svg>
             </button>
         </div>
     </header>
