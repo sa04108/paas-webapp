@@ -11,6 +11,7 @@
 
 const fs   = require("node:fs");
 const path = require("node:path");
+const os = require("node:os");
 const express = require("express");
 const { ROLE_ADMIN } = require("../authService");
 const { AppError, normalizeBoolean, sendOk } = require("../utils");
@@ -35,6 +36,8 @@ const {
   runContainerComplete,
 } = require("../appManager");
 const jobStore = require("../jobStore");
+const { normalizeBuildConfig } = require("../../scripts/lib/build-config");
+const { listRootDockerfiles } = require("../repositoryFiles");
 
 const router = express.Router();
 
@@ -70,7 +73,13 @@ function validateCreateBody(body) {
     throw new AppError(400, "repoUrl must start with http:// or https://");
   }
 
-  return { appname, repoUrl, branch, usePrivate };
+  let build;
+  try {
+    build = normalizeBuildConfig(body.build);
+  } catch (error) {
+    throw new AppError(400, error.message);
+  }
+  return { appname, repoUrl, branch, usePrivate, build };
 }
 
 // 로그인된 사용자의 userid를 req.auth에서 추출한다.
@@ -105,11 +114,26 @@ function dispatchJob(res, type, meta, userid, extraData = {}) {
 
 // ── 공용 job 실행 함수 (재시도에도 재사용) ───────────────────────────────────
 
+const appJobQueues = new Map();
+
 /**
  * job 객체를 받아 type에 따라 적절한 작업을 실행한다.
  * jobStore.recoverOnStartup() 및 /jobs/:id/retry 엔드포인트에서도 호출된다.
  */
+// 같은 앱의 생명주기 작업은 순서대로 실행해 소스와 빌드 설정의 교체가 겹치지 않게 한다.
 async function executeJob(job) {
+  const key = `${job.meta.userid}/${job.meta.appname}`.toLowerCase();
+  const previous = appJobQueues.get(key) || Promise.resolve();
+  const current = previous.catch(() => {}).then(() => runJob(job));
+  appJobQueues.set(key, current);
+  try {
+    await current;
+  } finally {
+    if (appJobQueues.get(key) === current) appJobQueues.delete(key);
+  }
+}
+
+async function runJob(job) {
   const { id, type, meta } = job;
   const onLog = (line) => jobStore.appendLog(id, line);
 
@@ -117,7 +141,7 @@ async function executeJob(job) {
   try {
     switch (type) {
       case "create": {
-        const { userid, appname, repoUrl, branch, installationId } = meta;
+        const { userid, appname, repoUrl, branch, installationId, build } = meta;
         const env = {};
         if (installationId && _githubService) {
           // 매 실행 시 fresh installation token을 발급해 env로만 전달 (askpass가 소비)
@@ -125,7 +149,16 @@ async function executeJob(job) {
           // create.sh가 .paas-meta.json에 기록하도록 비밀 아닌 installationId를 전달
           env.PAAS_INSTALLATION_ID = installationId;
         }
-        await runRunnerScript(RUNNER_SCRIPTS.create, [userid, appname, repoUrl, branch], { onLog, env });
+        // 긴 Dockerfile 본문을 환경변수나 인자 대신 권한이 제한된 임시 파일로 전달한다.
+        const inputDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "paas-build-"));
+        try {
+          const inputPath = path.join(inputDir, "build.json");
+          await fs.promises.writeFile(inputPath, JSON.stringify(normalizeBuildConfig(build)), { mode: 0o600 });
+          env.PAAS_BUILD_CONFIG_PATH = inputPath;
+          await runRunnerScript(RUNNER_SCRIPTS.create, [userid, appname, repoUrl, branch], { onLog, env });
+        } finally {
+          await fs.promises.rm(inputDir, { recursive: true, force: true });
+        }
         const appInfo = await buildAppInfo(userid, appname, null);
         jobStore.finishJob(id, JSON.stringify({ app: appInfo }));
         break;
@@ -205,11 +238,30 @@ function setGithubService(svc) { _githubService = svc; }
 
 // ── 앱 CRUD ───────────────────────────────────────────────────────────────────
 
+// POST /apps/dockerfiles — 선택한 브랜치의 GitHub 루트 파일만 조회한다.
+router.post("/dockerfiles", async (req, res, next) => {
+  try {
+    resolveRequestUserId(req);
+    const { repoUrl, branch = "main", usePrivate } = req.body || {};
+    if (typeof repoUrl !== "string") throw new AppError(400, "repoUrl is required");
+    let token = "";
+    if (usePrivate === true) {
+      if (!_githubService) throw new AppError(503, "GitHub integration is disabled.");
+      const installationId = _githubService.getInstallationId(req.auth.user.id);
+      if (!installationId) throw new AppError(400, "GitHub is not connected.");
+      token = await _githubService.getCloneToken(installationId);
+    }
+    return sendOk(res, await listRootDockerfiles(repoUrl, branch, token));
+  } catch (error) {
+    return next(error);
+  }
+});
+
 // POST /apps — 앱 생성 (비동기 job)
 router.post("/", async (req, res, next) => {
   try {
     const userid = resolveRequestUserId(req);
-    const { appname, repoUrl, branch, usePrivate } = validateCreateBody(req.body);
+    const { appname, repoUrl, branch, usePrivate, build } = validateCreateBody(req.body);
 
     // private 저장소 의도인 경우, 본인 GitHub 설치에서 installationId를 조회한다.
     let installationId = "";
@@ -228,7 +280,7 @@ router.post("/", async (req, res, next) => {
       throw new AppError(429, `MAX_APPS_PER_USER exceeded (${config.MAX_APPS_PER_USER})`);
     }
 
-    dispatchJob(res, "create", { userid, appname, repoUrl, branch, installationId }, userid);
+    dispatchJob(res, "create", { userid, appname, repoUrl, branch, installationId, build }, userid);
   } catch (error) {
     return next(error);
   }

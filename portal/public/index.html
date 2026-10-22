@@ -160,6 +160,30 @@
                         <label for="repo-branch-input">Branch</label>
                         <input id="repo-branch-input" name="branch" type="text" placeholder="main" value="main" />
 
+                        <fieldset class="build-options">
+                            <legend>Build configuration</legend>
+                            <label class="build-option"><input type="radio" name="buildMode" value="auto" checked /> <span>Detect Dockerfile automatically</span></label>
+                            <p class="field-hint">Uses a Dockerfile in the repository when found, then falls back to Railpack.</p>
+                            <label class="build-option"><input type="radio" name="buildMode" value="repository" /> <span>Choose a root Dockerfile</span></label>
+                            <div id="build-repository-panel" class="build-mode-panel" hidden>
+                                <div class="build-file-heading">
+                                    <label for="build-dockerfile-select">Dockerfile</label>
+                                    <button id="build-files-refresh" class="ghost-btn" type="button">Refresh</button>
+                                </div>
+                                <select id="build-dockerfile-select" disabled aria-describedby="build-files-status">
+                                    <option value="">Select a repository first</option>
+                                </select>
+                                <p id="build-files-status" class="field-hint" role="status" aria-live="polite">Choose a repository and branch to load root Dockerfiles.</p>
+                            </div>
+                            <label class="build-option"><input type="radio" name="buildMode" value="custom" /> <span>Write a Dockerfile</span></label>
+                            <div id="build-custom-panel" class="build-mode-panel" hidden>
+                                <label for="build-custom-content">Dockerfile contents</label>
+                                <textarea id="build-custom-content" rows="12" spellcheck="false" maxlength="65536" placeholder="FROM ..."></textarea>
+                                <p class="field-hint">Build context is the repository root. HTTP apps must listen on 0.0.0.0:5000. Maximum size: 64 KiB.</p>
+                                <p id="build-custom-error" class="field-hint build-error" role="alert" hidden></p>
+                            </div>
+                        </fieldset>
+
                         <div class="preview-text preview-row preview-row-domain">
                             <span class="preview-label">Preview URL:</span>
                             <code id="domain-preview" class="preview-code">owner-appname.my.domain.com</code>

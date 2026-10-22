@@ -88,7 +88,7 @@ DISPLAY_NAME="$(node -e "console.log(JSON.parse(process.argv[1]).displayName)" "
 echo "[deploy] Detected runtime: ${DISPLAY_NAME}"
 
 APP_IMAGE="$(app_image_name "${USER_ID}" "${APP_NAME}")"
-build_app_image "${APP_DIR}/${APP_SOURCE_SUBDIR}" "${APP_IMAGE}"
+build_app_image "${APP_DIR}/${APP_SOURCE_SUBDIR}" "${APP_IMAGE}" "${APP_DIR}/.paas-meta.json"
 
 echo "[deploy] Regenerating docker-compose.yml..."
 generate_app_compose "${USER_ID}" "${APP_NAME}" "${APP_IMAGE}"

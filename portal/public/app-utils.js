@@ -125,8 +125,10 @@ function getRepoSource() {
 // 선택된 방식을 라디오에 반영한다. (GitHub 연동 미설정 시 url로 강제 전환할 때 사용)
 function setRepoSource(source) {
   const target = el.repoSourceRadios.find((radio) => radio.value === source);
+  const changed = Boolean(target && !target.checked);
   if (target) target.checked = true;
   syncRepoSourcePanels();
+  if (changed) target.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 // 선택된 방식의 입력 패널만 표시하고, 숨겨지는 패널의 필드는 오류 표시를 정리한다.
@@ -278,6 +280,7 @@ function applyAccessState() {
   if (el.detailEnvSaveBtn)   el.detailEnvSaveBtn.disabled   = !enabled;
   if (el.detailExecRunBtn)   el.detailExecRunBtn.disabled   = !enabled;
   if (el.detailExecInput)    el.detailExecInput.disabled    = !enabled;
+  el.createForm.dispatchEvent(new Event("build-access-state-changed"));
 }
 
 export {

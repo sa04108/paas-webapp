@@ -43,8 +43,17 @@ npm start
 ### 앱 관리
 
 - `POST /apps`
-  - body: `{ appname, repoUrl, branch? }`
+  - body: `{ appname, repoUrl, branch?, usePrivate?, build? }`
   - `branch` 기본값: `main`
+  - `build` 생략 또는 `{ mode: "auto" }`: 기존 루트 Dockerfile 자동 탐지 후, 후보가 없으면 Railpack 사용
+  - `{ mode: "repository", dockerfile: "Dockerfile.web" }`: 이름에 `Dockerfile`이 포함된 루트 파일을 명시적으로 선택
+  - `{ mode: "custom", content: "FROM ..." }`: UTF-8 기준 최대 64 KiB의 Dockerfile 본문 사용
+  - 빌드 설정은 소스 밖의 `.paas-meta.json`에 저장소 정보와 함께 저장되며 재배포 때도 유지
+- `POST /apps/dockerfiles`
+  - body: `{ repoUrl, branch?, usePrivate? }`
+  - 선택한 브랜치의 GitHub 루트에서 이름에 `Dockerfile`이 포함된 파일만 조회
+  - 응답: `{ files: ["Dockerfile", "Dockerfile.web"], branch: "main" }` (`data` 안에 포함)
+  - 비공개 저장소는 로그인 사용자의 GitHub App 설치 권한 사용
 - `GET /apps`
 - `GET /apps/:userid/:appname`
 - `POST /apps/:userid/:appname/start`

@@ -71,32 +71,23 @@ DISPLAY_NAME="$(node -e "console.log(JSON.parse(process.argv[1]).displayName)" "
 echo "[create] Detected runtime: ${DISPLAY_NAME}"
 
 APP_IMAGE="$(app_image_name "${USER_ID}" "${APP_NAME}")"
-build_app_image "${APP_DIR}/${APP_SOURCE_SUBDIR}" "${APP_IMAGE}"
+build_app_image "${APP_DIR}/${APP_SOURCE_SUBDIR}" "${APP_IMAGE}" "${PAAS_BUILD_CONFIG_PATH:-}"
 
 echo "[create] Generating docker-compose.yml..."
 generate_app_compose "${USER_ID}" "${APP_NAME}" "${APP_IMAGE}"
-
-echo "[create] Writing app metadata..."
-REPO_URL="${REPO_URL}" \
-BRANCH="${BRANCH}" \
-RUNTIME_JSON="${RUNTIME_JSON}" \
-INSTALLATION_ID="${PAAS_INSTALLATION_ID:-}" \
-META_PATH="${APP_DIR}/.paas-meta.json" \
-node -e "
-const meta = {
-  repoUrl: process.env.REPO_URL,
-  branch: process.env.BRANCH,
-  installationId: process.env.INSTALLATION_ID || null,
-  createdAt: new Date().toISOString(),
-  detectedRuntime: (({ runtime, displayName, icon, dependencies }) => ({ name: runtime, displayName, icon, dependencies }))(JSON.parse(process.env.RUNTIME_JSON))
-};
-require('fs').writeFileSync(process.env.META_PATH, JSON.stringify(meta, null, 2));
-"
 
 # 기동 (이미 빌드된 이미지를 사용)
 mkdir -p "$(app_log_dir_for "${APP_DIR}")"
 echo "[create] Starting container..."
 docker compose -f "${COMPOSE_FILE}" up -d 2>&1 | tee -a "${APP_DIR}/${APP_LOGS_SUBDIR}/create.log"
+
+# 생성이 성공한 뒤 저장소 정보와 빌드 설정을 한 파일로 원자적으로 저장한다.
+echo "[create] Writing app metadata..."
+REPO_URL="${REPO_URL}" \
+BRANCH="${BRANCH}" \
+RUNTIME_JSON="${RUNTIME_JSON}" \
+INSTALLATION_ID="${PAAS_INSTALLATION_ID:-}" \
+node "${SCRIPT_DIR}/lib/build-config.js" save-metadata "${APP_DIR}/.paas-meta.json" "${PAAS_BUILD_CONFIG_PATH:-}"
 
 # echo "[create] 소스 디렉토리 유지 (deploy 목적)..."
 # rm -rf "${APP_DIR}/${APP_SOURCE_SUBDIR}"

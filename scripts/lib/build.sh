@@ -12,17 +12,24 @@ app_image_name() {
   echo "paas-app-${user_id}-${app_name}:latest"
 }
 
-# build_app_image <src_dir> <image_name>
-# → 루트의 Dockerfile을 우선하고, 없으면 이름에 Dockerfile이 포함된 첫 파일을 빌드한다.
-# → 후보는 바이트순으로 선택하며, 후보가 없을 때만 railpack build를 사용한다.
+# build_app_image <src_dir> <image_name> [config_path]
+# → 저장된 명시적 설정을 우선하고, 자동 모드에서는 기존 루트 파일 탐지를 사용한다.
+# → 자동 모드의 후보는 바이트순으로 선택하며, 후보가 없을 때만 railpack build를 사용한다.
 build_app_image() {
   local src_dir="$1"
   local image_name="$2"
+  local config_path="${3:-}"
   local dockerfile_path=""
   local candidate_path=""
   local candidate_name=""
 
-  if [[ -f "${src_dir}/Dockerfile" ]]; then
+  if [[ -n "${config_path}" ]]; then
+    dockerfile_path="$(node "$(dirname "${BASH_SOURCE[0]}")/build-config.js" resolve "${src_dir}" "${config_path}")" || return $?
+  fi
+
+  if [[ -n "${dockerfile_path}" ]]; then
+    echo "[build] Using configured Dockerfile"
+  elif [[ -f "${src_dir}/Dockerfile" ]]; then
     dockerfile_path="${src_dir}/Dockerfile"
   else
     while IFS= read -r -d '' candidate_path; do
