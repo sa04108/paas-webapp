@@ -15,6 +15,8 @@ const { promisify } = require("node:util");
 const Docker = require("dockerode");
 const readline = require("node:readline");
 const appReadiness = require("./appReadiness");
+const { projectName, INSPECT_FORMAT } = require("./composeConfig");
+const { atomicWrite } = require("../scripts/lib/compose-project");
 
 const { AppError } = require("./utils");
 const {
@@ -136,13 +138,11 @@ async function readAppMeta(appDir) {
   }
 }
 
-// docker-compose.yml에서 container_name 값을 추출한다.
+// 원자적으로 저장된 서비스 목록에서 웹 컨테이너를 찾는다.
 async function readContainerName(appDir) {
-  const composePath = path.join(appDir, APP_COMPOSE_FILE);
   try {
-    const content = await fs.readFile(composePath, "utf8");
-    const match = content.match(/^\s+container_name:\s+"(.+)"\s*$/m);
-    return match?.[1] ?? null;
+    const state = JSON.parse(await fs.readFile(path.join(appDir, ".paas-project.json"), "utf8"));
+    return state.services.find((service) => service.name === state.webService)?.containerName || null;
   } catch {
     return null;
   }
@@ -182,6 +182,8 @@ async function buildAppInfo(userid, appname, dockerAppItem = null) {
     appname,
     domain: item?.domain || domainName(userid, appname),
     containerName: item?.containerName || null,
+    primaryService: item?.primaryService || "app",
+    services: item?.services || [],
     ...readiness,
     rawStatus: item?.rawStatus || "not-found",
     repoUrl: metadata?.repoUrl || null,
@@ -330,12 +332,13 @@ async function runRunnerScript(scriptName, args, options = {}) {
 // docker compose 명령을 앱 디렉터리 기준으로 실행한다.
 async function runDockerCompose(appDir, args) {
   const composePath = path.join(appDir, APP_COMPOSE_FILE);
-  if (!(await pathExists(composePath))) {
-    throw new AppError(404, `${APP_COMPOSE_FILE} not found for this app`);
-  }
-
   try {
-    const result = await runCommand("docker", ["compose", "-f", APP_COMPOSE_FILE, ...args], {
+    const state = JSON.parse(await fs.readFile(path.join(appDir, ".paas-project.json"), "utf8"));
+    const expected = projectName(path.basename(path.dirname(appDir)), path.basename(appDir));
+    if (state.project !== expected) throw new AppError(409, "App project identity does not match");
+    if (state.compose) atomicWrite(composePath, state.compose);
+    if (!(await pathExists(composePath))) throw new AppError(404, `${APP_COMPOSE_FILE} not found for this app`);
+    const result = await runCommand("docker", ["compose", "--env-file", "/dev/null", "-p", expected, "-f", APP_COMPOSE_FILE, ...args], {
       cwd: appDir,
     });
     dockerAppsCache.ts = 0; // 실행 후 Docker 상태 캐시를 무효화
@@ -378,48 +381,50 @@ async function listDockerApps() {
     return dockerAppsCache.data;
   }
 
-  const result = { apps: [], hasLabelErrors: false };
+  const result = { apps: [], hasLabelErrors: false, dockerAvailable: true };
+  let containers = [];
   try {
-    const { stdout } = await runCommand("docker", [
-      "ps", "-a",
-      "--filter", "label=paas.type=user-app",
-      "--format", "{{.Label \"paas.userid\"}}\t{{.Label \"paas.appname\"}}\t{{.Names}}\t{{.Status}}\t{{.Label \"paas.domain\"}}\t{{.CreatedAt}}\t{{.Label \"paas.port\"}}",
-    ]);
-
-    if (stdout) {
-      for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
-        const parts = line.split("\t");
-        const uid = parts[0]?.trim();
-        const appn = parts[1]?.trim();
-        const containerName = parts[2]?.trim();
-        const rawStatus = parts[3]?.trim() || "unknown";
-        const domain = parts[4]?.trim() || "";
-        const createdAt = parts[5]?.trim() || "";
-        const port = Number.parseInt(parts[6]?.trim(), 10) || 5000;
-
-        if (!uid || !appn) {
-          result.hasLabelErrors = true;
-          continue;
-        }
-
-        result.apps.push({
-          userid: uid,
-          appname: appn,
-          containerName,
-          rawStatus,
-          domain,
-          port,
-          createdAt,
-        });
+    const { stdout } = await runCommand("docker", ["ps", "-aq", "--filter", "label=paas.type=user-app"]);
+    if (stdout.trim()) {
+      let inspection;
+      try { inspection = await runCommand("docker", ["inspect", "--format", INSPECT_FORMAT, ...stdout.trim().split(/\s+/)]); }
+      catch (error) {
+        // 목록 조회 사이에 다른 앱이 삭제됐으면 남은 결과를 사용한다.
+        if (error.code !== 1 || !/No such (?:object|container):/.test(error.stderr || "")) throw error;
+        inspection = { stdout: String(error.stdout || "") };
       }
+      containers = inspection.stdout.split("\n").filter(Boolean).map((line) => JSON.parse(line));
     }
-
-    dockerAppsCache.data = result;
-    dockerAppsCache.ts = now;
-  } catch {
-    // docker 데몬 오류 시 빈 데이터 캐싱
+  } catch { result.dockerAvailable = false; }
+  // 관리 메타데이터를 기준으로 세어 중지·실패한 앱도 목록과 할당량에서 유지한다.
+  for (const app of await listFilesystemApps()) {
+    const metadata = await readAppMeta(app.appDir);
+    if (!metadata) continue;
+    let state;
+    try { state = JSON.parse(await fs.readFile(path.join(app.appDir, ".paas-project.json"), "utf8")); }
+    catch (error) { if (error.code !== "ENOENT") throw error; }
+    const expected = projectName(app.userid, app.appname);
+    if (state && state.project !== expected) { result.hasLabelErrors = true; continue; }
+    const services = (state?.services || []).map((service) => {
+      const container = containers.find((item) => item.Name === `/${service.containerName}` && item.Config.Labels?.["paas.project"] === expected && item.Config.Labels?.["com.docker.compose.project"] === expected && item.Config.Labels?.["paas.service"] === service.name);
+      const raw = container?.State;
+      const status = !result.dockerAvailable ? "docker-unavailable" : !raw ? "not-found" : service.kind === "init" && raw.Status === "exited" && raw.ExitCode === 0 ? "completed" : service.kind === "init" && raw.Status === "running" ? "starting" : raw.Status === "running" ? raw.Health?.Status === "unhealthy" ? "unhealthy" : raw.Health?.Status === "starting" ? "starting" : "running" : ["dead", "exited"].includes(raw.Status) ? "stopped" : raw.Status;
+      return { name: service.name, kind: service.kind, containerName: container ? service.containerName : null, status, health: raw?.Health?.Status || null, exitCode: raw?.ExitCode ?? null };
+    });
+    let rawStatus;
+    const running = services.filter((service) => service.kind !== "init");
+    if (["deleting", "delete-failed"].includes(state?.phase)) rawStatus = state.phase;
+    else if (!result.dockerAvailable) rawStatus = "docker-unavailable";
+    else if (!services.length) rawStatus = "unhealthy";
+    else if (running.length && running.every((service) => ["stopped", "not-found"].includes(service.status))) rawStatus = "stopped";
+    else if (services.every((service) => ["running", "completed"].includes(service.status))) rawStatus = "running";
+    else if (services.some((service) => ["stopped", "not-found", "unhealthy"].includes(service.status))) rawStatus = "degraded";
+    else rawStatus = "starting";
+    const primaryService = state?.webService || metadata.runtime?.webService || "app";
+    result.apps.push({ userid: app.userid, appname: app.appname, domain: domainName(app.userid, app.appname), primaryService, containerName: services.find((service) => service.name === primaryService)?.containerName || null, services, rawStatus, port: 5000, createdAt: metadata.createdAt });
   }
-
+  dockerAppsCache.data = result;
+  dockerAppsCache.ts = now;
   return result;
 }
 
@@ -437,39 +442,49 @@ async function findDockerApp(userid, appname) {
 }
 
 // 앱 디렉터리를 기준으로 docker compose logs를 조회한다. (다중 컨테이너 지원)
-async function getComposeLogs(appDir, lines) {
-  const result = await runDockerCompose(appDir, ["logs", "--no-color", "--tail", String(lines)]);
+async function getComposeLogs(appDir, lines, service) {
+  if (service) await findDockerService(path.basename(path.dirname(appDir)), path.basename(appDir), service);
+  const result = await runDockerCompose(appDir, ["logs", "--no-color", "--tail", String(lines), ...(service ? [service] : [])]);
   // docker compose logs는 stdout + stderr에 출력될 수 있으므로 병합한다.
   return [result.stdout, result.stderr].filter(Boolean).join("\n");
 }
 
+async function findDockerService(userid, appname, requested) {
+  const app = await findDockerApp(userid, appname);
+  const name = requested || app?.primaryService;
+  if (typeof name !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(name)) throw new AppError(400, "Invalid service name");
+  const service = app?.services?.find((entry) => entry.name === name);
+  if (!service) throw new AppError(404, "Service not found for this app");
+  return service;
+}
+
+async function waitForServices(userid, appname, onLog) {
+  await runCommand("node", [path.join(config.PAAS_SCRIPTS_DIR, "lib/compose-project.js"), "wait", userid, appname], { stream: true, logTag: "services", onLog });
+  dockerAppsCache.ts = 0;
+}
+
+async function areServicesReady(userid, appname) {
+  dockerAppsCache.ts = 0;
+  return (await findDockerApp(userid, appname))?.rawStatus === "running";
+}
+
 // ── 환경변수 파일 관리 ────────────────────────────────────────────────────────
 
-// 구형 compose 파일(env_file 항목 없음)에 .env.paas 참조를 자동으로 주입한다.
-// generate-compose.js가 생성하는 포맷은 결정적이므로 단순 문자열 치환으로 처리한다.
+// 앱 환경변수 파일을 모든 서비스에 연결하고 실행 정의에도 함께 저장한다.
 async function patchComposeEnvFile(appDir) {
   const composePath = path.join(appDir, APP_COMPOSE_FILE);
-  let content;
-  try {
-    content = await fs.readFile(composePath, "utf8");
-  } catch {
-    return;
-  }
-  if (content.includes("env_file:")) return;
-
-  const patched = content.replace(
-    /^(\s+environment:)/m,
-    `    env_file:\n      - ".env.paas"\n$1`
-  );
-  if (patched !== content) {
-    await fs.writeFile(composePath, patched, "utf8");
-  }
+  const statePath = path.join(appDir, ".paas-project.json");
+  const state = JSON.parse(await fs.readFile(statePath, "utf8"));
+  const compose = state.compose;
+  for (const service of Object.values(compose.services)) service.env_file = [".env.paas"];
+  atomicWrite(statePath, { ...state, compose });
+  atomicWrite(composePath, compose);
 }
 
 async function readEnvFile(appDir) {
   const envPath = path.join(appDir, ENV_PAAS_FILE);
   try {
-    return await fs.readFile(envPath, "utf8");
+    return (await fs.readFile(envPath, "utf8")).replace(/\$\$/g, () => "$");
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
     return "";
@@ -655,6 +670,9 @@ module.exports = {
   buildAppInfo,
   ensureAppExists,
   findDockerApp,
+  findDockerService,
+  waitForServices,
+  areServicesReady,
   normalizeStatus,
   // 커맨드 실행
   runCommand,

@@ -24,6 +24,11 @@ const {
   buildAppInfo,
   ensureAppExists,
   findDockerApp,
+  findDockerService,
+  waitForServices,
+  getAppDir,
+  readAppMeta,
+  dockerAppsCache,
   normalizeStatus,
   listDockerApps,
   getDockerContainerStatus,
@@ -41,6 +46,7 @@ const { normalizeBuildConfig, saveAppMetadata } = require("../../scripts/lib/bui
 const { listRootDockerfiles } = require("../repositoryFiles");
 const { normalizeCreateEnv } = require("../appEnvironment");
 const appReadiness = require("../appReadiness");
+const { normalizeRuntime } = require("../composeConfig");
 
 const router = express.Router();
 
@@ -62,7 +68,7 @@ function validateCreateBody(body) {
   if (!body || typeof body !== "object") {
     throw new AppError(400, "Request body is required");
   }
-  const appname    = String(body.appname    || "").trim();
+  const appname    = String(body.appname    || "").trim().toLowerCase();
   const repoUrl    = String(body.repoUrl    || "").trim();
   const branch     = String(body.branch     || "main").trim() || "main";
   const usePrivate = body.usePrivate === true;
@@ -83,7 +89,10 @@ function validateCreateBody(body) {
     throw new AppError(400, error.message);
   }
   const env = normalizeCreateEnv(body.env);
-  return { appname, repoUrl, branch, usePrivate, build, env };
+  let runtime;
+  try { runtime = normalizeRuntime(body.runtime); }
+  catch (error) { throw new AppError(400, error.message); }
+  return { appname, repoUrl, branch, usePrivate, build, runtime, env };
 }
 
 // 로그인된 사용자의 userid를 req.auth에서 추출한다.
@@ -96,8 +105,8 @@ function resolveRequestUserId(req) {
 
 // URL 파라미터(:userid, :appname)를 검증하고 접근 권한을 확인한다.
 async function resolveAppRequestContext(req) {
-  const userid  = String(req.params?.userid  || "").trim();
-  const appname = String(req.params?.appname || "").trim();
+  const userid  = String(req.params?.userid  || "").trim().toLowerCase();
+  const appname = String(req.params?.appname || "").trim().toLowerCase();
   validateAppParams(userid, appname);
 
   const user = req.auth?.user;
@@ -111,7 +120,8 @@ async function resolveAppRequestContext(req) {
 
 // 비동기 job 생성을 담당하고 즉시 202 응답을 반환하는 공통 헬퍼
 function dispatchJob(res, type, meta, userid, extraData = {}, privateInput = {}) {
-  const jobId = jobStore.createJob(type, meta, userid, privateInput);
+  const metadata = JSON.parse(fs.readFileSync(path.join(getAppDir(meta.userid, meta.appname), ".paas-meta.json"), "utf8"));
+  const jobId = jobStore.createJob(type, { ...meta, instanceId: metadata.instanceId }, userid, privateInput);
   res.status(202).json({ ok: true, data: { jobId, ...extraData } });
   setImmediate(() => executeJob(jobStore.getJob(jobId)));
 }
@@ -150,10 +160,16 @@ async function runJob(job) {
   const requiresReadiness = ["create", "deploy", "start", "env-restart"].includes(type);
   const readinessGeneration = randomUUID();
   try {
+    const appDir = getAppDir(meta.userid, meta.appname);
+    const metadata = await readAppMeta(appDir);
+    if (!metadata?.instanceId || metadata.instanceId !== meta.instanceId) throw new AppError(409, "This job belongs to a different app creation");
+    const projectState = await fs.promises.readFile(path.join(appDir, ".paas-project.json"), "utf8").then(JSON.parse).catch((error) => { if (error.code === "ENOENT") return null; throw error; });
+    if (type !== "delete" && ["deleting", "delete-failed"].includes(projectState?.phase)) throw new AppError(409, "Finish deleting this app before starting another operation");
+    saveAppMetadata(path.join(appDir, ".paas-meta.json"), { ...metadata, lastJobId: id }, metadata.build);
     if (requiresReadiness) appReadiness.begin(meta.userid, meta.appname, readinessGeneration);
     switch (type) {
       case "create": {
-        const { userid, appname, repoUrl, branch, installationId, build } = meta;
+        const { userid, appname, repoUrl, branch, installationId, build, runtime } = meta;
         const env = {};
         const initialEnv = jobStore.getJobEnvironment(id);
         if (initialEnv !== undefined) {
@@ -173,6 +189,9 @@ async function runJob(job) {
           const inputPath = path.join(inputDir, "build.json");
           await fs.promises.writeFile(inputPath, JSON.stringify(normalizeBuildConfig(build)), { mode: 0o600 });
           env.PAAS_BUILD_CONFIG_PATH = inputPath;
+          const runtimePath = path.join(inputDir, "runtime.json");
+          await fs.promises.writeFile(runtimePath, JSON.stringify(normalizeRuntime(runtime)), { mode: 0o600 });
+          env.PAAS_RUNTIME_CONFIG_PATH = runtimePath;
           await runRunnerScript(RUNNER_SCRIPTS.create, [userid, appname, repoUrl, branch], { onLog, env });
         } finally {
           await fs.promises.rm(inputDir, { recursive: true, force: true });
@@ -212,6 +231,7 @@ async function runJob(job) {
       case "start": {
         const { userid, appname, appDir } = meta;
         const result = await runDockerCompose(appDir, ["up", "-d"]);
+        await waitForServices(userid, appname, onLog);
         await appReadiness.waitUntilReady(userid, appname, readinessGeneration, onLog);
         const status = await getDockerContainerStatus(appDir);
         jobStore.finishJob(id, JSON.stringify({ status: normalizeStatus(status) }));
@@ -227,6 +247,7 @@ async function runJob(job) {
       case "env-restart": {
         const { userid, appname, appDir } = meta;
         await runDockerCompose(appDir, ["up", "-d", "--force-recreate"]);
+        await waitForServices(userid, appname, onLog);
         await appReadiness.waitUntilReady(userid, appname, readinessGeneration, onLog);
         jobStore.finishJob(id, "restarted");
         break;
@@ -246,6 +267,13 @@ async function runJob(job) {
 // executeJob을 jobs 라우터에 주입 (재시도 기능을 위해)
 const jobsRouter = require("./jobs");
 jobsRouter.setExecuteJobFn(executeJob);
+jobsRouter.setCleanupJobFn((job) => withAppQueue(job.meta.userid, job.meta.appname, async () => {
+  const metadata = await readAppMeta(getAppDir(job.meta.userid, job.meta.appname));
+  // 다른 배포가 소유권을 이어받았거나 앱이 재생성됐다면 이전 작업만 정리한다.
+  if (!metadata || metadata.instanceId !== job.meta.instanceId || metadata.lastJobId !== job.id) return;
+  await runRunnerScript(RUNNER_SCRIPTS.delete, [job.meta.userid, job.meta.appname]);
+  appReadiness.remove(job.meta.userid, job.meta.appname);
+}));
 
 // ── 앱 이벤트 훅 ─────────────────────────────────────────────────────────────
 // server.js에서 domainManager 의존성을 순환 없이 주입하기 위한 훅 패턴
@@ -283,10 +311,12 @@ router.post("/dockerfiles", async (req, res, next) => {
 });
 
 // POST /apps — 앱 생성 (비동기 job)
+let creationQueue = Promise.resolve();
+
 router.post("/", async (req, res, next) => {
   try {
     const userid = resolveRequestUserId(req);
-    const { appname, repoUrl, branch, usePrivate, build, env } = validateCreateBody(req.body);
+    const { appname, repoUrl, branch, usePrivate, build, runtime, env } = validateCreateBody(req.body);
 
     // private 저장소 의도인 경우, 본인 GitHub 설치에서 installationId를 조회한다.
     let installationId = "";
@@ -296,16 +326,21 @@ router.post("/", async (req, res, next) => {
       if (!installationId) throw new AppError(400, "GitHub is not connected.");
     }
 
-    const { apps: existingApps } = await listDockerApps();
-    if (existingApps.length >= config.MAX_TOTAL_APPS) {
-      throw new AppError(429, `MAX_TOTAL_APPS exceeded (${config.MAX_TOTAL_APPS})`);
-    }
-    const userAppCount = existingApps.filter((item) => item.userid === userid).length;
-    if (userAppCount >= config.MAX_APPS_PER_USER) {
-      throw new AppError(429, `MAX_APPS_PER_USER exceeded (${config.MAX_APPS_PER_USER})`);
-    }
-
-    dispatchJob(res, "create", { userid, appname, repoUrl, branch, installationId, build }, userid, {}, { env });
+    const reserve = creationQueue.catch(() => {}).then(async () => {
+      dockerAppsCache.ts = 0;
+      const { apps: existingApps, dockerAvailable } = await listDockerApps();
+      if (dockerAvailable === false) throw new AppError(503, "Docker is unavailable");
+      if (existingApps.some((item) => item.userid === userid && item.appname === appname)) throw new AppError(409, "App already exists");
+      if (existingApps.length >= config.MAX_TOTAL_APPS) throw new AppError(429, `MAX_TOTAL_APPS exceeded (${config.MAX_TOTAL_APPS})`);
+      if (existingApps.filter((item) => item.userid === userid).length >= config.MAX_APPS_PER_USER) throw new AppError(429, `MAX_APPS_PER_USER exceeded (${config.MAX_APPS_PER_USER})`);
+      const appDir = getAppDir(userid, appname);
+      await fs.promises.mkdir(appDir, { recursive: true });
+      await fs.promises.writeFile(path.join(appDir, ".paas-meta.json"), JSON.stringify({ instanceId: randomUUID(), repoUrl, branch, installationId, build, runtime, createdAt: new Date().toISOString() }), { mode: 0o600, flag: "wx" });
+      dockerAppsCache.ts = 0;
+      dispatchJob(res, "create", { userid, appname, repoUrl, branch, installationId, build, runtime }, userid, {}, { env });
+    });
+    creationQueue = reserve;
+    await reserve;
   } catch (error) {
     return next(error);
   }
@@ -411,7 +446,8 @@ router.get("/:userid/:appname/logs", async (req, res, next) => {
     const requestedLines = Number.parseInt(String(req.query.lines || "120"), 10);
     const lines = Number.isFinite(requestedLines) ? Math.max(1, Math.min(1000, requestedLines)) : 120;
 
-    const logs = await getComposeLogs(appDir, lines);
+    const service = req.query.service === undefined || req.query.service === "" ? undefined : req.query.service;
+    const logs = await getComposeLogs(appDir, lines, service);
     return sendOk(res, { lines, logs });
   } catch (error) {
     return next(error);
@@ -431,7 +467,7 @@ router.post("/:userid/:appname/exec", async (req, res, next) => {
 
     const cwd = String(req.body?.cwd || "").trim();
 
-    const app = await findDockerApp(userid, appname);
+    const app = await findDockerService(userid, appname, req.body?.service);
     if (!app?.containerName) throw new AppError(404, "Container not found for this app");
 
     const { stdout, stderr } = await runContainerExec(app.containerName, command, cwd);
@@ -451,7 +487,7 @@ router.post("/:userid/:appname/exec/complete", async (req, res, next) => {
 
     const cwd = String(req.body?.cwd || "").trim();
 
-    const app = await findDockerApp(userid, appname);
+    const app = await findDockerService(userid, appname, req.body?.service);
     if (!app?.containerName) throw new AppError(404, "Container not found for this app");
 
     const completions = await runContainerComplete(app.containerName, partial, cwd);
@@ -462,6 +498,32 @@ router.post("/:userid/:appname/exec/complete", async (req, res, next) => {
 });
 
 // ── 빌드 설정 ────────────────────────────────────────────────────────────────
+
+router.get("/:userid/:appname/runtime", async (req, res, next) => {
+  try {
+    const { appDir } = await resolveAppRequestContext(req);
+    const metadata = await readBuildMetadata(appDir);
+    return sendOk(res, { runtime: normalizeRuntime(metadata.runtime) });
+  } catch (error) { next(error); }
+});
+
+router.put("/:userid/:appname/runtime", async (req, res, next) => {
+  try {
+    const { userid, appname } = await resolveAppRequestContext(req);
+    let runtime;
+    try {
+      if (!req.body || !Object.hasOwn(req.body, "runtime")) throw new Error("runtime is required");
+      runtime = normalizeRuntime(req.body.runtime);
+    } catch (error) { throw new AppError(400, error.message); }
+    await withAppQueue(userid, appname, async () => {
+      const appDir = await ensureAppExists(userid, appname);
+      const metadata = await readBuildMetadata(appDir);
+      saveAppMetadata(path.join(appDir, ".paas-meta.json"), { ...metadata, runtime }, metadata.build);
+      dockerAppsCache.ts = 0;
+    });
+    return sendOk(res, { saved: true, runtime });
+  } catch (error) { next(error); }
+});
 
 async function readBuildMetadata(appDir) {
   try {
@@ -545,10 +607,13 @@ router.put("/:userid/:appname/env", async (req, res, next) => {
     const { userid, appname, appDir } = await resolveAppRequestContext(req);
     const content = String(req.body?.env || "");
 
-    await patchComposeEnvFile(appDir);
-    await writeEnvFile(appDir, content);
-
-    dispatchJob(res, "env-restart", { userid, appname, appDir }, userid, { saved: true });
+    const normalized = normalizeCreateEnv(content);
+    await withAppQueue(userid, appname, async () => {
+      await ensureAppExists(userid, appname);
+      await patchComposeEnvFile(appDir);
+      await writeEnvFile(appDir, normalized);
+      dispatchJob(res, "env-restart", { userid, appname, appDir }, userid, { saved: true });
+    });
   } catch (error) {
     return next(error);
   }

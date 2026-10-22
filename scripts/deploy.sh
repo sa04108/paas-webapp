@@ -5,9 +5,9 @@
 # 역할:
 #   1) git pull 로 최신 코드 반영
 #   2) 런타임 재감지 (package.json 변경 대응)
-#   3) Dockerfile 재생성
-#   4) docker compose down → up -d --build 로 이미지 재빌드 및 재기동
-#   5) 최대 30초간 running 상태 도달 여부 확인
+#   3) 저장된 Compose 서비스와 빌드 설정 검증
+#   4) 서비스 이미지 준비 후 앱 프로젝트 전체 재기동
+#   5) 초기화 작업 성공과 장기 실행 서비스 준비 상태 확인
 #   6) 배포 과정을 logs/deploy.log 에 기록
 #
 # 사용법:
@@ -37,16 +37,11 @@ validate_user_id "${USER_ID}"
 validate_app_name "${APP_NAME}"
 
 APP_DIR="$(app_dir_for "${USER_ID}" "${APP_NAME}")"
-COMPOSE_FILE="$(app_compose_file_path "${APP_DIR}")"
 LOG_DIR="$(app_log_dir_for "${APP_DIR}")"
 LOG_FILE="${LOG_DIR}/deploy.log"
 
 if [[ ! -d "${APP_DIR}" ]]; then
   echo "App directory not found: ${APP_DIR}" >&2
-  exit 1
-fi
-if [[ ! -f "${COMPOSE_FILE}" ]]; then
-  echo "${APP_COMPOSE_FILE} not found: ${COMPOSE_FILE}" >&2
   exit 1
 fi
 
@@ -56,7 +51,6 @@ exec > >(tee -a "${LOG_FILE}") 2>&1
 echo "[deploy] app=${USER_ID}/${APP_NAME} started_at=$(date -Is)"
 
 require_node
-require_railpack
 
 setup_git_auth  # GIT_TOKEN이 있으면 private repo 인증 설정 (clone/pull 양쪽에 적용)
 
@@ -87,31 +81,5 @@ RUNTIME_JSON="$(node "${DETECT_RUNTIME_TOOL}" "${APP_DIR}/${APP_SOURCE_SUBDIR}")
 DISPLAY_NAME="$(node -e "console.log(JSON.parse(process.argv[1]).displayName)" "${RUNTIME_JSON}")"
 echo "[deploy] Detected runtime: ${DISPLAY_NAME}"
 
-APP_IMAGE="$(app_image_name "${USER_ID}" "${APP_NAME}")"
-build_app_image "${APP_DIR}/${APP_SOURCE_SUBDIR}" "${APP_IMAGE}" "${APP_DIR}/.paas-meta.json"
-
-echo "[deploy] Regenerating docker-compose.yml..."
-generate_app_compose "${USER_ID}" "${APP_NAME}" "${APP_IMAGE}"
-
-echo "[deploy] Restarting container..."
-docker compose -f "${COMPOSE_FILE}" down
-docker compose -f "${COMPOSE_FILE}" up -d
-
-echo "[deploy] Cleaning up dangling images after build..."
-docker image prune -f || true
-
-TARGET_CONTAINER="$(app_container_name "${USER_ID}" "${APP_NAME}")"
-DEADLINE=$((SECONDS + DEPLOY_TIMEOUT_SECS))
-
-while (( SECONDS < DEADLINE )); do
-  STATUS="$(docker inspect -f '{{.State.Status}}' "${TARGET_CONTAINER}" 2>/dev/null || true)"
-  if [[ "${STATUS}" == "running" ]]; then
-    echo "[deploy] success status=${STATUS}"
-    exit 0
-  fi
-  sleep 1
-done
-
-echo "[deploy] failed to reach running state within ${DEPLOY_TIMEOUT_SECS}s"
-docker compose -f "${COMPOSE_FILE}" logs --no-color --tail "${DEPLOY_LOG_TAIL_LINES}" app || true
-exit 1
+node "${SCRIPT_DIR}/lib/compose-project.js" deploy "${USER_ID}" "${APP_NAME}"
+echo "[deploy] App services are ready"

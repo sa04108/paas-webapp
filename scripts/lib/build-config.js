@@ -134,13 +134,21 @@ if (require.main === module) {
     if (command === "save-metadata" && firstPath) {
       const build = secondPath ? parseJson(fs.readFileSync(secondPath, "utf8")) : undefined;
       const { runtime, displayName, icon, dependencies } = JSON.parse(process.env.RUNTIME_JSON);
+      const previous = fs.existsSync(firstPath) ? parseJson(fs.readFileSync(firstPath, "utf8")) : {};
       saveAppMetadata(firstPath, {
+        ...previous,
+        instanceId: previous.instanceId || crypto.randomUUID(),
         repoUrl: process.env.REPO_URL,
         branch: process.env.BRANCH,
         installationId: process.env.INSTALLATION_ID || null,
-        createdAt: new Date().toISOString(),
+        createdAt: previous.createdAt || new Date().toISOString(),
         detectedRuntime: { name: runtime, displayName, icon, dependencies },
       }, build);
+    } else if (command === "auto" && firstPath && secondPath) {
+      const root = fs.realpathSync(firstPath);
+      const selected = fs.realpathSync(path.join(root, secondPath));
+      if (path.dirname(selected) !== root || !fs.statSync(selected).isFile()) throw new Error("Automatic Dockerfile must be a regular repository root file");
+      process.stdout.write(selected);
     } else if (command === "resolve" && firstPath && secondPath) {
       process.stdout.write(resolveDockerfile(firstPath, secondPath));
     } else if (command === "mode" && firstPath) {

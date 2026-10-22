@@ -118,6 +118,15 @@ export const el = {
   buildRailpackPanel: document.getElementById("build-railpack-panel"),
   buildRailpackConfig: document.getElementById("build-railpack-config"),
   buildRailpackError: document.getElementById("build-railpack-error"),
+  createRuntimeModeRadios: Array.from(document.querySelectorAll('#create-form input[name="runtimeMode"]')),
+  createComposeSourceRadios: Array.from(document.querySelectorAll('#create-form input[name="composeSource"]')),
+  createComposePanel: document.getElementById("create-compose-panel"),
+  createComposeInlinePanel: document.getElementById("create-compose-inline-panel"),
+  createComposeRepositoryPanel: document.getElementById("create-compose-repository-panel"),
+  createComposeContent: document.getElementById("create-compose-content"),
+  createComposeFile: document.getElementById("create-compose-file"),
+  createWebService: document.getElementById("create-web-service"),
+  createRuntimeError: document.getElementById("create-runtime-error"),
   githubStatusText: document.getElementById("github-status-text"),
   githubConnectBtn: document.getElementById("github-connect-btn"),
   githubDisconnectBtn: document.getElementById("github-disconnect-btn"),
@@ -159,12 +168,14 @@ export const el = {
 
   // Logs 탭
   detailLogLinesInput: document.getElementById("detail-log-lines-input"),
+  detailLogService: document.getElementById("detail-log-service"),
   detailRefreshLogsBtn: document.getElementById("detail-refresh-logs-btn"),
   detailLogsTitle: document.getElementById("detail-logs-title"),
   detailLogsOutput: document.getElementById("detail-logs-output"),
 
   // Exec 탭
   detailExecClearBtn: document.getElementById("detail-exec-clear-btn"),
+  detailExecService: document.getElementById("detail-exec-service"),
   detailExecTerminal: document.getElementById("detail-exec-terminal"),
 
   // Settings 탭 (환경변수)
@@ -186,6 +197,18 @@ export const el = {
   detailBuildStatus: document.getElementById("detail-build-status"),
   detailBuildError: document.getElementById("detail-build-error"),
   detailBuildSaveBtn: document.getElementById("detail-build-save-btn"),
+  detailRuntimeOptions: document.getElementById("detail-runtime-options"),
+  detailRuntimeModeRadios: Array.from(document.querySelectorAll('#detail-runtime-options input[name="detailRuntimeMode"]')),
+  detailRuntimeComposePanel: document.getElementById("detail-runtime-compose-panel"),
+  detailRuntimeComposeSourceRadios: Array.from(document.querySelectorAll('#detail-runtime-options input[name="detailComposeSource"]')),
+  detailRuntimeInlinePanel: document.getElementById("detail-runtime-inline-panel"),
+  detailRuntimeRepositoryPanel: document.getElementById("detail-runtime-repository-panel"),
+  detailRuntimeContent: document.getElementById("detail-runtime-content"),
+  detailRuntimeFile: document.getElementById("detail-runtime-file"),
+  detailRuntimeWebService: document.getElementById("detail-runtime-web-service"),
+  detailRuntimeStatus: document.getElementById("detail-runtime-status"),
+  detailRuntimeError: document.getElementById("detail-runtime-error"),
+  detailRuntimeSaveBtn: document.getElementById("detail-runtime-save-btn"),
   keepDataInput: document.getElementById("keep-data-input"),
 
   // 사용자 관리 뷰

@@ -8,6 +8,9 @@ const { AppError } = require("./utils");
 
 const probes = new Map();
 let db;
+let checkServices = async () => true;
+
+function setServiceChecker(checker) { checkServices = checker; }
 
 function init(dbPath) {
   db = new Database(dbPath);
@@ -119,12 +122,14 @@ async function probe(userid, appname, generation, timeoutMs) {
   const key = keyFor(userid, appname).join("/");
   const active = probes.get(key);
   if (active?.generation === generation) return active.promise;
-  const promise = requestStatus(healthUrl(userid, appname), timeoutMs).then((result) => {
+  const promise = requestStatus(healthUrl(userid, appname), timeoutMs).then(async (result) => {
+    const ready = result.status === 200 && await checkServices(userid, appname);
+    result = { ...result, ready, error: result.status === 200 && !ready ? "Required app services are not ready" : result.error };
     db.prepare(`
       UPDATE app_readiness SET phase = CASE WHEN ? = 200 THEN 'ready' ELSE phase END,
         last_status = ?, checked_at = ?, error = ?
       WHERE userid = ? AND appname = ? AND generation = ? AND phase IN ('checking', 'failed')
-    `).run(result.status, result.status, Date.now(), result.error, ...keyFor(userid, appname), generation);
+    `).run(ready ? 200 : 0, result.status, Date.now(), result.error, ...keyFor(userid, appname), generation);
     return result;
   });
   probes.set(key, { generation, promise });
@@ -149,21 +154,21 @@ async function waitUntilReady(userid, appname, generation, onLog) {
     if (current.phase === "ready") return;
     const result = await probe(userid, appname, generation,
       Math.min(config.APP_HEALTH_REQUEST_TIMEOUT_MS, Math.max(1, deadline - Date.now())));
-    if (result.status === 200) {
+    if (result.ready) {
       if (read(userid, appname)?.generation !== generation) {
         throw new AppError(409, "Health check superseded by another deployment");
       }
       onLog(`[health] Ready: HTTP 200 at ${url}`);
       return;
     }
-    const description = result.status ? `HTTP ${result.status}` : result.error;
+    const description = result.error || (result.status ? `HTTP ${result.status}` : "No response");
     if (description !== previousResult) onLog(`[health] Not ready: ${description}`);
     previousResult = description;
     const remaining = deadline - Date.now();
     if (remaining > 0) await delay(Math.min(config.APP_HEALTH_INTERVAL_MS, remaining));
   }
   fail(userid, appname, generation);
-  throw new AppError(504, `Health check timed out after ${config.APP_HEALTH_TIMEOUT_SECS}s: expected HTTP 200 at ${url}`);
+  throw new AppError(504, `Health check timed out after ${config.APP_HEALTH_TIMEOUT_SECS}s: expected HTTP 200 and ready services at ${url}`);
 }
 
 function apply(userid, appname, containerStatus) {
@@ -183,4 +188,4 @@ function apply(userid, appname, containerStatus) {
   };
 }
 
-module.exports = { init, begin, fail, remove, waitUntilReady, apply };
+module.exports = { init, begin, fail, remove, waitUntilReady, apply, setServiceChecker };

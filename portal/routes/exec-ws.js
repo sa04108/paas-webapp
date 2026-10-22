@@ -47,6 +47,7 @@ function parseExecWsUrl(url) {
         appname: m[2],
         cols: parseInt(params.get("cols"), 10) || 0,
         rows: parseInt(params.get("rows"), 10) || 0,
+        service: params.get("service") || undefined,
     };
 }
 
@@ -55,10 +56,10 @@ function parseExecWsUrl(url) {
  *
  * @param {object} deps
  * @param {Function} deps.resolveSessionAuth   - (req) => auth | null  (fallback용)
- * @param {Function} deps.findDockerApp        - (userid, appname) => Promise<app|null>
+ * @param {Function} deps.findDockerService    - 앱 내부 서비스의 컨테이너를 조회한다.
  * @param {Function} deps.getDockerContainer   - (containerName) => dockerode Container
  */
-function createExecWsHandler({ resolveSessionAuth, findDockerApp, getDockerContainer }) {
+function createExecWsHandler({ resolveSessionAuth, findDockerService, getDockerContainer }) {
 
     return async function handleExecWs(ws, req) {
         // ── 파라미터 추출 ──────────────────────────────────────────────────────
@@ -87,7 +88,7 @@ function createExecWsHandler({ resolveSessionAuth, findDockerApp, getDockerConta
         // ── 컨테이너 조회 ──────────────────────────────────────────────────────
         let app;
         try {
-            app = await findDockerApp(userid, appname);
+            app = await findDockerService(userid, appname, params.service);
         } catch (err) {
             ws.close(1011, truncateReason(err.message || "Failed to find app"));
             return;
@@ -118,7 +119,7 @@ function createExecWsHandler({ resolveSessionAuth, findDockerApp, getDockerConta
                 Tty: true,
             });
             stream = await new Promise((resolve, reject) => {
-                exec.start({ hijack: true, stdin: true }, (err, s) =>
+                exec.start({ hijack: true, stdin: true, Tty: true }, (err, s) =>
                     err ? reject(err) : resolve(s)
                 );
             });

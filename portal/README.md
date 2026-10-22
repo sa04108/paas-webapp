@@ -43,7 +43,7 @@ npm start
 ### 앱 관리
 
 - `POST /apps`
-  - body: `{ appname, repoUrl, branch?, usePrivate?, build?, env? }`
+  - body: `{ appname, repoUrl, branch?, usePrivate?, build?, runtime?, env? }`
   - `branch` 기본값: `main`
   - `env`: 선택 입력인 `.env` 형식 문자열. 한 줄에 `KEY=VALUE` 하나씩, UTF-8 기준 최대 64 KiB (빈 줄·주석·인용부호 지원)
   - 환경변수는 최초 컨테이너 실행부터 적용되고 재배포에도 유지됩니다. 빌드 인자로 전달하지 않으며 `PORT`, `APP_ID`, `NODE_ENV`는 플랫폼 값이 우선합니다.
@@ -61,6 +61,8 @@ npm start
   - 비공개 저장소는 로그인 사용자의 GitHub App 설치 권한 사용
 - `GET /apps`
 - `GET /apps/:userid/:appname`
+- `GET/PUT /apps/:userid/:appname/runtime`: Compose 서비스 설정 조회·저장. 다음 재배포부터 적용
+- 서비스별 이미지·Dockerfile·공용 Railpack 이미지, 초기화 작업, 소유권·삭제 정책은 [Compose 앱 배포](../docs/compose-apps.md) 참고
 - `GET /apps/:userid/:appname/build`
   - 응답: `{ build, repoUrl, branch }`, 기존 빌드 설정이 없으면 `auto`
 - `PUT /apps/:userid/:appname/build`
@@ -73,15 +75,16 @@ npm start
 - `POST /apps/:userid/:appname/stop`
 - `POST /apps/:userid/:appname/deploy`
 - `DELETE /apps/:userid/:appname`
-- `GET /apps/:userid/:appname/logs?lines=<n>` (`1..1000`, 기본 120)
+- `GET /apps/:userid/:appname/logs?lines=<n>&service=<name>` (`1..1000`, 기본 120, 서비스 생략 시 전체)
+- Exec HTTP 본문과 WebSocket 쿼리의 `service`로 앱 내부 서비스를 선택하며 생략하면 웹 서비스
 
 ### 앱 준비 상태
 
-- Portal의 생성·재배포·시작·환경변수 변경 후 재시작 작업은 할당된 기본 도메인의 `/` 경로에서 HTTP **200**을 확인한 뒤 완료됩니다. 프로덕션은 HTTPS 인증서를 검증하고, 개발 모드는 HTTP와 `TRAEFIK_HOST_PORT`를 사용합니다. 다른 도메인으로의 리다이렉트는 따라가지 않습니다.
+- Portal의 생성·재배포·시작·환경변수 변경 후 재시작 작업은 초기화 서비스의 종료 코드 0, 장기 실행 서비스의 정상 상태, 할당 도메인의 `/`에서 HTTP **200**을 모두 확인한 뒤 완료됩니다. 프로덕션은 HTTPS 인증서를 검증하고, 개발 모드는 HTTP와 `TRAEFIK_HOST_PORT`를 사용합니다. 다른 도메인으로의 리다이렉트는 따라가지 않습니다.
 - Docker 컨테이너가 실행 중이어도 검사 전에는 `starting`, 확인 제한 시간 이후에는 `unhealthy`, HTTP 200 확인 후에는 `running`으로 표시합니다. 컨테이너의 `stopped`·`restarting` 상태가 우선합니다.
 - 기본 제한 시간은 120초(`APP_HEALTH_TIMEOUT_SECS`), 검사 간격은 2초(`APP_HEALTH_INTERVAL_MS=2000`), 요청별 제한 시간은 5초(`APP_HEALTH_REQUEST_TIMEOUT_MS=5000`)입니다. 빌드 시간은 준비 상태 제한 시간에 포함하지 않습니다.
 - 제한 시간 초과는 작업 실패로 기록되며 Jobs 로그에서 검사 결과를 볼 수 있습니다. 이후에도 앱 목록을 조회하면 `unhealthy` 앱을 재검사하므로 늦게 HTTP 200이 반환되어도 `running`으로 전환됩니다. 대시보드와 관리자 목록은 준비 중이거나 비정상인 앱의 상태를 자동 갱신합니다.
-- 준비 상태는 SQLite에 저장됩니다. Portal이 검사 중 재시작되면 성공으로 간주하지 않고 재검사하며, 새 배포는 이전 검사 결과를 초기화합니다. 이 기능은 배포 직후 준비 상태를 확인하며, 확인이 끝난 앱을 계속 감시하는 기능은 아닙니다.
+- HTTP 준비 상태는 SQLite에 저장됩니다. Portal이 검사 중 재시작되면 성공으로 간주하지 않고 재검사하며, 새 배포는 이전 검사 결과를 초기화합니다. HTTP 검사는 배포 직후에 수행합니다. 서비스 컨테이너 상태는 앱 조회마다 갱신하고, 다중 서비스 앱은 화면이 활성 상태일 때 주기적으로 조회합니다. 워커 장애는 웹의 HTTP 200과 별개로 `degraded`로 표시합니다.
 - `docker-compose.dev.yml`은 `APP_HEALTH_DEV_ORIGIN=http://traefik:80`을 지정합니다. Portal 컨테이너 내부에서도 앱 도메인의 Host 헤더를 유지한 채 개발용 Traefik에 접속합니다.
 
 ### 사용자 관리

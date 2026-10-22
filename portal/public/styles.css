@@ -729,6 +729,26 @@ form label,
   border-radius: var(--radius-md);
 }
 
+.runtime-options {
+  width: 100%;
+  min-width: 0;
+}
+
+.runtime-options .build-mode-panel,
+.runtime-options .repo-source-toggle {
+  min-width: 0;
+}
+
+.runtime-options .repo-source-toggle {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.runtime-options .repo-source-option-label {
+  padding-right: 6px;
+  padding-left: 6px;
+  overflow-wrap: anywhere;
+}
+
 .build-options legend {
   padding: 0 6px;
   color: var(--ink-main);
@@ -1233,6 +1253,9 @@ code {
 
 .status-stopped,
 .status-unhealthy,
+.status-degraded,
+.status-deleting,
+.status-delete-failed,
 .status-not-found {
   --status-pill-bg: rgba(var(--danger-rgb), 0.14);
   --status-pill-border: rgba(var(--danger-rgb), 0.3);
@@ -1904,6 +1927,59 @@ code {
   font-size: 0.82rem;
 }
 
+.service-selector-label {
+  color: var(--ink-subtle);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.service-selector {
+  width: 150px !important;
+  min-width: 105px;
+  padding: 7px 30px 7px 10px !important;
+  font-size: 0.82rem;
+}
+
+.compose-sample {
+  margin: 6px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--surface-border);
+  border-radius: 9px;
+  background: var(--surface-strong);
+  color: var(--ink-main);
+  font: 0.78rem/1.5 "IBM Plex Mono", "JetBrains Mono", monospace;
+  overflow-x: auto;
+}
+
+.app-service-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--surface-border);
+  list-style: none;
+}
+
+.app-service-list li {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) auto minmax(0, 2fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 0.8rem;
+}
+
+.app-service-name {
+  color: var(--ink-main);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.app-service-meta {
+  color: var(--ink-subtle);
+  overflow-wrap: anywhere;
+}
+
 .detail-logs-title {
   margin: 0 0 10px;
   color: var(--ink-soft);
@@ -2447,6 +2523,12 @@ html[data-theme="dark"] .app-card {
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
 }
 
+html[data-theme="dark"] .status-degraded,
+html[data-theme="dark"] .status-deleting,
+html[data-theme="dark"] .status-delete-failed {
+  --status-pill-color: #ffb6b6;
+}
+
 html[data-theme="dark"] .app-domain,
 html[data-theme="dark"] .users-count,
 html[data-theme="dark"] .app-branch-badge,
@@ -2576,6 +2658,23 @@ html[data-theme="dark"] .runtime-badge.express {
 
   .gnb-logout-icon {
     display: block;
+  }
+
+  .logs-controls {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .service-selector {
+    width: 124px !important;
+  }
+
+  .app-service-list li {
+    grid-template-columns: minmax(72px, 1fr) auto;
+  }
+
+  .app-service-meta {
+    grid-column: 1 / -1;
   }
 }
 
