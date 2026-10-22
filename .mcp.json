@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "layout": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["--yes", "@layoutdesign/context@0.19.0", "serve"]
+    }
+  }
+}
