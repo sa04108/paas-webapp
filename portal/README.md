@@ -64,11 +64,13 @@ npm start
 - `GET/PUT /apps/:userid/:appname/runtime`: Compose 서비스 설정 조회·저장. 다음 재배포부터 적용
 - 서비스별 이미지·Dockerfile·공용 Railpack 이미지, 초기화 작업, 소유권·삭제 정책은 [Compose 앱 배포](../docs/compose-apps.md) 참고
 - `GET /apps/:userid/:appname/build`
-  - 응답: `{ build, repoUrl, branch }`, 기존 빌드 설정이 없으면 `auto`
+  - 응답: `{ build, repoUrl, branch, redeployRequired, pendingConfigChanges }`, 기존 빌드 설정이 없으면 `auto`
 - `PUT /apps/:userid/:appname/build`
   - body: `{ build }`, 생성과 동일한 네 가지 모드 지원
   - 현재 컨테이너를 재시작하지 않고 설정만 저장하며 다음 재배포부터 적용
   - 앱 소유자 또는 관리자만 사용 가능하며 배포 작업과 같은 앱 단위 큐에서 저장
+- 앱 조회와 빌드·런타임 설정 조회/저장 응답의 `redeployRequired`는 마지막 성공 배포와 저장된 설정이 다른지 나타냅니다. `pendingConfigChanges`의 `build`·`runtime`으로 항목별 변경 여부를 제공하며 비교 해시는 응답에 포함하지 않습니다.
+- 설정 화면의 저장 버튼 아래와 앱 카드에 재배포 안내가 표시됩니다. 같은 값 저장·배포한 값으로 되돌리기는 불필요한 안내를 만들지 않고, 새로고침·중지/시작·환경변수 재시작 후에도 미적용 변경을 유지합니다. 포털의 생성·재배포에서 서비스 준비 및 도메인 HTTP 200 확인이 끝나야 적용 완료로 기록합니다.
 - `GET /apps/:userid/:appname/dockerfiles`
   - 앱에 저장된 저장소·브랜치와 소유자의 설치 권한으로 루트 파일 조회
 - `POST /apps/:userid/:appname/start`

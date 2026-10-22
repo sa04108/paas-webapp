@@ -8,6 +8,7 @@ const { spawn } = require("node:child_process");
 const { setTimeout: delay } = require("node:timers/promises");
 const { loadDefinition, projectName, normalizeRuntime, INSPECT_FORMAT } = require("../../portal/composeConfig");
 const { compile } = require("../generate-compose");
+const { configSnapshot } = require("./deployment-config");
 
 function readJson(file, fallback = null) {
   try { return JSON.parse(fs.readFileSync(file, "utf8")); }
@@ -58,11 +59,23 @@ function syncCompose(info) {
   }
 }
 
+// 실제 기동한 설정만 적용 완료로 기록해 실패·재시작이 미적용 변경을 지우지 않게 한다.
+function confirmDeployment(userid, appname) {
+  const info = locations(userid, appname);
+  const state = readJson(info.stateFile);
+  const metadata = readJson(info.metaFile);
+  if (!metadata || state?.phase !== "active" || state.project !== info.project || state.instanceId !== metadata.instanceId || !state.configSnapshot) {
+    throw new Error("Cannot confirm configuration for an inactive or different app deployment");
+  }
+  atomicWrite(info.metaFile, { ...metadata, deployedConfig: state.configSnapshot });
+}
+
 async function deploy(userid, appname, runtimePath) {
   const info = locations(userid, appname);
   const metadata = readJson(info.metaFile);
   if (!metadata) throw new Error("App repository metadata is missing");
   const runtime = normalizeRuntime(runtimePath ? readJson(runtimePath) : metadata.runtime);
+  const snapshot = configSnapshot({ ...metadata, runtime });
   // 실패해도 설정을 보존해 재시도와 삭제가 같은 앱을 식별할 수 있게 한다.
   atomicWrite(info.metaFile, { ...metadata, runtime });
   const loaded = loadDefinition(runtime, info.sourceDir);
@@ -94,12 +107,14 @@ async function deploy(userid, appname, runtimePath) {
     syncCompose(info);
     if (fs.existsSync(info.composeFile)) await compose(info, info.composeFile, ["down", "--remove-orphans", "--volumes"]);
     // 실행 정의와 서비스 목록을 한 파일로 교체하고 Compose 파일은 여기서 복원한다.
-    atomicWrite(info.stateFile, { project: info.project, revision, webService: compiled.webService, services: compiled.manifest, compose: compiled.compose, phase: "starting", runtime });
+    atomicWrite(info.stateFile, { project: info.project, revision, instanceId: metadata.instanceId, configSnapshot: snapshot, webService: compiled.webService, services: compiled.manifest, compose: compiled.compose, phase: "starting", runtime });
     syncCompose(info);
     await compose(info, info.composeFile, ["up", "-d", "--no-build", "--remove-orphans", "--force-recreate"]);
     await wait(userid, appname);
     const state = readJson(info.stateFile);
     atomicWrite(info.stateFile, { ...state, phase: "active" });
+    // 포털 작업은 도메인의 HTTP 준비 확인까지 끝낸 뒤 별도로 확정한다.
+    if (process.env.PAAS_DEFER_CONFIG_CONFIRMATION !== "1") confirmDeployment(userid, appname);
   } catch (error) {
     const state = readJson(info.stateFile);
     if (state?.revision === revision) atomicWrite(info.stateFile, { ...state, phase: "failed", error: error.message });
@@ -162,7 +177,7 @@ async function down(userid, appname) {
   }
 }
 
-module.exports = { locations, atomicWrite, readJson, syncCompose, compile, deploy, down, wait, serviceState, projectContainers };
+module.exports = { locations, atomicWrite, readJson, syncCompose, confirmDeployment, compile, deploy, down, wait, serviceState, projectContainers };
 
 if (require.main === module) {
   const [command, userid, appname, runtimePath] = process.argv.slice(2);

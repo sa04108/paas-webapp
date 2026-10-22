@@ -8,6 +8,18 @@ let requestController = null;
 let loaded = false;
 let saving = false;
 let dockerfiles = new Set();
+let redeployRequired = false;
+
+function setRedeployWarning(value) {
+  redeployRequired = Boolean(value);
+  el.detailBuildRedeployWarning.hidden = !redeployRequired;
+}
+
+function syncRedeployWarningFromApps() {
+  const key = selectedKey();
+  const app = [...state.apps, ...state.adminApps].find((item) => `${item.userid}/${item.appname}` === key);
+  if (app?.pendingConfigChanges) setRedeployWarning(app.pendingConfigChanges.build);
+}
 
 function selectedKey() {
   return state.selectedApp ? `${state.selectedApp.userid}/${state.selectedApp.appname}` : "";
@@ -66,6 +78,7 @@ async function loadDetailBuild() {
   requestController = controller;
   loaded = false;
   saving = false;
+  setRedeployWarning(false);
   dockerfiles = new Set();
   el.detailBuildModeRadios.forEach((radio) => { radio.checked = radio.value === "auto"; });
   el.detailBuildCustomContent.value = "";
@@ -85,6 +98,7 @@ async function loadDetailBuild() {
     const data = await apiFetch(`/apps/${encodeURIComponent(userid)}/${encodeURIComponent(appname)}/build`, { signal: controller.signal });
     if (!current(id, key)) return;
     const build = data.build || { mode: "auto" };
+    setRedeployWarning(data.pendingConfigChanges?.build);
     if (build.mode === "repository") {
       try {
         const fileData = await apiFetch(`/apps/${encodeURIComponent(userid)}/${encodeURIComponent(appname)}/dockerfiles`, { signal: controller.signal });
@@ -181,11 +195,16 @@ async function saveDetailBuild() {
   el.detailBuildSaveBtn.textContent = "Saving…";
   sync();
   try {
-    await apiFetch(`/apps/${encodeURIComponent(userid)}/${encodeURIComponent(appname)}/build`, {
+    const result = await apiFetch(`/apps/${encodeURIComponent(userid)}/${encodeURIComponent(appname)}/build`, {
       method: "PUT",
       body: JSON.stringify({ build }),
     });
     if (!current(id, key)) return;
+    setRedeployWarning(result.pendingConfigChanges?.build);
+    document.dispatchEvent(new CustomEvent("app-config-updated", { detail: {
+      userid, appname, redeployRequired: result.redeployRequired,
+      pendingConfigChanges: result.pendingConfigChanges,
+    } }));
     el.detailBuildStatus.textContent = "Build settings saved. Changes apply on the next redeployment.";
   } catch (error) {
     if (!current(id, key)) return;
@@ -212,6 +231,7 @@ function initBuildSettings(fetcher) {
   el.detailBuildDockerfile.addEventListener("change", sync);
   el.detailBuildFilesRefresh.addEventListener("click", loadDockerfiles);
   el.detailBuildSaveBtn.addEventListener("click", saveDetailBuild);
+  document.addEventListener("app-list-updated", syncRedeployWarningFromApps);
 }
 
 export { initBuildSettings, loadDetailBuild };

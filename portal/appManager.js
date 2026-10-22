@@ -17,6 +17,7 @@ const readline = require("node:readline");
 const appReadiness = require("./appReadiness");
 const { projectName, INSPECT_FORMAT } = require("./composeConfig");
 const { atomicWrite } = require("../scripts/lib/compose-project");
+const { deploymentStatus } = require("../scripts/lib/deployment-config");
 
 const { AppError } = require("./utils");
 const {
@@ -184,6 +185,7 @@ async function buildAppInfo(userid, appname, dockerAppItem = null) {
     containerName: item?.containerName || null,
     primaryService: item?.primaryService || "app",
     services: item?.services || [],
+    ...deploymentStatus(metadata),
     ...readiness,
     rawStatus: item?.rawStatus || "not-found",
     repoUrl: metadata?.repoUrl || null,

@@ -796,6 +796,28 @@ form label,
   color: var(--ink-main);
 }
 
+.config-redeploy-warning {
+  margin: 8px 0 0;
+  padding: 9px 11px;
+  border: 1px solid #a86108;
+  border-radius: 9px;
+  background: #fff4d6;
+  color: #663b00;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.app-card .config-redeploy-warning {
+  margin: 0;
+}
+
+html[data-theme="dark"] .config-redeploy-warning {
+  border-color: #d99a43;
+  background: #3b2d19;
+  color: #ffe0a8;
+}
+
 .settings-build .build-options {
   margin-top: 12px;
 }
