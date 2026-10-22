@@ -1193,6 +1193,8 @@ html[lang="en"] .app-card-title-row {
 }
 
 .status-pill {
+  display: inline-flex;
+  align-items: center;
   border-radius: 999px;
   font-size: 0.76rem;
   line-height: 1;
@@ -1271,6 +1273,42 @@ html[lang="en"] .app-card-title-row {
   width: min(840px, 100%) !important;
 }
 
+.job-log-modal-card {
+  display: flex;
+  flex-direction: column;
+  width: min(800px, 100%);
+  max-height: calc(100dvh - 40px);
+}
+
+.job-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.job-clear-btn {
+  padding: 7px 10px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.job-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.job-log-modal-card .logs-output {
+  min-height: 0;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 16px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
 .modal-head {
   display: flex;
   align-items: center;
@@ -1280,6 +1318,8 @@ html[lang="en"] .app-card-title-row {
 
 .modal-head h2 {
   margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-family: "Space Grotesk", "Noto Sans KR", sans-serif;
   font-size: 1.2rem;
 }
@@ -1341,6 +1381,7 @@ html[lang="en"] .app-card-title-row {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-width: 80px;
   border-radius: 999px;
   padding: 7px 10px;
   font-size: 0.76rem;
@@ -1479,10 +1520,10 @@ html[lang="en"] .app-card-title-row {
     gap: 10px;
   }
 
-  .app-detail-tabs {
+  .app-detail-gnb .app-detail-tabs {
     width: 100%;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .detail-tab-btn {
@@ -1563,6 +1604,31 @@ html[lang="en"] .app-card-title-row {
     flex-shrink: 0;
   }
 
+  .job-list-modal-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+  }
+
+  .job-list-modal-head .job-modal-actions {
+    display: contents;
+  }
+
+  #clear-completed-jobs-btn {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: start;
+  }
+
+  #close-job-list-btn {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .job-log-modal-card {
+    max-height: calc(100dvh - 24px);
+  }
+
   .job-list-modal-card .users-table-wrap {
     min-height: 0;
     overflow: auto;
@@ -1584,9 +1650,9 @@ html[lang="en"] .app-card-title-row {
 
   #job-list-table tbody tr {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) 88px 68px;
     align-items: center;
-    padding: 8px;
+    padding: 8px 4px;
     border-bottom: 1px solid rgba(25, 68, 108, 0.12);
   }
 
@@ -2199,6 +2265,7 @@ html[data-theme="dark"] .gnb {
 }
 
 html[data-theme="dark"] .gnb-item.active,
+html[data-theme="dark"] .detail-tab-btn.active,
 html[data-theme="dark"] .tab-btn.active {
   color: #c7e0ff;
 }
@@ -2214,6 +2281,7 @@ html[data-theme="dark"] .gnb-item.admin-menu.active {
 
 html[data-theme="dark"] .auth-state,
 html[data-theme="dark"] .tab-btn,
+html[data-theme="dark"] .detail-tab-btn,
 html[data-theme="dark"] .repo-source-panel,
 html[data-theme="dark"] .chip,
 html[data-theme="dark"] .users-table-wrap,
@@ -2464,4 +2532,9 @@ html[data-theme="dark"] .runtime-badge.express {
 
 html[data-theme="dark"] .theme-toggle-btn {
   color: #f2d38b;
+}
+
+html[data-theme="dark"] .detail-tab-btn.active {
+  background: rgba(var(--accent-blue-rgb), 0.17);
+  border-color: rgba(var(--accent-blue-rgb), 0.36);
 }

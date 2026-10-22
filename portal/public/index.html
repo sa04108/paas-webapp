@@ -549,11 +549,10 @@
     <div id="job-list-modal" class="modal-backdrop" hidden>
         <section class="modal-card panel-inset job-list-modal-card" role="dialog" aria-modal="true"
             aria-labelledby="job-list-title">
-            <div class="modal-head">
+            <div class="modal-head job-list-modal-head">
                 <h2 id="job-list-title">Jobs</h2>
-                <div style="display: flex; align-items: center;">
-                    <button id="clear-completed-jobs-btn" class="ghost-btn danger-ghost-btn" type="button"
-                        style="margin-right: 12px;">Clear all completed jobs</button>
+                <div class="job-modal-actions">
+                    <button id="clear-completed-jobs-btn" class="ghost-btn danger-ghost-btn job-clear-btn" type="button">Clear all completed jobs</button>
                     <button id="close-job-list-btn" class="icon-btn close-icon-btn" type="button" aria-label="Close job list">
                         <span aria-hidden="true">x</span>
                     </button>
@@ -581,13 +580,11 @@
 
     <!-- ── 작업 로그 상세 모달 ── -->
     <div id="job-log-modal" class="modal-backdrop" style="z-index: 10001;" hidden>
-        <section class="modal-card panel-inset" role="dialog" aria-modal="true" aria-labelledby="job-log-title"
-            style="max-width: 800px; width: 90%;">
+        <section class="modal-card panel-inset job-log-modal-card" role="dialog" aria-modal="true" aria-labelledby="job-log-title">
             <div class="modal-head">
                 <h2 id="job-log-title">Job Log Details</h2>
-                <div style="display: flex; align-items: center;">
-                    <button id="copy-job-log-btn" class="ghost-btn" type="button"
-                        style="margin-right: 12px; display: flex; align-items: center; gap: 4px;">
+                <div class="job-modal-actions">
+                    <button id="copy-job-log-btn" class="ghost-btn job-copy-btn" type="button">
                         <svg viewBox="0 0 24 24" aria-hidden="true" width="16" height="16">
                             <path fill="currentColor"
                                 d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
@@ -600,8 +597,7 @@
                 </div>
             </div>
             <p id="job-log-status" class="modal-description" role="status" aria-live="polite"></p>
-            <pre id="job-log-content" class="logs-output" tabindex="0" aria-label="Job log output"
-                style="max-height: 60vh; overflow-y: auto; white-space: pre-wrap; font-size: 0.9rem; line-height: 1.4; padding: 16px;">No content</pre>
+            <pre id="job-log-content" class="logs-output" tabindex="0" aria-label="Job log output">No content</pre>
         </section>
     </div>
 
