@@ -37,9 +37,11 @@ These instructions apply repository-wide.
 
 - Explicit user instructions about branches, commits, or pushes override these workflow defaults. The root agent manages branch/worktree setup, staging, commits, and pushes; subagents perform these operations only when explicitly delegated.
 - Before editing, inspect `git status --short --branch`, `git worktree list`, and recent commits. Preserve pre-existing changes, including staged changes; never overwrite them or include them in your commits.
-- Before the first edit, create a descriptive task branch if on `main`, an unrelated branch, or a detached HEAD. Use a separate branch and worktree for concurrent editing tasks or when the existing checkout must be preserved.
-- Base new independent tasks on freshly fetched remote `main`; if unavailable, use local `main` and report the limitation. Related subagent work must use the root's agreed task snapshot, including required parent changes.
+- Before the first edit, create a descriptive task branch separate from `main` and `devel`. Do not work directly on either integration branch. Use a separate branch and worktree for concurrent editing tasks or when the existing checkout must be preserved.
+- Base new independent tasks on freshly fetched remote `devel`; if unavailable, use local `devel` and report the limitation. Related subagent work must use the root's agreed task snapshot, including required parent changes.
 - Commit each complete unit with related documentation only after required verification passes. If verification fails or is blocked, do not commit; report the cause.
 - Do not commit or push test code unless the user explicitly requests it.
 - Stage only task-owned changes by explicit path or hunk, and inspect the entire staged diff before committing.
 - After committing, push when the remote and authentication are available, setting upstream for new branches. If pushing is unavailable or fails, preserve the commit and report why.
+- As soon as the task is complete and required verification passes, update `devel` from the remote, merge the completed task branch into `devel`, and push `devel`. Include this integration in task completion rather than leaving completed work only on its task branch.
+- After the merge and `devel` push succeed, switch the retained checkout to `devel`, remove any temporary worktree created for the task, and delete the task branch locally and on the remote. Preserve the primary checkout, user-owned changes, and any unmerged work. If integration or cleanup fails, preserve the remaining work and report the failure.
