@@ -1171,16 +1171,12 @@ code {
 /* 앱 이름 행 — 관리 버튼이 absolute로 우상단에 고정되므로 우측 여백 확보 */
 .app-card-title-row {
   min-width: 0;
-  padding-right: 68px;
-  /* 관리 버튼 너비(~52px) + 여백(16px) */
+  padding-right: 40px;
+  /* 설정 아이콘 너비(28px) + 여백(12px) */
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-html[lang="en"] .app-card-title-row {
-  padding-right: 96px;
 }
 
 .app-name {
@@ -1416,9 +1412,34 @@ html[lang="en"] .app-card-title-row {
   white-space: nowrap;
 }
 
+.job-action-group {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.job-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.job-remove-btn {
+  width: 34px;
+}
+
 #job-list-table th,
 #job-list-table td {
   padding: 8px 10px;
+  vertical-align: middle;
   /* 줄인 간격 */
 }
 
@@ -1696,6 +1717,11 @@ html[lang="en"] .app-card-title-row {
     justify-self: end;
   }
 
+  .job-action-group {
+    flex-direction: column;
+    align-items: center;
+  }
+
   #job-list-table td:nth-child(-n + 2) {
     grid-column: 1 / -1;
     overflow-wrap: anywhere;
@@ -1757,9 +1783,12 @@ html[lang="en"] .app-card-title-row {
   top: 15px;
   /* 카드 padding과 일치 */
   right: 15px;
-  padding: 7px 11px;
-  font-size: 0.78rem;
-  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
 }
 
 /* ── App detail — sub GNB ── */

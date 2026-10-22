@@ -20,6 +20,14 @@ import {
   statusClass,
 } from "./app-utils.js";
 
+function appSettingsButton(safeUser, safeApp, disabled = "") {
+  return `<button class="action-btn app-manage-btn" data-action="manage" type="button" title="App settings" aria-label="App settings for ${safeUser} / ${safeApp}" ${disabled}>
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path fill="currentColor" d="M19.14 12.94a7.8 7.8 0 0 0 .05-.94 7.8 7.8 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.2 7.2 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54a7.2 7.2 0 0 0-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.8 7.8 0 0 0-.05.94 7.8 7.8 0 0 0 .05.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.39 1.04.7 1.62.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54c.58-.24 1.12-.55 1.62-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58Z" />
+    </svg>
+  </button>`;
+}
+
 // ── 앱 카드 목록 렌더링 ───────────────────────────────────────────────────────
 
 function renderApps(apps) {
@@ -74,7 +82,7 @@ function renderApps(apps) {
           <div class="app-card-title-row">
             <button class="app-name-btn" data-action="manage" type="button" ${actionsDisabled}>${safeUser} / ${safeApp}</button>
             <span class="status-pill ${statusClass(rawStatus)}">${safeStatus}</span>
-            <button class="action-btn app-manage-btn" data-action="manage" type="button" ${actionsDisabled}>Manage</button>
+            ${appSettingsButton(safeUser, safeApp, actionsDisabled)}
           </div>
           <div class="app-card-badges">
             ${badgeHtml}
@@ -136,7 +144,7 @@ function renderAdminApps(apps) {
           <div class="app-card-title-row">
             <button class="app-name-btn" data-action="manage" type="button">${safeUser} / ${safeApp}</button>
             <span class="status-pill ${statusClass(rawStatus)}">${safeStatus}</span>
-            <button class="action-btn app-manage-btn" data-action="manage" type="button">Manage</button>
+            ${appSettingsButton(safeUser, safeApp)}
           </div>
           <div class="app-card-badges">
             ${badgeHtml}
@@ -253,21 +261,21 @@ function renderJobList(jobs) {
 
     let actions = `<span class="ink-subtle">-</span>`;
     const closeBtnHtml = `
-      <button class="ghost-btn danger-ghost-btn" data-action="cancel-job" data-id="${job.id}" type="button" style="padding: 4px 8px; min-width: auto; height: 28px; display: inline-flex; align-items: center; justify-content: center;" title="Remove from list">
+      <button class="ghost-btn danger-ghost-btn job-action-btn job-remove-btn" data-action="cancel-job" data-id="${job.id}" type="button" aria-label="Remove job from list" title="Remove from list">
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
       </button>
     `;
 
     if (rawStatus === "interrupted" || rawStatus === "failed") {
       actions = `
-        <div class="users-action-group">
-          <button class="action-btn" data-action="retry-job" data-id="${job.id}" type="button">Retry</button>
+        <div class="job-action-group">
+          <button class="action-btn job-action-btn" data-action="retry-job" data-id="${job.id}" type="button">Retry</button>
           ${closeBtnHtml}
         </div>
       `;
     } else if (rawStatus === "done" || rawStatus === "warn") {
       actions = `
-        <div class="users-action-group">
+        <div class="job-action-group">
           ${closeBtnHtml}
         </div>
       `;
