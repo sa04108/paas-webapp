@@ -106,6 +106,7 @@ function syncLogRefreshBtn(btn, isAuto) {
 }
 
 configureUiHandlers({
+  fetchJob: async (id) => (await apiFetch(`/jobs/${encodeURIComponent(id)}`)).job,
   handleRequestError,
   loadDetailEnv,
   loadDetailLogs,
@@ -347,6 +348,7 @@ el.passwordForm.addEventListener("submit", async (event) => {
 // ── 로그아웃 ──────────────────────────────────────────────────────────────────
 
 el.logoutBtn.addEventListener("click", async () => {
+  closeJobLogModal();
   try {
     await apiFetch("/auth/logout", { method: "POST" });
   } catch {
@@ -630,7 +632,7 @@ el.jobListTbody.addEventListener("click", async (event) => {
     if (id) {
       const job = state.jobs.find((j) => j.id === id);
       if (job) {
-        openJobLogModal(job.error || job.output || "No content");
+        openJobLogModal(job);
       }
     }
   }
@@ -668,6 +670,7 @@ el.copyJobLogBtn.addEventListener("click", async () => {
 // 열린 모달 중 우선순위(promoteAdmin > deleteUser > createUser > settings) 순서로 닫는다.
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape" && event.key !== "Esc") return;
+  if (!el.jobLogModal.hidden) { closeJobLogModal(); return; }
   if (!el.promoteAdminModal.hidden) { closePromoteAdminModal(); return; }
   if (!el.addDomainModal.hidden) { closeAddDomainModal(); return; }
   if (!el.deleteUserModal.hidden) { closeDeleteUserModal({ resetForm: true }); return; }
@@ -775,7 +778,10 @@ async function bootstrap() {
 }
 
 // 페이지 언로드 시 소켓 정리
-window.addEventListener("beforeunload", () => closeExecSocket());
+window.addEventListener("beforeunload", () => {
+  closeExecSocket();
+  closeJobLogModal();
+});
 
 bootstrap().catch((error) => {
   handleRequestError(error);

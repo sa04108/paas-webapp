@@ -246,7 +246,7 @@ function renderJobList(jobs) {
     const rawStatus = job.status;
     const safeStatus = escapeHtml(rawStatus);
     
-    let errorReason = "-";
+    let errorReason = "";
     const logText = job.error || job.output;
     if (logText) {
       const singleLineLog = logText.split('\n')[0];
@@ -257,14 +257,17 @@ function renderJobList(jobs) {
       errorReason = `
         <div style="display: flex; align-items: center; max-width: 250px;">
           <span class="${textClass}" style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(singleLineLog)}">${escapeHtml(singleLineLog)}</span>
-          <button class="ghost-btn" data-action="view-job-log" data-id="${job.id}" type="button" style="padding: 2px 6px; margin-left: 4px;" title="View full logs">
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
-          </button>
         </div>
       `;
     } else if (rawStatus === "interrupted") {
        errorReason = `<span class="ink-subtle">Interrupted by a server restart</span>`;
     }
+
+    const isActive = rawStatus === "pending" || rawStatus === "running";
+    errorReason += `
+      <button class="ghost-btn" data-action="view-job-log" data-id="${escapeHtml(job.id)}" type="button">
+        ${isActive ? "Live logs" : "View logs"}
+      </button>`;
 
     let actions = `<span class="ink-subtle">-</span>`;
     const closeBtnHtml = `

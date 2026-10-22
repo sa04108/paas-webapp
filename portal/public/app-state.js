@@ -209,6 +209,7 @@ export const el = {
   // 작업 로그 상세 모달
   jobLogModal: document.getElementById("job-log-modal"),
   jobLogTitle: document.getElementById("job-log-title"),
+  jobLogStatus: document.getElementById("job-log-status"),
   copyJobLogBtn: document.getElementById("copy-job-log-btn"),
   closeJobLogBtn: document.getElementById("close-job-log-btn"),
   jobLogContent: document.getElementById("job-log-content"),

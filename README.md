@@ -172,7 +172,9 @@ An application named `demo` owned by `admin` is served at:
 https://admin-demo.apps.example.com
 ```
 
-Use the job view to inspect build progress, then the application's **Logs**, **Exec**, environment-variable, and domain controls to manage it. Redeployment pulls the repository's latest code, rebuilds the image, and replaces the container; the current implementation has a brief interruption while the container is recreated.
+Open **Jobs** and select **Live logs** on a pending or running job to watch build and deployment output as it arrives. The log window reconnects after temporary connection loss and displays the final result or error when the job ends. Scroll up to read earlier lines without following new output; completed jobs remain available through **View logs**.
+
+Use the application's **Logs**, **Exec**, environment-variable, and domain controls to manage it. Redeployment pulls the repository's latest code, rebuilds the image, and replaces the container; the current implementation has a brief interruption while the container is recreated.
 
 ## Optional: private GitHub repositories
 
