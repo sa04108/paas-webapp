@@ -283,6 +283,8 @@ Additional documentation: [GitHub App setup](docs/github-app-setup.md), [securit
 
 ## UI tooling
 
-The Layout MCP configuration is in `.codex/config.toml`, with portal design context in `.layout/layout.md`. The upstream [Layout CLI](https://github.com/uselayout/cli) currently publishes as `@layoutdesign/context`; this project pins version `0.19.0`. Start its stdio server with `npx --yes @layoutdesign/context@0.19.0 serve` through your MCP client.
+Layout MCP is configured per project: Claude Code reads the root `.mcp.json`, while Codex reads `.codex/config.toml`. Both configurations use the same stdio command, `npx --yes @layoutdesign/context@0.19.0 serve`. Open the MCP client from the repository root so Layout can load `.layout/layout.md`; trust the project and enable its MCP server when the client requests it, then reload the client's MCP configuration. A root JSON file is only auto-loaded by clients that support that filename.
+
+The upstream [Layout CLI](https://github.com/uselayout/cli) currently publishes as `@layoutdesign/context`; this project pins version `0.19.0`. No global package installation or credentials are required for this project's local design context; Node.js and npm must be available.
 
 In the managed cloud environment, global Codex configuration is read-only. Use the prepared `/workspace/.tools/codex-with-layout` launcher to enable Layout for a Codex CLI session without changing the managed configuration. Reload the MCP client after changing its project configuration.
