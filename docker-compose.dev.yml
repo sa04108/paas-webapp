@@ -2,6 +2,7 @@ services:
   portal:
     environment:
       - RUN_MODE=development
+      - APP_HEALTH_DEV_ORIGIN=http://traefik:80
 
   # dev 모드: ACME/HTTPS 없이 HTTP 전용으로 오버라이드
   # (localhost는 Let's Encrypt 인증서 발급 불가)

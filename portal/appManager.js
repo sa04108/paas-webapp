@@ -14,6 +14,7 @@ const { execFile, spawn } = require("node:child_process");
 const { promisify } = require("node:util");
 const Docker = require("dockerode");
 const readline = require("node:readline");
+const appReadiness = require("./appReadiness");
 
 const { AppError } = require("./utils");
 const {
@@ -168,19 +169,20 @@ function normalizeStatus(statusText) {
 
 // 앱 하나의 완전한 정보 객체를 빌드한다.
 // dockerAppItem이 제공되면 파싱된 값을 사용하고, 없으면 Docker 레이블 캐시에서 조회한다.
-// 어느 경우도 파일시스템에 접근하지 않는다 (metadata는 null-safe fallback).
+// 컨테이너 실행 상태에 도메인 준비 상태를 합쳐 반환한다.
 async function buildAppInfo(userid, appname, dockerAppItem = null) {
   const appDir = getAppDir(userid, appname);
   const metadata = await readAppMeta(appDir); // 디렉토리가 없어도 안전하게 null 반환
 
   const item = dockerAppItem ?? await findDockerApp(userid, appname);
+  const readiness = appReadiness.apply(userid, appname, normalizeStatus(item?.rawStatus ?? "not-found"));
 
   return {
     userid,
     appname,
     domain: item?.domain || domainName(userid, appname),
     containerName: item?.containerName || null,
-    status: normalizeStatus(item?.rawStatus ?? "not-found"),
+    ...readiness,
     rawStatus: item?.rawStatus || "not-found",
     repoUrl: metadata?.repoUrl || null,
     branch: metadata?.branch || null,

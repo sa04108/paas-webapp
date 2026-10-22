@@ -33,6 +33,10 @@ const config = {
   BCRYPT_ROUNDS:        toPositiveInt(process.env.BCRYPT_ROUNDS, 10),
   MAX_APPS_PER_USER:    toPositiveInt(process.env.MAX_APPS_PER_USER, 5),
   MAX_TOTAL_APPS:       toPositiveInt(process.env.MAX_TOTAL_APPS, 20),
+  APP_HEALTH_TIMEOUT_SECS: toPositiveInt(process.env.APP_HEALTH_TIMEOUT_SECS, 120),
+  APP_HEALTH_INTERVAL_MS: toPositiveInt(process.env.APP_HEALTH_INTERVAL_MS, 2000),
+  APP_HEALTH_REQUEST_TIMEOUT_MS: toPositiveInt(process.env.APP_HEALTH_REQUEST_TIMEOUT_MS, 5000),
+  APP_HEALTH_DEV_ORIGIN: process.env.APP_HEALTH_DEV_ORIGIN || "",
   PORTAL_TRUST_PROXY:   normalizeBoolean(process.env.PORTAL_TRUST_PROXY, true),
 
   // ── GitHub App (private repo 배포) ──────────────────────────────────────
