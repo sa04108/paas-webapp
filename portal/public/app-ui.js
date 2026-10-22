@@ -34,6 +34,7 @@ import {
 } from "./app-utils.js";
 import { renderUsers, renderJobList } from "./app-render.js";
 import { buildPath } from "./app-router.js";
+import { createJobLogViewer } from "./app-job-log.js";
 
 const uiHandlers = {
   loadDetailEnv: async () => { },
@@ -42,7 +43,15 @@ const uiHandlers = {
   handleRequestError: async () => { },
   resetExecForApp: () => { },
   closeExecSocket: () => { },
+  fetchJob: async () => { throw new Error("Job loader not configured"); },
 };
+
+const jobLogViewer = createJobLogViewer({
+  content: el.jobLogContent,
+  status: el.jobLogStatus,
+  copyButton: el.copyJobLogBtn,
+  fetchJob: (id) => uiHandlers.fetchJob(id),
+});
 
 function configureUiHandlers(handlers = {}) {
   Object.assign(uiHandlers, handlers);
@@ -155,6 +164,7 @@ function syncModalOpenState() {
     !el.deleteUserModal.hidden ||
     !el.promoteAdminModal.hidden ||
     !el.jobListModal.hidden ||
+    !el.jobLogModal.hidden ||
     !el.addDomainModal.hidden;
   document.body.classList.toggle("modal-open", hasOpenModal);
 }
@@ -300,17 +310,21 @@ function closeJobListModal() {
 
 // ── 작업 로그 상세 모달 ────────────────────────────────────────────────────────
 
-function openJobLogModal(logText) {
+function openJobLogModal(job) {
   modalBackdropState.jobLog = false;
-  el.jobLogContent.textContent = logText || "No content";
+  el.jobLogTitle.textContent = `Job Logs — ${job.meta?.appname || job.id}`;
   el.jobLogModal.hidden = false;
   syncModalOpenState();
+  jobLogViewer.open(job);
+  el.closeJobLogBtn.focus();
 }
 
 function closeJobLogModal() {
+  jobLogViewer.close();
   modalBackdropState.jobLog = false;
   el.jobLogModal.hidden = true;
   syncModalOpenState();
+  if (!el.jobListModal.hidden) el.closeJobListBtn.focus();
 }
 
 // ── 인증 UI 동기화 ────────────────────────────────────────────────────────────
@@ -319,6 +333,7 @@ function closeJobLogModal() {
 // (stopAutoRefresh는 app-api.js에 정의되어 있으며, 런타임에만 호출된다.)
 function updateAuthUi() {
   if (!isLoggedIn()) {
+    closeJobLogModal();
     el.authState.textContent = "Login required";
     el.logoutBtn.hidden = true;
     el.settingsBtn.hidden = true;
