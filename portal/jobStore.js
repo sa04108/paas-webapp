@@ -58,6 +58,7 @@ function init(dbPath) {
   _db = new Database(dbPath);
   _db.pragma("journal_mode = WAL");
   _db.pragma("busy_timeout = 5000");
+  _db.pragma("foreign_keys = ON");
   _db.exec(`
     CREATE TABLE IF NOT EXISTS jobs (
       id           TEXT PRIMARY KEY,
@@ -74,6 +75,10 @@ function init(dbPath) {
     CREATE INDEX IF NOT EXISTS idx_jobs_userid   ON jobs(userid);
     CREATE INDEX IF NOT EXISTS idx_jobs_status   ON jobs(status);
     CREATE INDEX IF NOT EXISTS idx_jobs_created  ON jobs(created_at);
+    CREATE TABLE IF NOT EXISTS job_environments (
+      job_id  TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+      content TEXT NOT NULL
+    );
   `);
 }
 
@@ -86,16 +91,27 @@ function init(dbPath) {
  * @param {string} userid - 요청한 사용자 ID
  * @returns {string} jobId
  */
-function createJob(type, meta, userid) {
+function createJob(type, meta, userid, { env } = {}) {
   const id = randomUUID();
   const now = Date.now();
-  _db.prepare(`
-    INSERT INTO jobs (id, type, status, userid, meta, created_at)
-    VALUES (?, ?, 'pending', ?, ?, ?)
-  `).run(id, type, userid, JSON.stringify(meta), now);
+  _db.transaction(() => {
+    _db.prepare(`
+      INSERT INTO jobs (id, type, status, userid, meta, created_at)
+      VALUES (?, ?, 'pending', ?, ?, ?)
+    `).run(id, type, userid, JSON.stringify(meta), now);
+    // 비밀값은 공개 메타데이터와 분리하되, 재시작·재시도까지 영속화한다.
+    if (env !== undefined) {
+      _db.prepare("INSERT INTO job_environments (job_id, content) VALUES (?, ?)").run(id, env);
+    }
+  })();
 
   _logBuffers.set(id, []);
   return id;
+}
+
+// 실행기 전용 조회이며 getJob/listJobs 응답에는 포함하지 않는다.
+function getJobEnvironment(jobId) {
+  return _db.prepare("SELECT content FROM job_environments WHERE job_id = ?").get(jobId)?.content;
 }
 
 /**
@@ -118,10 +134,14 @@ function finishJob(jobId, output = "") {
     finalOutput = logs.join('\n') + (finalOutput ? '\n\n[Result]\n' + finalOutput : '');
   }
 
-  const row = _db.prepare(`
-    UPDATE jobs SET status = 'done', output = ?, finished_at = ? WHERE id = ?
-    RETURNING userid
-  `).get(finalOutput, now, jobId);
+  const row = _db.transaction(() => {
+    const updated = _db.prepare(`
+      UPDATE jobs SET status = 'done', output = ?, finished_at = ? WHERE id = ?
+      RETURNING userid
+    `).get(finalOutput, now, jobId);
+    _db.prepare("DELETE FROM job_environments WHERE job_id = ?").run(jobId);
+    return updated;
+  })();
   
   if (row) _enforceUserJobLimit(row.userid);
   _closeSseSubscribers(jobId, "done");
@@ -357,6 +377,7 @@ module.exports = {
   CANCELABLE_STATUSES,
   init,
   createJob,
+  getJobEnvironment,
   startJob,
   finishJob,
   failJob,

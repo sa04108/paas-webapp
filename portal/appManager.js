@@ -476,7 +476,8 @@ async function readEnvFile(appDir) {
 
 async function writeEnvFile(appDir, content) {
   const envPath = path.join(appDir, ENV_PAAS_FILE);
-  await fs.writeFile(envPath, content, "utf8");
+  await fs.writeFile(envPath, content, { encoding: "utf8", mode: 0o600 });
+  await fs.chmod(envPath, 0o600);
 }
 
 // ── 컨테이너 Exec ─────────────────────────────────────────────────────────────

@@ -57,6 +57,10 @@ function buildCompose({ userid, appname, appDir }) {
     `    restart: ${JSON.stringify(DEFAULT_RESTART_POLICY)}`,
     '    volumes:',
     `      - "./${APP_DATA_SUBDIR}:/data"`,
+    // 환경변수 파일이 있는 앱만 참조해 기존 앱과 Compose 2.17 호환성을 유지한다.
+    ...(fs.existsSync(path.join(appDir, '.env.paas'))
+      ? ['    env_file:', '      - ".env.paas"']
+      : []),
     '    environment:',
     `      - ${JSON.stringify(`PORT=${containerPort}`)}`,
     `      - ${JSON.stringify(`APP_ID=${userid}-${appname}`)}`,

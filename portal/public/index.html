@@ -175,6 +175,12 @@
                         <label for="repo-branch-input">Branch</label>
                         <input id="repo-branch-input" name="branch" type="text" placeholder="main" value="main" />
 
+                        <label for="create-env-input">Environment Variables (optional)</label>
+                        <textarea id="create-env-input" class="env-textarea create-env-textarea" rows="6"
+                            maxlength="65536" autocomplete="off" spellcheck="false"
+                            aria-describedby="create-env-help"></textarea>
+                        <p id="create-env-help" class="field-hint">Runtime variables use one KEY=VALUE entry per line. PORT, APP_ID, and NODE_ENV remain platform-managed defaults.</p>
+
                         <fieldset class="build-options">
                             <legend>Build configuration</legend>
                             <label class="build-option"><input type="radio" name="buildMode" value="auto" checked /> <span>Detect Dockerfile automatically</span></label>
