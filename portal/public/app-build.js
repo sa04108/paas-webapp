@@ -25,17 +25,34 @@ function customError() {
   return "";
 }
 
+function railpackError() {
+  const config = el.buildRailpackConfig.value;
+  if (new TextEncoder().encode(config).byteLength > MAX_DOCKERFILE_BYTES) return "Railpack configuration must be 64 KiB or smaller.";
+  if (!config.trim()) return "";
+  try {
+    const parsed = JSON.parse(config);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return "Railpack configuration must be a JSON object.";
+  } catch {
+    return "Enter valid JSON for the Railpack configuration.";
+  }
+  return "";
+}
+
 function syncBuildUi() {
   const mode = getMode();
   el.buildRepositoryPanel.hidden = mode !== "repository";
   el.buildCustomPanel.hidden = mode !== "custom";
+  el.buildRailpackPanel.hidden = mode !== "railpack";
   const error = mode === "custom" ? customError() : "";
+  const railpackValidationError = mode === "railpack" ? railpackError() : "";
   el.buildCustomError.textContent = error;
   el.buildCustomError.hidden = !error;
+  el.buildRailpackError.textContent = railpackValidationError;
+  el.buildRailpackError.hidden = !railpackValidationError;
   const validRepository = lookupState === "ready" && validFiles.has(el.buildDockerfileSelect.value);
   el.createSubmitBtn.disabled = submitting || !canManageApps() || (mode === "repository"
     ? !validRepository
-    : mode === "custom" && Boolean(error));
+    : mode === "custom" ? Boolean(error) : mode === "railpack" && Boolean(railpackValidationError));
 }
 
 function invalidateLookup(message = "Choose a repository and branch to load root Dockerfiles.") {
@@ -117,6 +134,7 @@ function initBuildOptions(apiFetch) {
   el.buildFilesRefresh.addEventListener("click", loadDockerfiles);
   el.buildDockerfileSelect.addEventListener("change", syncBuildUi);
   el.buildCustomContent.addEventListener("input", syncBuildUi);
+  el.buildRailpackConfig.addEventListener("input", syncBuildUi);
   el.repoSourceRadios.forEach((radio) => radio.addEventListener("change", scheduleLookup));
   el.repoUrlInput.addEventListener("input", scheduleLookup);
   el.repoSelect.addEventListener("change", scheduleLookup);
@@ -146,12 +164,19 @@ function getBuildPayload() {
     if (error) throw new Error(error);
     return { mode, content };
   }
+  if (mode === "railpack") {
+    const config = el.buildRailpackConfig.value;
+    const error = railpackError();
+    if (error) throw new Error(error);
+    return { mode, config };
+  }
   return { mode: "auto" };
 }
 
 function resetBuildOptions() {
   el.buildModeRadios.find((radio) => radio.value === "auto").checked = true;
   el.buildCustomContent.value = "";
+  el.buildRailpackConfig.value = "";
   invalidateLookup();
   syncBuildUi();
 }

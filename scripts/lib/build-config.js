@@ -5,6 +5,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 
 const MAX_DOCKERFILE_BYTES = 64 * 1024;
+const MAX_RAILPACK_CONFIG_BYTES = 64 * 1024;
 
 // 저장소 루트의 파일명만 허용하며 경로와 제어 문자는 받지 않는다.
 function isDockerfileName(name) {
@@ -33,7 +34,25 @@ function normalizeBuildConfig(input) {
     }
     return { mode: "custom", content: input.content };
   }
-  throw new Error("build.mode must be auto, repository, or custom");
+  if (input.mode === "railpack") {
+    const config = input.config == null ? "" : input.config;
+    if (typeof config !== "string") throw new Error("Railpack config must be JSON text");
+    if (Buffer.byteLength(config, "utf8") > MAX_RAILPACK_CONFIG_BYTES) {
+      throw new Error("Railpack config must be at most 64 KiB");
+    }
+    if (!config.trim()) return { mode: "railpack", config: "" };
+    let parsed;
+    try {
+      parsed = JSON.parse(config);
+    } catch {
+      throw new Error("Railpack config must contain valid JSON");
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("Railpack config must be a JSON object");
+    }
+    return { mode: "railpack", config: config.trim() };
+  }
+  throw new Error("build.mode must be auto, repository, custom, or railpack");
 }
 
 function parseJson(text) {
@@ -62,17 +81,20 @@ function saveAppMetadata(metadataPath, metadata, input) {
   atomicWrite(metadataPath, `${JSON.stringify({ ...metadata, build }, null, 2)}\n`);
 }
 
-// 명시적으로 고른 파일이 없어졌거나 루트 밖을 가리키면 자동 탐지로 대체하지 않는다.
-function resolveDockerfile(sourceDir, configPath) {
-  let build;
+function readBuildConfig(configPath) {
   try {
     const input = parseJson(fs.readFileSync(configPath, "utf8"));
-    build = normalizeBuildConfig(path.basename(configPath) === ".paas-meta.json" ? input.build : input);
+    return normalizeBuildConfig(path.basename(configPath) === ".paas-meta.json" ? input.build : input);
   } catch (error) {
-    if (error.code === "ENOENT") return "";
+    if (error.code === "ENOENT") return { mode: "auto" };
     throw error;
   }
-  if (build.mode === "auto") return "";
+}
+
+// 명시적으로 고른 파일이 없어졌거나 루트 밖을 가리키면 자동 탐지로 대체하지 않는다.
+function resolveDockerfile(sourceDir, configPath) {
+  const build = readBuildConfig(configPath);
+  if (build.mode === "auto" || build.mode === "railpack") return "";
   if (build.mode === "repository") {
     const sourceRoot = fs.realpathSync(sourceDir);
     const selectedPath = path.join(sourceRoot, build.dockerfile);
@@ -92,7 +114,19 @@ function resolveDockerfile(sourceDir, configPath) {
   return customPath;
 }
 
-module.exports = { MAX_DOCKERFILE_BYTES, isDockerfileName, normalizeBuildConfig, saveAppMetadata, resolveDockerfile };
+// 설정은 소스 밖에 생성하고 Railpack에는 검증된 상대 경로만 전달한다.
+function resolveRailpackConfig(sourceDir, configPath) {
+  const build = readBuildConfig(configPath);
+  if (build.mode !== "railpack" || !build.config) return "";
+  const customPath = path.resolve(path.dirname(configPath), "railpack.custom.json");
+  atomicWrite(customPath, build.config);
+  return path.relative(path.resolve(sourceDir), customPath);
+}
+
+module.exports = {
+  MAX_DOCKERFILE_BYTES, MAX_RAILPACK_CONFIG_BYTES, isDockerfileName, normalizeBuildConfig,
+  saveAppMetadata, readBuildConfig, resolveDockerfile, resolveRailpackConfig,
+};
 
 if (require.main === module) {
   try {
@@ -109,8 +143,12 @@ if (require.main === module) {
       }, build);
     } else if (command === "resolve" && firstPath && secondPath) {
       process.stdout.write(resolveDockerfile(firstPath, secondPath));
+    } else if (command === "mode" && firstPath) {
+      process.stdout.write(readBuildConfig(firstPath).mode);
+    } else if (command === "railpack" && firstPath && secondPath) {
+      process.stdout.write(resolveRailpackConfig(firstPath, secondPath));
     } else {
-      throw new Error("Usage: build-config.js save-metadata <metadata-path> [input-path] | resolve <source-dir> <config-path>");
+      throw new Error("Usage: build-config.js save-metadata <metadata-path> [input-path] | mode <config-path> | resolve|railpack <source-dir> <config-path>");
     }
   } catch (error) {
     console.error(`[build] ${error.message}`);

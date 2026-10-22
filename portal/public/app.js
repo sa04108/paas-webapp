@@ -14,6 +14,7 @@
 
 import { DEFAULT_VIEW, el, state } from "./app-state.js";
 import { initBuildOptions } from "./app-build.js";
+import { initBuildSettings, loadDetailBuild } from "./app-build-settings.js";
 import { parsePath, buildPath } from "./app-router.js";
 import {
   canManageUsers,
@@ -100,6 +101,7 @@ import {
 } from "./app-api.js";
 
 initBuildOptions(apiFetch);
+initBuildSettings(apiFetch);
 
 // 로그 새로고침 버튼 UI 상태 동기화 (data-auto 속성 + 텍스트)
 function syncLogRefreshBtn(btn, isAuto) {
@@ -114,6 +116,7 @@ configureUiHandlers({
   loadDetailEnv,
   loadDetailLogs,
   loadDetailDomains,
+  loadDetailBuild,
   resetExecForApp,
   closeExecSocket,
   retryAllAlertJobs: async (alertJobs) => {

@@ -758,7 +758,24 @@ form label,
   line-height: 1.5;
   resize: vertical;
 }
+.build-mode-panel textarea#build-railpack-config,
+.build-mode-panel textarea#detail-build-railpack-config {
+  min-height: 120px;
+}
 .build-options .build-error { margin-left: 0; color: var(--danger); }
+
+.settings-build > h4 {
+  margin: 0 0 8px;
+  color: var(--ink-main);
+}
+
+.settings-build .build-options {
+  margin-top: 12px;
+}
+
+.settings-build .build-mode-panel {
+  min-width: 0;
+}
 
 .panel-head {
   display: flex;
