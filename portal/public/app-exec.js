@@ -74,7 +74,9 @@ function openExecSocket() {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const cols = term.cols || 80;
   const rows = term.rows || 24;
-  const url = `${proto}//${location.host}/api/apps/${userid}/${appname}/exec/ws?cols=${cols}&rows=${rows}`;
+  const params = new URLSearchParams({ cols: String(cols), rows: String(rows) });
+  if (el.detailExecService.value) params.set("service", el.detailExecService.value);
+  const url = `${proto}//${location.host}/api/apps/${encodeURIComponent(userid)}/${encodeURIComponent(appname)}/exec/ws?${params}`;
 
   let ws;
   try {

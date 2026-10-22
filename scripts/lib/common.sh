@@ -29,7 +29,6 @@ DEPLOY_TIMEOUT_SECS="${DEPLOY_TIMEOUT_SECS:-30}"
 DEPLOY_LOG_TAIL_LINES="${DEPLOY_LOG_TAIL_LINES:-120}"
 
 DETECT_RUNTIME_TOOL="${SCRIPTS_DIR}/detect-runtime.js"
-GENERATE_COMPOSE_TOOL="${SCRIPTS_DIR}/generate-compose.js"
 
 # 컨테이너 경로(/paas/...)를 호스트 경로로 변환
 # PAAS_HOST_ROOT가 설정되어 있으면 PAAS_ROOT 접두사를 PAAS_HOST_ROOT로 치환
@@ -71,7 +70,7 @@ require_node() {
 
 validate_user_id() {
   local user_id="$1"
-  if [[ ! "${user_id}" =~ ^[A-Za-z0-9]{3,20}$ ]]; then
+  if [[ ! "${user_id}" =~ ^[a-z0-9]{3,20}$ ]]; then
     echo "User ID must be 3–20 characters and contain only letters and digits." >&2
     exit 1
   fi
@@ -79,7 +78,7 @@ validate_user_id() {
 
 validate_app_name() {
   local app_name="$1"
-  if [[ ! "${app_name}" =~ ^[A-Za-z0-9-]{3,30}$ ]]; then
+  if [[ ! "${app_name}" =~ ^[a-z0-9][a-z0-9-]{2,29}$ ]]; then
     echo "App name must be 3–30 characters and contain only letters, digits, and hyphens (-)." >&2
     exit 1
   fi

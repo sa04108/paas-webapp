@@ -1,128 +1,72 @@
 #!/usr/bin/env node
-'use strict';
+"use strict";
 
-/**
- * generate-compose.js <userid> <appname>
- *
- * {APP_DIR}/docker-compose.yml을 생성한다.
- * APP_IMAGE 환경변수에 pre-built 이미지 태그를 전달받아 image: 필드로 참조한다.
- * (빌드는 create.sh에서 railpack build 또는 docker build로 별도 수행)
- *
- * 모든 환경에서 포트를 직접 노출하지 않고 Traefik 리버스 프록시를 경유한다.
- * dev 환경에서는 PAAS_DOMAIN=localhost 설정으로 *.apps.localhost 도메인을 통해 접근한다.
- */
+const fs = require("node:fs");
+const path = require("node:path");
+const { containerName: appContainerName, containedPath, memoryBytes, allocate, literal, IMAGE_TOKEN } = require("../portal/composeConfig");
 
-const fs = require('node:fs');
-const path = require('node:path');
+// 검증된 서비스에 소유권·네트워크·자원 정책을 적용해 실행용 Compose를 생성한다.
+function hostPath(file) {
+  const root = path.resolve(process.env.PAAS_ROOT || path.resolve(__dirname, ".."));
+  return process.env.PAAS_HOST_ROOT && (file === root || file.startsWith(`${root}/`)) ? path.join(process.env.PAAS_HOST_ROOT, path.relative(root, file)) : file;
+}
 
-// --- 환경변수 (common.sh / .env 와 동일한 이름) ---
-const PAAS_ROOT              = process.env.PAAS_ROOT              || '/paas';
-const PAAS_APPS_DIR          = process.env.PAAS_APPS_DIR          || `${PAAS_ROOT}/apps`;
-const PAAS_DOMAIN            = process.env.PAAS_DOMAIN            || 'my.domain.com';
-const APP_NETWORK            = process.env.APP_NETWORK            || 'paas-app';
-const APP_CONTAINER_PREFIX   = process.env.APP_CONTAINER_PREFIX   || 'paas-app';
-const APP_DATA_SUBDIR        = process.env.APP_DATA_SUBDIR        || 'data';
-const APP_COMPOSE_FILE       = process.env.APP_COMPOSE_FILE       || 'docker-compose.yml';
-const DEFAULT_MEM_LIMIT      = process.env.DEFAULT_MEM_LIMIT      || '256m';
-const DEFAULT_CPU_LIMIT      = process.env.DEFAULT_CPU_LIMIT      || '0.5';
-const DEFAULT_RESTART_POLICY = process.env.DEFAULT_RESTART_POLICY || 'unless-stopped';
-const APP_IMAGE              = process.env.APP_IMAGE; // create.sh에서 빌드 후 전달
-
-// --- 내부 규약 ---
-const DEFAULT_CONTAINER_PORT = 5000;
-
-// localhost 계열 도메인은 dev 환경 → TLS 불필요
-const TLS_ENABLED = !PAAS_DOMAIN.endsWith('localhost');
-
-// --- compose 생성 ---
-
-/**
- * @returns {{ content: string, containerPort: number }}
- */
-function buildCompose({ userid, appname, appDir }) {
-  const containerName = `${APP_CONTAINER_PREFIX}-${userid}-${appname}`;
-  const domain = `${userid}-${appname}.apps.${PAAS_DOMAIN}`;
-
-  if (!APP_IMAGE) {
-    throw new Error('APP_IMAGE environment variable is not set. It must be provided after building in create.sh.');
+function compile(userid, appname, info, loaded, revision) {
+  const { definition, webService } = loaded;
+  const memory = allocate(definition.services, "mem_limit", memoryBytes(process.env.DEFAULT_MEM_LIMIT || "256m"), memoryBytes);
+  const parseCpu = (value) => { const cpu = Number(value); if (!Number.isFinite(cpu) || cpu < 0.01 || cpu > 1024) throw new Error("cpus must be at least 0.01"); return cpu; };
+  const cpus = allocate(definition.services, "cpus", parseCpu(process.env.DEFAULT_CPU_LIMIT || "0.5"), parseCpu);
+  const network = process.env.APP_NETWORK || "paas-app";
+  const domainRoot = process.env.PAAS_DOMAIN || "my.domain.com";
+  const domain = `${userid}-${appname}.apps.${domainRoot}`;
+  const privateNetwork = `${info.project}-private`;
+  const maxPids = Number(process.env.DEFAULT_PIDS_LIMIT || 128);
+  const services = {}, manifest = [], builds = [], pulls = new Set();
+  let sharedImage = null;
+  for (const [name, input] of Object.entries(definition.services)) {
+    const web = name === webService;
+    const kind = input.restart === "no" ? "init" : "service";
+    const containerName = appContainerName(userid, appname, name, web);
+    const generatedImage = `paas-build-${info.project.slice(5)}-service-${name}:${revision}`;
+    let image;
+    if (input.build !== undefined) {
+      const build = typeof input.build === "string" ? { context: input.build } : input.build;
+      const context = containedPath(info.sourceDir, build.context || ".", `${name} build context`, true);
+      const dockerfile = containedPath(context, build.dockerfile || "Dockerfile", `${name} Dockerfile`);
+      builds.push({ image: generatedImage, context, dockerfile, args: build.args || {}, target: build.target });
+      image = generatedImage;
+    } else if (!input.image || input.image === IMAGE_TOKEN) {
+      sharedImage ||= `paas-build-${info.project.slice(5)}-railpack:${revision}`;
+      image = sharedImage;
+    } else { image = input.image; pulls.add(image); }
+    const pids = input.pids_limit === undefined ? maxPids : Number(input.pids_limit);
+    if (!Number.isInteger(pids) || pids < 1 || pids > maxPids) throw new Error(`${name}.pids_limit must be 1–${maxPids}`);
+    const labels = { "paas.type": "user-app", "paas.userid": userid, "paas.appname": appname, "paas.service": name, "paas.kind": kind, "paas.project": info.project, "paas.web": String(web), "paas.domain": domain, "paas.port": "5000", "traefik.enable": String(web) };
+    if (web) Object.assign(labels, {
+      [`traefik.http.routers.${containerName}.rule`]: `Host(\`${domain}\`)`,
+      [`traefik.http.routers.${containerName}.entrypoints`]: domainRoot.endsWith("localhost") ? "web" : "websecure",
+      [`traefik.http.routers.${containerName}.service`]: containerName,
+      [`traefik.http.routers.${containerName}.middlewares`]: `${containerName}-rewrite-host`,
+      [`traefik.http.services.${containerName}.loadbalancer.server.port`]: "5000",
+      [`traefik.http.middlewares.${containerName}-rewrite-host.headers.customrequestheaders.Host`]: "localhost",
+    });
+    const service = { image, container_name: containerName, restart: input.restart || process.env.DEFAULT_RESTART_POLICY || "unless-stopped", mem_limit: memory[name], cpus: cpus[name], pids_limit: pids, init: true,
+      security_opt: ["no-new-privileges:true"], cap_drop: ["NET_RAW", "MKNOD"], networks: web ? ["private", "proxy"] : ["private"], labels,
+      logging: { driver: "json-file", options: { "max-size": "10m", "max-file": "3" } } };
+    if (fs.existsSync(path.join(info.appDir, ".env.paas"))) service.env_file = [".env.paas"];
+    service.environment = { ...Object.fromEntries(Object.entries(input.environment || {}).map(([key, value]) => [key, String(value)])), APP_ID: `${userid}-${appname}`, PAAS_SERVICE: name, ...(web ? { PORT: "5000", NODE_ENV: "production" } : {}) };
+    for (const key of ["command", "entrypoint", "depends_on", "healthcheck", "working_dir", "user", "expose", "stop_grace_period", "read_only", "init"]) if (input[key] !== undefined) service[key] = input[key];
+    const mounts = input.volumes || (web ? ["__app_data:/data"] : []);
+    service.volumes = mounts.map((mount) => {
+      const [volume, target, mode] = mount.split(":");
+      const dataPath = path.join(info.appDir, process.env.APP_DATA_SUBDIR || "data", volume === "__app_data" ? "app" : volume);
+      fs.mkdirSync(dataPath, { recursive: true });
+      return { type: "bind", source: hostPath(dataPath), target, read_only: mode === "ro" };
+    });
+    services[name] = service;
+    manifest.push({ name, kind, containerName, image, healthcheck: Boolean(input.healthcheck) });
   }
-
-  const containerPort = DEFAULT_CONTAINER_PORT;
-
-  const content = [
-    'services:',
-    '  app:',
-    `    image: ${JSON.stringify(APP_IMAGE)}`,
-    `    container_name: ${JSON.stringify(containerName)}`,
-    `    restart: ${JSON.stringify(DEFAULT_RESTART_POLICY)}`,
-    '    volumes:',
-    `      - "./${APP_DATA_SUBDIR}:/data"`,
-    // 환경변수 파일이 있는 앱만 참조해 기존 앱과 Compose 2.17 호환성을 유지한다.
-    ...(fs.existsSync(path.join(appDir, '.env.paas'))
-      ? ['    env_file:', '      - ".env.paas"']
-      : []),
-    '    environment:',
-    `      - ${JSON.stringify(`PORT=${containerPort}`)}`,
-    `      - ${JSON.stringify(`APP_ID=${userid}-${appname}`)}`,
-    '      - "NODE_ENV=production"',
-    `    mem_limit: ${JSON.stringify(DEFAULT_MEM_LIMIT)}`,
-    `    cpus: ${DEFAULT_CPU_LIMIT}`,
-    '    networks:',
-    `      - ${APP_NETWORK}`,
-    '    labels:',
-    `      - ${JSON.stringify('traefik.enable=true')}`,
-    // 라우터: defaultRule 대신 명시적으로 선언해야 미들웨어를 붙일 수 있다.
-    `      - ${JSON.stringify(`traefik.http.routers.${containerName}.rule=Host(\`${domain}\`)`)}`,
-    `      - ${JSON.stringify(`traefik.http.routers.${containerName}.entrypoints=${TLS_ENABLED ? 'websecure' : 'web'}`)}`,
-    `      - ${JSON.stringify(`traefik.http.routers.${containerName}.service=${containerName}`)}`,
-    `      - ${JSON.stringify(`traefik.http.routers.${containerName}.middlewares=${containerName}-rewrite-host`)}`,
-    // TLS 라벨을 명시하지 않는다: websecure 엔트리포인트의 기본 TLS 설정이 적용되어
-    // 선발급된 *.apps 와일드카드 인증서를 공유한다. 라우터에 tls를 선언하면 기본
-    // 설정을 덮어써 앱마다 개별 인증서 발급(수십 초 대기)이 다시 발생한다.
-    // 서비스: 컨테이너가 실제로 리스닝하는 포트로 명시적 포워딩
-    `      - ${JSON.stringify(`traefik.http.services.${containerName}.loadbalancer.server.port=${containerPort}`)}`,
-    // 미들웨어: Host 헤더를 localhost로 재작성 → Vite 등 dev server의 host 검증을 통과시킨다.
-    `      - ${JSON.stringify(`traefik.http.middlewares.${containerName}-rewrite-host.headers.customrequestheaders.Host=localhost`)}`,
-    `      - ${JSON.stringify('paas.type=user-app')}`,
-    `      - ${JSON.stringify(`paas.userid=${userid}`)}`,
-    `      - ${JSON.stringify(`paas.appname=${appname}`)}`,
-    `      - ${JSON.stringify(`paas.domain=${domain}`)}`,
-    `      - ${JSON.stringify(`paas.port=${containerPort}`)}`,
-    '    logging:',
-    '      driver: json-file',
-    '      options:',
-    '        max-size: "10m"',
-    '        max-file: "3"',
-    '',
-    'networks:',
-    `  ${APP_NETWORK}:`,
-    '    external: true',
-    `    name: ${JSON.stringify(APP_NETWORK)}`,
-    '',
-  ].join('\n');
-
-  return { content, containerPort };
+  return { compose: literal({ name: info.project, services, networks: { private: { name: privateNetwork, labels: { "paas.project": info.project } }, proxy: { external: true, name: network } } }), manifest, sharedImage, builds, pulls: [...pulls], webService };
 }
 
-// --- CLI entry point ---
-
-const userid = process.argv[2];
-const appname = process.argv[3];
-
-if (!userid || !appname) {
-  process.stderr.write('Usage: generate-compose.js <userid> <appname>\n');
-  process.exit(1);
-}
-
-const appDir = path.resolve(PAAS_APPS_DIR, userid, appname);
-const composePath = path.join(appDir, APP_COMPOSE_FILE);
-
-try {
-  const { content, containerPort } = buildCompose({ userid, appname, appDir });
-  fs.writeFileSync(composePath, content);
-  process.stdout.write(`[generate-compose] Created: ${composePath}\n`);
-  process.stdout.write(`[generate-compose] Container port: ${containerPort}\n`);
-} catch (e) {
-  process.stderr.write(`Failed to create docker-compose.yml: ${e.message}\n`);
-  process.exit(1);
-}
+module.exports = { compile };

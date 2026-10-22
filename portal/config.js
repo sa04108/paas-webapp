@@ -69,7 +69,7 @@ const RUNNER_SCRIPTS = {
 
 // 입력값 검증용 정규식
 const USER_ID_REGEX  = /^[A-Za-z0-9]{3,20}$/;
-const APP_NAME_REGEX = /^[A-Za-z0-9-]{3,30}$/;
+const APP_NAME_REGEX = /^[A-Za-z0-9][A-Za-z0-9-]{2,29}$/;
 
 // 앱 디렉터리 내 관리 파일명
 const APP_META_FILE    = ".paas-meta.json";

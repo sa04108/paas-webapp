@@ -10,10 +10,7 @@
 const express = require("express");
 const { ROLE_ADMIN } = require("../authService");
 const { AppError, sendOk, sendError } = require("../utils");
-const { RUNNER_SCRIPTS } = require("../config");
-const { runRunnerScript } = require("../appManager");
 const jobStore = require("../jobStore");
-const appReadiness = require("../appReadiness");
 
 const router = express.Router();
 
@@ -130,10 +127,13 @@ router.get("/:id/stream", resolveJob, (req, res, next) => {
 // interrupted 또는 failed 상태의 job을 재시도한다.
 // 실행 함수는 server.js에서 setExecuteJobFn()으로 주입받는다.
 let _executeJobFn = null;
+let _cleanupJobFn = null;
 
 function setExecuteJobFn(fn) {
   _executeJobFn = fn;
 }
+
+function setCleanupJobFn(fn) { _cleanupJobFn = fn; }
 
 router.post("/:id/retry", resolveJob, async (req, res, next) => {
   try {
@@ -174,13 +174,12 @@ router.post("/:id/cancel", resolveJob, async (req, res, next) => {
     }
 
     if (job.type === "create" && job.status !== "done" && job.status !== "warn") {
-      const { userid, appname } = job.meta;
       try {
-        await runRunnerScript(RUNNER_SCRIPTS.delete, [userid, appname]);
-        appReadiness.remove(userid, appname);
+        if (!_cleanupJobFn) throw new Error("Cleanup is unavailable");
+        await _cleanupJobFn(job);
       } catch (err) {
         console.error(`[jobs] cleanup failed during cancel for ${job.id}:`, err);
-        // 클린업 중 오류가 발생해도 job 삭제는 진행한다.
+        throw new AppError(502, "Cleanup failed; the job was retained so cleanup can be retried");
       }
     }
 
@@ -193,3 +192,4 @@ router.post("/:id/cancel", resolveJob, async (req, res, next) => {
 
 module.exports = router;
 module.exports.setExecuteJobFn = setExecuteJobFn;
+module.exports.setCleanupJobFn = setCleanupJobFn;

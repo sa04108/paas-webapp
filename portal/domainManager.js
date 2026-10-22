@@ -17,6 +17,7 @@ const dns = require("node:dns").promises;
 
 const { AppError } = require("./utils");
 const { config, IS_DEV } = require("./config");
+const { containerName: appContainerName } = require("./composeConfig");
 
 // FQDN 기본 검증 정규식
 const FQDN_REGEX =
@@ -51,14 +52,12 @@ async function rebuildTraefikConfig(statements) {
     return;
   }
 
-  const containerPrefix = process.env.APP_CONTAINER_PREFIX || "paas-app";
-
   const routerLines = [];
   const serviceLines = [];
   const middlewareLines = [];
 
   for (const row of activeDomains) {
-    const containerName = `${containerPrefix}-${row.userid}-${row.appname}`;
+    const containerName = appContainerName(row.userid, row.appname, "", true);
     const routerKey = `custom-${row.id}`;
 
     routerLines.push(

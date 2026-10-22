@@ -41,6 +41,7 @@ const uiHandlers = {
   loadDetailLogs: async () => { },
   loadDetailDomains: async () => { },
   loadDetailBuild: async () => { },
+  loadDetailRuntime: async () => { },
   handleRequestError: async () => { },
   resetExecForApp: () => { },
   closeExecSocket: () => { },
@@ -137,6 +138,7 @@ async function navigateToApp(userid, appname, { updateUrl = true } = {}) {
   uiHandlers.closeExecSocket(); // 이전 앱 소켓 정리
   state.selectedApp = { userid, appname };
   uiHandlers.loadDetailBuild().catch(() => { });
+  uiHandlers.loadDetailRuntime().catch(() => { });
   uiHandlers.resetExecForApp();
   el.appDetailAppname.textContent = `${userid} / ${appname}`;
   switchDetailTab(DEFAULT_DETAIL_TAB);

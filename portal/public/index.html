@@ -175,6 +175,40 @@
                         <label for="repo-branch-input">Branch</label>
                         <input id="repo-branch-input" name="branch" type="text" placeholder="main" value="main" />
 
+                        <fieldset class="build-options runtime-options">
+                            <legend>Runtime</legend>
+                            <label class="build-option"><input type="radio" name="runtimeMode" value="single" checked /> <span>Single container</span></label>
+                            <label class="build-option"><input type="radio" name="runtimeMode" value="compose" /> <span>Docker Compose</span></label>
+                            <div id="create-compose-panel" class="build-mode-panel" hidden>
+                                <p class="field-hint">Services without an image/build, or with image: ${PAAS_APP_IMAGE}, reuse this app's existing build. Services with their own image or build keep it. App environment variables come from Settings. Supported fields include command, environment, depends_on, healthcheck, and named volumes. Do not use env_file, container_name, ports, labels, or networks. restart: "no" creates an initialization job; it must exit 0. Dependencies may use service_completed_successfully.</p>
+                                <div class="repo-source-toggle" role="radiogroup" aria-label="Compose file source">
+                                    <label class="repo-source-option"><input type="radio" name="composeSource" value="inline" checked /><span class="repo-source-option-label">Paste YAML</span></label>
+                                    <label class="repo-source-option"><input type="radio" name="composeSource" value="repository" /><span class="repo-source-option-label">Repository file</span></label>
+                                </div>
+                                <div id="create-compose-inline-panel" class="build-mode-panel">
+                                    <label for="create-compose-content">Compose YAML</label>
+                                    <textarea id="create-compose-content" rows="10" maxlength="65536" spellcheck="false" aria-describedby="create-compose-help" placeholder="Paste Compose YAML"></textarea>
+                                    <p id="create-compose-help" class="field-hint">Example:</p>
+                                    <pre class="compose-sample">services:
+  app:
+    image: ${PAAS_APP_IMAGE}
+    depends_on:
+      redis:
+        condition: service_started
+  redis:
+    image: redis:7</pre>
+                                    <p class="field-hint">Maximum size: 64 KiB.</p>
+                                </div>
+                                <div id="create-compose-repository-panel" class="build-mode-panel" hidden>
+                                    <label for="create-compose-file">Root Compose file</label>
+                                    <input id="create-compose-file" type="text" value="compose.yaml" placeholder="compose.yaml" />
+                                </div>
+                                <label for="create-web-service">Web service name</label>
+                                <input id="create-web-service" type="text" value="app" placeholder="app" />
+                            </div>
+                            <p id="create-runtime-error" class="field-hint build-error" role="alert" hidden></p>
+                        </fieldset>
+
                         <label for="create-env-input">Environment Variables (optional)</label>
                         <textarea id="create-env-input" class="env-textarea create-env-textarea" rows="6"
                             maxlength="65536" autocomplete="off" spellcheck="false"
@@ -261,6 +295,8 @@
                         <div class="logs-controls">
                             <input id="detail-log-lines-input" type="number" class="log-lines-input" min="1" max="1000"
                                 value="120" aria-label="Number of log lines" title="Number of log lines" />
+                            <label class="service-selector-label" for="detail-log-service">Service</label>
+                            <select id="detail-log-service" class="service-selector" aria-label="Log service"><option value="">All services</option></select>
                             <button id="detail-refresh-logs-btn" class="ghost-btn logs-refresh-btn" type="button"
                                 data-auto="false">
                                 <span class="refresh-icon">↻</span><span class="refresh-label">Refresh</span>
@@ -276,7 +312,11 @@
                     aria-labelledby="detail-tab-btn-exec" hidden>
                     <div class="panel-head">
                         <h3>Exec</h3>
-                        <button id="detail-exec-clear-btn" class="ghost-btn" type="button">Clear</button>
+                        <div class="logs-controls">
+                            <label class="service-selector-label" for="detail-exec-service">Service</label>
+                            <select id="detail-exec-service" class="service-selector" aria-label="Exec service"><option value="">app</option></select>
+                            <button id="detail-exec-clear-btn" class="ghost-btn" type="button">Clear</button>
+                        </div>
                     </div>
                     <div class="exec-terminal-container">
                         <div id="detail-exec-terminal" class="exec-terminal-mount"></div>
@@ -325,6 +365,45 @@
                         <button id="detail-env-save-btn" class="primary-btn env-save-btn" type="button">Save and
                             Restart</button>
                     </div>
+                    <div class="settings-separator"></div>
+                    <section class="settings-build" aria-labelledby="detail-runtime-title">
+                        <h4 id="detail-runtime-title">Runtime configuration</h4>
+                        <p class="env-help">Changes apply on the next deployment. Services without an image/build, or with image: ${PAAS_APP_IMAGE}, reuse this app's existing build. App environment variables come from Settings. Supported fields include command, environment, depends_on, healthcheck, and named volumes. Do not use env_file, container_name, ports, labels, or networks. restart: "no" creates an initialization job; it must exit 0. Dependencies may use service_completed_successfully.</p>
+                        <p id="detail-runtime-status" class="field-hint" role="status" aria-live="polite"></p>
+                        <fieldset id="detail-runtime-options" class="build-options" disabled>
+                            <legend>Runtime mode</legend>
+                            <label class="build-option"><input type="radio" name="detailRuntimeMode" value="single" checked /> <span>Single container</span></label>
+                            <label class="build-option"><input type="radio" name="detailRuntimeMode" value="compose" /> <span>Docker Compose</span></label>
+                            <div id="detail-runtime-compose-panel" class="build-mode-panel" hidden>
+                                <div class="repo-source-toggle" role="radiogroup" aria-label="Compose file source">
+                                    <label class="repo-source-option"><input type="radio" name="detailComposeSource" value="inline" checked /><span class="repo-source-option-label">Paste YAML</span></label>
+                                    <label class="repo-source-option"><input type="radio" name="detailComposeSource" value="repository" /><span class="repo-source-option-label">Repository file</span></label>
+                                </div>
+                                <div id="detail-runtime-inline-panel" class="build-mode-panel">
+                                    <label for="detail-runtime-content">Compose YAML</label>
+                                    <textarea id="detail-runtime-content" rows="10" maxlength="65536" spellcheck="false" placeholder="Paste Compose YAML"></textarea>
+                                    <p class="field-hint">Example:</p>
+                                    <pre class="compose-sample">services:
+  app:
+    image: ${PAAS_APP_IMAGE}
+    depends_on:
+      redis:
+        condition: service_started
+  redis:
+    image: redis:7</pre>
+                                    <p class="field-hint">Maximum size: 64 KiB.</p>
+                                </div>
+                                <div id="detail-runtime-repository-panel" class="build-mode-panel" hidden>
+                                    <label for="detail-runtime-file">Root Compose file</label>
+                                    <input id="detail-runtime-file" type="text" value="compose.yaml" placeholder="compose.yaml" />
+                                </div>
+                                <label for="detail-runtime-web-service">Web service name</label>
+                                <input id="detail-runtime-web-service" type="text" value="app" placeholder="app" />
+                            </div>
+                        </fieldset>
+                        <p id="detail-runtime-error" class="modal-error" role="alert" hidden></p>
+                        <div class="env-actions"><button id="detail-runtime-save-btn" class="primary-btn env-save-btn" type="button" disabled>Save runtime settings</button></div>
+                    </section>
                     <div class="settings-separator"></div>
                     <section class="settings-build" aria-labelledby="detail-build-title">
                         <h4 id="detail-build-title">Build configuration</h4>

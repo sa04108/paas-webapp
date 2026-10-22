@@ -36,7 +36,7 @@ const appReadiness = require("./appReadiness");
 const { createDomainManager } = require("./domainManager");
 const { WebSocketServer } = require("ws");
 const { createExecWsHandler, parseExecWsUrl } = require("./routes/exec-ws");
-const { findDockerApp, getDockerContainer } = require("./appManager");
+const { findDockerService, getDockerContainer, areServicesReady } = require("./appManager");
 
 // ── authService 초기화 ────────────────────────────────────────────────────────
 
@@ -287,6 +287,7 @@ async function start() {
   // jobStore 초기화 및 서버 재시작 복원
   jobStore.init(config.PORTAL_DB_PATH);
   appReadiness.init(config.PORTAL_DB_PATH);
+  appReadiness.setServiceChecker(areServicesReady);
   await jobStore.recoverOnStartup(executeJob);
 
   // ── WebSocket 서버 (exec 스트리밍) ─────────────────────────────────────────
@@ -294,7 +295,7 @@ async function start() {
   const wss = new WebSocketServer({ noServer: true });
   const handleExecWs = createExecWsHandler({
     resolveSessionAuth: (req) => authService.resolveSessionAuth(req),
-    findDockerApp,
+    findDockerService,
     getDockerContainer,
   });
   wss.on("connection", handleExecWs);

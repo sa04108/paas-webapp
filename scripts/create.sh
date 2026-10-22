@@ -6,9 +6,9 @@
 #   1) userid / appname / repoUrl 유효성 검증
 #   2) git clone으로 사용자 repo를 앱 디렉토리에 복제
 #   3) detect-runtime.js로 런타임 메타데이터 감지 (UI 표시용)
-#   4) railpack build (또는 사용자 Dockerfile의 경우 docker build)로 이미지 빌드
-#   5) generate-compose.js로 docker-compose.yml 생성
-#   6) docker compose up -d 로 컨테이너 기동
+#   4) Compose 검증 후 Railpack·서비스 Dockerfile·레지스트리 이미지 준비
+#   5) 실행 정의와 서비스 목록을 원자적으로 저장
+#   6) 앱 프로젝트 전체 기동과 초기화 작업 완료 확인
 #
 # 사용법:
 #   create.sh <userid> <appname> <repoUrl> [branch]
@@ -42,19 +42,13 @@ validate_repo_url "${REPO_URL}"
 ensure_base_directories
 
 APP_DIR="$(app_dir_for "${USER_ID}" "${APP_NAME}")"
-COMPOSE_FILE="$(app_compose_file_path "${APP_DIR}")"
 
 if [[ -e "${APP_DIR}" ]]; then
   echo "[create] [info] App directory already exists. Replacing existing source: ${USER_ID}/${APP_NAME}"
   rm -rf "${APP_DIR}/${APP_SOURCE_SUBDIR}"
 fi
 
-# app 소스 디렉토리 복제 실패 시 정리 (메타데이터 및 기타 구조 보존을 위해 app 폴더 전체 대신 소스코드만 삭제)
-cleanup_on_failure() {
-  echo "[create] Failed — cleaning up partial creation (removing source directory only): ${APP_DIR}/${APP_SOURCE_SUBDIR}" >&2
-  rm -rf "${APP_DIR}/${APP_SOURCE_SUBDIR}"
-}
-trap cleanup_on_failure ERR
+# 실패한 빌드와 일부 기동도 같은 프로젝트로 재시도하거나 삭제할 수 있게 보존한다.
 
 mkdir -p "${APP_DIR}/${APP_DATA_SUBDIR}" "${APP_DIR}/${APP_LOGS_SUBDIR}"
 
@@ -63,25 +57,13 @@ echo "[create] Cloning repository: ${REPO_URL} (branch: ${BRANCH})"
 git clone --depth 1 --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}/${APP_SOURCE_SUBDIR}"
 
 require_node
-require_railpack
 
 echo "[create] Detecting runtime..."
 RUNTIME_JSON="$(node "${DETECT_RUNTIME_TOOL}" "${APP_DIR}/${APP_SOURCE_SUBDIR}")"
 DISPLAY_NAME="$(node -e "console.log(JSON.parse(process.argv[1]).displayName)" "${RUNTIME_JSON}")"
 echo "[create] Detected runtime: ${DISPLAY_NAME}"
 
-APP_IMAGE="$(app_image_name "${USER_ID}" "${APP_NAME}")"
-build_app_image "${APP_DIR}/${APP_SOURCE_SUBDIR}" "${APP_IMAGE}" "${PAAS_BUILD_CONFIG_PATH:-}"
-
-echo "[create] Generating docker-compose.yml..."
-generate_app_compose "${USER_ID}" "${APP_NAME}" "${APP_IMAGE}"
-
-# 기동 (이미 빌드된 이미지를 사용)
-mkdir -p "$(app_log_dir_for "${APP_DIR}")"
-echo "[create] Starting container..."
-docker compose -f "${COMPOSE_FILE}" up -d 2>&1 | tee -a "${APP_DIR}/${APP_LOGS_SUBDIR}/create.log"
-
-# 생성이 성공한 뒤 저장소 정보와 빌드 설정을 한 파일로 원자적으로 저장한다.
+# 빌드 전에 저장해 실패한 앱도 관리 대상에 남긴다.
 echo "[create] Writing app metadata..."
 REPO_URL="${REPO_URL}" \
 BRANCH="${BRANCH}" \
@@ -89,10 +71,6 @@ RUNTIME_JSON="${RUNTIME_JSON}" \
 INSTALLATION_ID="${PAAS_INSTALLATION_ID:-}" \
 node "${SCRIPT_DIR}/lib/build-config.js" save-metadata "${APP_DIR}/.paas-meta.json" "${PAAS_BUILD_CONFIG_PATH:-}"
 
-# echo "[create] 소스 디렉토리 유지 (deploy 목적)..."
-# rm -rf "${APP_DIR}/${APP_SOURCE_SUBDIR}"
-
-# 성공 시 trap 해제
-trap - ERR
+node "${SCRIPT_DIR}/lib/compose-project.js" deploy "${USER_ID}" "${APP_NAME}" "${PAAS_RUNTIME_CONFIG_PATH:-}"
 
 echo "[create] Complete: ${USER_ID}/${APP_NAME} repo=${REPO_URL} runtime=${DISPLAY_NAME}"

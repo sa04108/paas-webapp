@@ -6,7 +6,8 @@ Hyunbbai PaaS is a self-hosted platform for deploying GitHub repositories as Doc
 
 - Deploy a public GitHub repository by providing its URL, application name, and branch; the default branch is `main`.
 - Build automatically, select a root-level Dockerfile from GitHub, or write a custom Dockerfile in the app creation form.
-- Start, stop, redeploy, and delete applications from the dashboard.
+- Deploy multiple services from Compose YAML, with registry images, service Dockerfiles, or a shared Railpack image.
+- Start, stop, redeploy, and delete whole application projects from the dashboard.
 - Inspect container logs with automatic refresh and open an interactive browser terminal.
 - Edit application environment variables and recreate the container to apply them.
 - Assign each application a subdomain and attach custom domains with CNAME verification.
@@ -18,9 +19,9 @@ Hyunbbai PaaS is a self-hosted platform for deploying GitHub repositories as Doc
 
 ### Containerize each user's application
 
-Each application runs in its own Docker container, with a separate filesystem and process namespace, a persistent `/data` mount, and configurable CPU and memory limits. Application containers do not receive the host Docker socket. The portal manages them through Docker Compose and Docker labels identifying their owner, name, domain, and internal port.
+Each application is one Docker Compose project containing its web service, workers, and initialization jobs. Services have separate filesystems and process namespaces; application data stays under that application's data directory. CPU and memory limits apply to the combined services. Application containers do not receive the host Docker socket. The portal owns project names, container identities, routing, networks, and ownership labels. See [Compose application configuration](docs/compose-apps.md) for the supported YAML fields and KTX example.
 
-This provides container-level isolation. Applications currently share the `paas-app` network with the portal and proxy, so network isolation between users is incomplete. BuildKit runs on a separate network and exposes only a Unix socket shared with the portal. See the existing [security review](docs/security-threats.md) for the current boundaries and remaining work.
+Workers use a private application network; only the web service also joins `paas-app` for proxy routing. Web services still share this network with other web services, the portal, and proxy, so isolation between users is incomplete. The Docker daemon and host remain shared. BuildKit runs on a separate network and exposes only a Unix socket shared with the portal. See the [security review](docs/security-threats.md) for remaining work.
 
 ### Bring Portainer-inspired logs and exec into the portal
 
@@ -43,7 +44,7 @@ In automatic mode, when no matching file exists, the platform runs `railpack bui
 
 In Railpack mode, a blank configuration runs the same plain `railpack build` command without injecting a server configuration. Any repository-provided `railpack.json` follows Railpack's normal behavior. A nonblank configuration is validated as a JSON object, written outside the cloned source, and passed through `--config-file` without modifying repository files.
 
-Build choices are saved with repository metadata in the application's `.paas-meta.json` outside its cloned source after successful creation and reused on redeployment. The metadata is replaced atomically so a failed recreation preserves the previous repository and build choices together. Custom Dockerfiles are materialized outside the cloned source, so they do not overwrite repository files or get replaced by `git pull`. Operations on the same app run in order to keep sources and build choices consistent. Existing apps without saved build configuration retain automatic detection.
+Build and runtime choices are saved with repository metadata in the application's `.paas-meta.json` outside its cloned source before building, so failed applications remain manageable. Custom Dockerfiles are materialized outside the cloned source. Services without `image`/`build`, or using `${PAAS_APP_IMAGE}`, share this build; services with their own registry image or Dockerfile are prepared separately. Operations on the same app run in order. This release does not migrate existing application layouts.
 
 For an existing app, open **Settings**, load or edit its build configuration, and choose **Save build settings**. Saving preserves the running container; changes apply on the next **Redeploy**. Dockerfile lookup uses the app's stored repository and branch, including the owner's GitHub App connection when an administrator edits another user's app.
 
@@ -54,7 +55,7 @@ The portal's runtime detector provides Node.js framework and dependency badges f
 Traefik discovers application containers through Docker labels. Applications do not publish individual host ports; traffic reaches them through the proxy. Platform subdomains share a wildcard certificate issued through Cloudflare DNS-01, while custom domains use HTTP-01 after CNAME verification.
 
 ```text
-GitHub repository -> clone -> Railpack / Dockerfile -> image -> app container
+GitHub repository -> clone -> Compose validation -> Railpack / Dockerfile / image pull -> app services
 Browser -> Traefik -> portal or application
 Portal -> Docker API / Compose -> lifecycle, logs, and exec
 ```
@@ -252,6 +253,7 @@ The host checkout stores the following runtime files:
 | `apps/<user>/<app>/data/` | Application files mounted at `/data` |
 | `apps/<user>/<app>/logs/` | Lifecycle script logs |
 | `apps/<user>/<app>/docker-compose.yml` | Generated application container configuration |
+| `apps/<user>/<app>/.paas-project.json` | Atomic active Compose definition, service manifest, and lifecycle state |
 | `apps/<user>/<app>/.env.paas` | User-defined application environment variables, when saved |
 
 Back up `.env`, `portal-data/`, and application data with a consistent SQLite backup. These runtime paths are excluded from Git. Application logs use Docker's `json-file` driver with rotation at 10 MB per file and 3 files per container.

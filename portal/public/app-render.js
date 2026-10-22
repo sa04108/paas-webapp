@@ -57,6 +57,19 @@ function renderApps(apps) {
     const safeStatus    = escapeHtml(rawStatus);
     const safeCreatedAt = escapeHtml(formatDate(appItem.createdAt));
     const badgeHtml     = runtimeBadgeHtml(appItem.detectedRuntime);
+    const servicesHtml = Array.isArray(appItem.services) && appItem.services.length
+      ? `<ul class="app-service-list" aria-label="Service status">${appItem.services.map((service) => {
+        const name = escapeHtml(service.name || "service");
+        const status = String(service.status || "unknown");
+        const safeStatus = escapeHtml(status);
+        const kind = service.kind === "init" ? " · init" : "";
+        const health = service.health && service.health !== "healthy" ? `health: ${escapeHtml(service.health)}` : "";
+        const showExit = service.exitCode !== null && service.exitCode !== undefined && Number(service.exitCode) !== 0 && status !== "running";
+        const exit = showExit ? `${health ? " · " : ""}exit ${escapeHtml(service.exitCode)}` : "";
+        const details = health || exit ? `<span class="app-service-meta">${health}${exit}</span>` : "";
+        return `<li><span class="app-service-name">${name}${kind}</span><span class="status-pill ${statusClass(status)}">${safeStatus}</span>${details}</li>`;
+      }).join("")}</ul>`
+      : "";
 
     // dev 모드에서는 http + Traefik 호스트 포트를 붙인다 (*.localhost 자동 해석).
     // prod 모드에서는 https (NPM이 443 처리).
@@ -90,6 +103,7 @@ function renderApps(apps) {
         </div>
         <p class="app-domain">${domainHtml}</p>
         <p class="app-meta">repo: ${safeRepoUrl} | branch: ${safeBranch} | created: ${safeCreatedAt}</p>
+        ${servicesHtml}
         <div class="app-actions">
           <button class="action-btn" data-action="start"  type="button" ${actionsDisabled}>Start</button>
           <button class="action-btn" data-action="stop"   type="button" ${actionsDisabled}>Stop</button>

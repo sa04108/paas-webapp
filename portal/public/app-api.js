@@ -10,6 +10,7 @@
 
 import { AUTO_REFRESH_MS, el, state } from "./app-state.js";
 import { getBuildPayload, invalidateLookup, resetBuildOptions, setBuildSubmitting } from "./app-build.js";
+import { getRuntimePayload, resetCreateRuntime } from "./app-runtime.js";
 import { renderApps, renderUsers, renderAdminApps, renderDomains } from "./app-render.js";
 import { navigateToApp, switchView, updateAuthUi, renderJobIndicator } from "./app-ui.js";
 import {
@@ -95,6 +96,7 @@ async function loadApps() {
   const data = await apiFetch("/apps");
   state.apps = data.apps || [];
   renderApps(state.apps);
+  document.dispatchEvent(new CustomEvent("app-list-updated"));
   syncAppStatusRefresh();
   if (data.hasLabelErrors) {
     setBanner("Some containers are missing labels and have been excluded from the dashboard. Contact an administrator.", "error");
@@ -127,6 +129,7 @@ async function loadAdminApps() {
   const data = await apiFetch("/apps?all=true");
   state.adminApps = data.apps || [];
   renderAdminApps(state.adminApps);
+  document.dispatchEvent(new CustomEvent("app-list-updated"));
   syncAppStatusRefresh();
 }
 
@@ -141,7 +144,7 @@ function hasAppReadinessWork() {
     APP_STATUS_JOB_TYPES.has(job.type) && (job.status === "pending" || job.status === "running")
   );
   const hasWaitingApp = [...state.apps, ...state.adminApps].some((app) =>
-    app.status === "starting" || app.status === "unhealthy"
+    app.status === "starting" || app.status === "unhealthy" || app.status === "degraded" || app.services?.length > 1
   );
   return hasActiveLifecycleJob || hasWaitingApp;
 }
@@ -483,13 +486,18 @@ async function performAction(target) {
 
 async function loadDetailLogs() {
   if (!state.selectedApp) return;
+  const selectedKey = `${state.selectedApp.userid}/${state.selectedApp.appname}`;
   const { userid, appname } = state.selectedApp;
   const rawLines = Number.parseInt(el.detailLogLinesInput.value, 10);
   const lines = Number.isFinite(rawLines)
     ? Math.max(1, Math.min(1000, rawLines))
     : 120;
+  const service = el.detailLogService.value;
   el.detailLogsTitle.textContent = `${userid}/${appname} Fetching logs...`;
-  const data = await apiFetch(`/apps/${userid}/${appname}/logs?lines=${lines}`);
+  const query = new URLSearchParams({ lines: String(lines) });
+  if (service) query.set("service", service);
+  const data = await apiFetch(`/apps/${encodeURIComponent(userid)}/${encodeURIComponent(appname)}/logs?${query}`);
+  if (!state.selectedApp || `${state.selectedApp.userid}/${state.selectedApp.appname}` !== selectedKey || service !== el.detailLogService.value) return;
   el.detailLogsTitle.textContent = `${userid}/${appname} (${lines} lines)`;
   el.detailLogsOutput.textContent = data.logs || "(empty)";
 }
@@ -544,7 +552,7 @@ async function handleCreate(event) {
     throw new Error("Enter an app name and repository.");
   }
 
-  const body = { appname: el.appnameInput.value.trim(), repoUrl, branch, build: getBuildPayload() };
+  const body = { appname: el.appnameInput.value.trim(), repoUrl, branch, build: getBuildPayload(), runtime: getRuntimePayload() };
   const env = el.createEnvInput.value;
   if (env.trim()) body.env = env;
   // 내 GitHub 저장소는 installation 토큰으로 clone한다 (Private 접근 허용).
@@ -559,6 +567,7 @@ async function handleCreate(event) {
     startJobPolling(data.jobId, `${body.appname}`, "Create App", "create");
     el.createForm.reset();
     resetBuildOptions();
+    resetCreateRuntime();
     el.repoBranchInput.value = "main";
     renderRepoOptions();
     // reset이 라디오를 markup 기본값(github)으로 되돌리므로 서버 설정에 맞춰 재조정한다.

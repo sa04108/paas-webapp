@@ -58,6 +58,9 @@ build_app_image() {
   fi
 
   if [[ -n "${dockerfile_path}" ]]; then
+    if [[ "${build_mode}" == "auto" ]]; then
+      dockerfile_path="$(node "${config_tool}" auto "${src_dir}" "${dockerfile_path##*/}")" || return $?
+    fi
     echo "[build] User Dockerfile detected at ${dockerfile_path}; using docker build"
     docker build \
       -t "${image_name}" \
@@ -67,13 +70,4 @@ build_app_image() {
     echo "[build] Using railpack build"
     (cd "${src_dir}" && railpack build . --name "${image_name}")
   fi
-}
-
-# generate_app_compose <userid> <appname> <image_name>
-# → generate-compose.js를 호출해 docker-compose.yml을 생성한다.
-generate_app_compose() {
-  local user_id="$1"
-  local app_name="$2"
-  local image_name="$3"
-  APP_IMAGE="${image_name}" node "${GENERATE_COMPOSE_TOOL}" "${user_id}" "${app_name}"
 }

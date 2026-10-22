@@ -15,6 +15,7 @@
 import { DEFAULT_VIEW, el, state } from "./app-state.js";
 import { initBuildOptions } from "./app-build.js";
 import { initBuildSettings, loadDetailBuild } from "./app-build-settings.js";
+import { initRuntime, loadDetailRuntime } from "./app-runtime.js";
 import { parsePath, buildPath } from "./app-router.js";
 import {
   canManageUsers,
@@ -102,6 +103,7 @@ import {
 
 initBuildOptions(apiFetch);
 initBuildSettings(apiFetch);
+initRuntime(apiFetch);
 
 // 로그 새로고침 버튼 UI 상태 동기화 (data-auto 속성 + 텍스트)
 function syncLogRefreshBtn(btn, isAuto) {
@@ -117,6 +119,7 @@ configureUiHandlers({
   loadDetailLogs,
   loadDetailDomains,
   loadDetailBuild,
+  loadDetailRuntime,
   resetExecForApp,
   closeExecSocket,
   retryAllAlertJobs: async (alertJobs) => {
@@ -189,10 +192,23 @@ el.detailTabBtns.forEach((btn) => {
     if (tab === "logs" && state.selectedApp) loadDetailLogs().catch(handleRequestError);
     if (tab === "exec" && state.selectedApp) { openExecSocket(); }
     if (tab === "settings" && state.selectedApp) loadDetailEnv().catch(handleRequestError);
+    if (tab === "settings" && state.selectedApp) loadDetailRuntime().catch(handleRequestError);
     if (tab === "domains" && state.selectedApp) loadDetailDomains().catch(handleRequestError);
     // exec 외 탭으로 전환 시 소켓 해제
     if (tab !== "exec") closeExecSocket();
   });
+});
+
+el.detailLogService.addEventListener("change", () => loadDetailLogs().catch(handleRequestError));
+el.detailExecService.addEventListener("change", () => {
+  closeExecSocket();
+  openExecSocket();
+});
+document.addEventListener("app-service-options-updated", () => {
+  if (state.activeView === "app-detail" && state.activeDetailTab === "exec") {
+    closeExecSocket();
+    openExecSocket();
+  }
 });
 
 // ── 커스텀 도메인 ─────────────────────────────────────────────────────────────
