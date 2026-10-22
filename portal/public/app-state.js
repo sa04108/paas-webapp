@@ -106,6 +106,7 @@ export const el = {
   repoUrlInput: document.getElementById("repo-url-input"),
   repoSelect: document.getElementById("repo-select"),
   repoBranchInput: document.getElementById("repo-branch-input"),
+  createEnvInput: document.getElementById("create-env-input"),
   buildModeRadios: Array.from(document.querySelectorAll('#create-form input[name="buildMode"]')),
   buildRepositoryPanel: document.getElementById("build-repository-panel"),
   buildDockerfileSelect: document.getElementById("build-dockerfile-select"),

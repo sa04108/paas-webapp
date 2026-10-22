@@ -746,10 +746,17 @@ form label,
 .build-option input { margin: 0; }
 .build-options .field-hint { margin: -3px 0 8px 24px; }
 .build-mode-panel { margin: 0 0 8px 24px; }
-.build-file-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.build-file-heading label { margin-top: 8px; }
+.build-file-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.build-file-heading label { margin: 0; }
+.build-file-heading button {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
 .build-mode-panel select,
 .build-mode-panel textarea { width: 100%; }
+.build-mode-panel .field-hint { margin: 8px 0 0; }
 .build-mode-panel textarea {
   min-height: 190px;
   padding: 12px;
@@ -1945,6 +1952,10 @@ html[lang="en"] .app-card-title-row {
 .env-textarea:focus {
   border-color: rgba(42, 134, 241, 0.54);
   box-shadow: 0 0 0 4px rgba(42, 134, 241, 0.14);
+}
+
+.create-env-textarea {
+  min-height: 132px;
 }
 
 .env-actions {

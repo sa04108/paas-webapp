@@ -43,8 +43,11 @@ npm start
 ### 앱 관리
 
 - `POST /apps`
-  - body: `{ appname, repoUrl, branch?, usePrivate?, build? }`
+  - body: `{ appname, repoUrl, branch?, usePrivate?, build?, env? }`
   - `branch` 기본값: `main`
+  - `env`: 선택 입력인 `.env` 형식 문자열. 한 줄에 `KEY=VALUE` 하나씩, UTF-8 기준 최대 64 KiB (빈 줄·주석·인용부호 지원)
+  - 환경변수는 최초 컨테이너 실행부터 적용되고 재배포에도 유지됩니다. 빌드 인자로 전달하지 않으며 `PORT`, `APP_ID`, `NODE_ENV`는 플랫폼 값이 우선합니다.
+  - 입력의 `$`는 호스트 환경변수로 치환하지 않고 리터럴로 저장합니다. 작업 조회 응답에는 포함하지 않으며, 실패·중단 작업의 재시도에도 사용합니다.
   - `build` 생략 또는 `{ mode: "auto" }`: 기존 루트 Dockerfile 자동 탐지 후, 후보가 없으면 Railpack 사용
   - `{ mode: "repository", dockerfile: "Dockerfile.web" }`: 이름에 `Dockerfile`이 포함된 루트 파일을 명시적으로 선택
   - `{ mode: "custom", content: "FROM ..." }`: UTF-8 기준 최대 64 KiB의 Dockerfile 본문 사용

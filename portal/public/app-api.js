@@ -474,6 +474,8 @@ async function handleCreate(event) {
   }
 
   const body = { appname: el.appnameInput.value.trim(), repoUrl, branch, build: getBuildPayload() };
+  const env = el.createEnvInput.value;
+  if (env.trim()) body.env = env;
   // 내 GitHub 저장소는 installation 토큰으로 clone한다 (Private 접근 허용).
   if (source === "github") body.usePrivate = true;
 

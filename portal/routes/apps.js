@@ -38,6 +38,7 @@ const {
 const jobStore = require("../jobStore");
 const { normalizeBuildConfig, saveAppMetadata } = require("../../scripts/lib/build-config");
 const { listRootDockerfiles } = require("../repositoryFiles");
+const { normalizeCreateEnv } = require("../appEnvironment");
 
 const router = express.Router();
 
@@ -79,7 +80,8 @@ function validateCreateBody(body) {
   } catch (error) {
     throw new AppError(400, error.message);
   }
-  return { appname, repoUrl, branch, usePrivate, build };
+  const env = normalizeCreateEnv(body.env);
+  return { appname, repoUrl, branch, usePrivate, build, env };
 }
 
 // 로그인된 사용자의 userid를 req.auth에서 추출한다.
@@ -106,8 +108,8 @@ async function resolveAppRequestContext(req) {
 }
 
 // 비동기 job 생성을 담당하고 즉시 202 응답을 반환하는 공통 헬퍼
-function dispatchJob(res, type, meta, userid, extraData = {}) {
-  const jobId = jobStore.createJob(type, meta, userid);
+function dispatchJob(res, type, meta, userid, extraData = {}, privateInput = {}) {
+  const jobId = jobStore.createJob(type, meta, userid, privateInput);
   res.status(202).json({ ok: true, data: { jobId, ...extraData } });
   setImmediate(() => executeJob(jobStore.getJob(jobId)));
 }
@@ -148,6 +150,12 @@ async function runJob(job) {
       case "create": {
         const { userid, appname, repoUrl, branch, installationId, build } = meta;
         const env = {};
+        const initialEnv = jobStore.getJobEnvironment(id);
+        if (initialEnv !== undefined) {
+          const appDir = path.join(config.PAAS_APPS_DIR, userid, appname);
+          await fs.promises.mkdir(appDir, { recursive: true });
+          await writeEnvFile(appDir, initialEnv);
+        }
         if (installationId && _githubService) {
           // 매 실행 시 fresh installation token을 발급해 env로만 전달 (askpass가 소비)
           env.GIT_TOKEN = await _githubService.getCloneToken(installationId);
@@ -266,7 +274,7 @@ router.post("/dockerfiles", async (req, res, next) => {
 router.post("/", async (req, res, next) => {
   try {
     const userid = resolveRequestUserId(req);
-    const { appname, repoUrl, branch, usePrivate, build } = validateCreateBody(req.body);
+    const { appname, repoUrl, branch, usePrivate, build, env } = validateCreateBody(req.body);
 
     // private 저장소 의도인 경우, 본인 GitHub 설치에서 installationId를 조회한다.
     let installationId = "";
@@ -285,7 +293,7 @@ router.post("/", async (req, res, next) => {
       throw new AppError(429, `MAX_APPS_PER_USER exceeded (${config.MAX_APPS_PER_USER})`);
     }
 
-    dispatchJob(res, "create", { userid, appname, repoUrl, branch, installationId, build }, userid);
+    dispatchJob(res, "create", { userid, appname, repoUrl, branch, installationId, build }, userid, {}, { env });
   } catch (error) {
     return next(error);
   }
