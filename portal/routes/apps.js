@@ -36,7 +36,7 @@ const {
   runContainerComplete,
 } = require("../appManager");
 const jobStore = require("../jobStore");
-const { normalizeBuildConfig } = require("../../scripts/lib/build-config");
+const { normalizeBuildConfig, saveAppMetadata } = require("../../scripts/lib/build-config");
 const { listRootDockerfiles } = require("../repositoryFiles");
 
 const router = express.Router();
@@ -116,21 +116,26 @@ function dispatchJob(res, type, meta, userid, extraData = {}) {
 
 const appJobQueues = new Map();
 
+// 설정 저장도 배포와 같은 큐를 사용해 최신 메타데이터에 변경 사항을 반영한다.
+async function withAppQueue(userid, appname, action) {
+  const key = `${userid}/${appname}`.toLowerCase();
+  const previous = appJobQueues.get(key) || Promise.resolve();
+  const current = previous.catch(() => {}).then(action);
+  appJobQueues.set(key, current);
+  try {
+    return await current;
+  } finally {
+    if (appJobQueues.get(key) === current) appJobQueues.delete(key);
+  }
+}
+
 /**
  * job 객체를 받아 type에 따라 적절한 작업을 실행한다.
  * jobStore.recoverOnStartup() 및 /jobs/:id/retry 엔드포인트에서도 호출된다.
  */
 // 같은 앱의 생명주기 작업은 순서대로 실행해 소스와 빌드 설정의 교체가 겹치지 않게 한다.
 async function executeJob(job) {
-  const key = `${job.meta.userid}/${job.meta.appname}`.toLowerCase();
-  const previous = appJobQueues.get(key) || Promise.resolve();
-  const current = previous.catch(() => {}).then(() => runJob(job));
-  appJobQueues.set(key, current);
-  try {
-    await current;
-  } finally {
-    if (appJobQueues.get(key) === current) appJobQueues.delete(key);
-  }
+  return withAppQueue(job.meta.userid, job.meta.appname, () => runJob(job));
 }
 
 async function runJob(job) {
@@ -149,7 +154,7 @@ async function runJob(job) {
           // create.sh가 .paas-meta.json에 기록하도록 비밀 아닌 installationId를 전달
           env.PAAS_INSTALLATION_ID = installationId;
         }
-        // 긴 Dockerfile 본문을 환경변수나 인자 대신 권한이 제한된 임시 파일로 전달한다.
+        // 긴 빌드 설정을 환경변수나 인자 대신 권한이 제한된 임시 파일로 전달한다.
         const inputDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "paas-build-"));
         try {
           const inputPath = path.join(inputDir, "build.json");
@@ -431,6 +436,71 @@ router.post("/:userid/:appname/exec/complete", async (req, res, next) => {
 
     const completions = await runContainerComplete(app.containerName, partial, cwd);
     return sendOk(res, { completions });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// ── 빌드 설정 ────────────────────────────────────────────────────────────────
+
+async function readBuildMetadata(appDir) {
+  try {
+    const metadata = JSON.parse(await fs.promises.readFile(path.join(appDir, ".paas-meta.json"), "utf8"));
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) throw new Error();
+    return metadata;
+  } catch (error) {
+    if (error.code === "ENOENT") throw new AppError(404, "App repository metadata is unavailable");
+    throw new AppError(500, "Unable to read app repository metadata");
+  }
+}
+
+router.get("/:userid/:appname/build", async (req, res, next) => {
+  try {
+    const { appDir } = await resolveAppRequestContext(req);
+    const metadata = await readBuildMetadata(appDir);
+    return sendOk(res, {
+      build: normalizeBuildConfig(metadata.build),
+      repoUrl: metadata.repoUrl || "",
+      branch: metadata.branch || "main",
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.put("/:userid/:appname/build", async (req, res, next) => {
+  try {
+    const { userid, appname } = await resolveAppRequestContext(req);
+    let build;
+    try {
+      if (!req.body || !Object.hasOwn(req.body, "build")) throw new Error("build is required");
+      build = normalizeBuildConfig(req.body.build);
+    } catch (error) {
+      throw new AppError(400, error.message);
+    }
+    await withAppQueue(userid, appname, async () => {
+      const appDir = await ensureAppExists(userid, appname);
+      const metadata = await readBuildMetadata(appDir);
+      saveAppMetadata(path.join(appDir, ".paas-meta.json"), metadata, build);
+    });
+    return sendOk(res, { saved: true, build });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// 앱 소유자의 기존 설치 권한으로 조회하므로 관리자가 다른 사용자의 앱도 편집할 수 있다.
+router.get("/:userid/:appname/dockerfiles", async (req, res, next) => {
+  try {
+    const { appDir } = await resolveAppRequestContext(req);
+    const metadata = await readBuildMetadata(appDir);
+    if (!metadata.repoUrl) throw new AppError(404, "App repository metadata is unavailable");
+    let token = "";
+    if (metadata.installationId) {
+      if (!_githubService) throw new AppError(503, "GitHub integration is disabled.");
+      token = await _githubService.getCloneToken(metadata.installationId);
+    }
+    return sendOk(res, await listRootDockerfiles(metadata.repoUrl, metadata.branch || "main", token));
   } catch (error) {
     return next(error);
   }

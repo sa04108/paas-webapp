@@ -197,6 +197,13 @@
                                 <p class="field-hint">Build context is the repository root. HTTP apps must listen on 0.0.0.0:5000. Maximum size: 64 KiB.</p>
                                 <p id="build-custom-error" class="field-hint build-error" role="alert" hidden></p>
                             </div>
+                            <label class="build-option"><input type="radio" name="buildMode" value="railpack" /> <span>Use Railpack</span></label>
+                            <div id="build-railpack-panel" class="build-mode-panel" hidden>
+                                <label for="build-railpack-config">Railpack build configuration (JSON)</label>
+                                <textarea id="build-railpack-config" rows="8" spellcheck="false" placeholder='{"provider":"node"}'></textarea>
+                                <p class="field-hint">Leave blank to use Railpack defaults. Optional configuration must be a JSON object, up to 64 KiB.</p>
+                                <p id="build-railpack-error" class="field-hint build-error" role="alert" hidden></p>
+                            </div>
                         </fieldset>
 
                         <div class="preview-text preview-row preview-row-domain">
@@ -312,6 +319,37 @@
                         <button id="detail-env-save-btn" class="primary-btn env-save-btn" type="button">Save and
                             Restart</button>
                     </div>
+                    <div class="settings-separator"></div>
+                    <section class="settings-build" aria-labelledby="detail-build-title">
+                        <h4 id="detail-build-title">Build configuration</h4>
+                        <p class="env-help">Choose how this app is built. Changes are saved for the next redeployment.</p>
+                        <p id="detail-build-status" class="field-hint" role="status" aria-live="polite"></p>
+                        <fieldset id="detail-build-options" class="build-options" disabled>
+                            <legend>Build method</legend>
+                            <label class="build-option"><input type="radio" name="detailBuildMode" value="auto" /> <span>Detect automatically</span></label>
+                            <label class="build-option"><input type="radio" name="detailBuildMode" value="repository" /> <span>Choose a root Dockerfile</span></label>
+                            <div id="detail-build-repository-panel" class="build-mode-panel" hidden>
+                                <div class="build-file-heading"><label for="detail-build-dockerfile">Dockerfile</label><button id="detail-build-files-refresh" class="ghost-btn" type="button">Refresh</button></div>
+                                <select id="detail-build-dockerfile" disabled><option value="">Loading Dockerfiles…</option></select>
+                                <p id="detail-build-files-status" class="field-hint" role="status" aria-live="polite"></p>
+                            </div>
+                            <label class="build-option"><input type="radio" name="detailBuildMode" value="custom" /> <span>Write a Dockerfile</span></label>
+                            <div id="detail-build-custom-panel" class="build-mode-panel" hidden>
+                                <label for="detail-build-custom-content">Dockerfile contents</label>
+                                <textarea id="detail-build-custom-content" rows="10" spellcheck="false" maxlength="65536"></textarea>
+                                <p id="detail-build-custom-error" class="field-hint build-error" role="alert" hidden></p>
+                            </div>
+                            <label class="build-option"><input type="radio" name="detailBuildMode" value="railpack" /> <span>Use Railpack</span></label>
+                            <div id="detail-build-railpack-panel" class="build-mode-panel" hidden>
+                                <label for="detail-build-railpack-config">Railpack build configuration (JSON)</label>
+                                <textarea id="detail-build-railpack-config" rows="8" spellcheck="false"></textarea>
+                                <p class="field-hint">Leave blank to use Railpack defaults. Optional configuration must be a JSON object, up to 64 KiB.</p>
+                                <p id="detail-build-railpack-error" class="field-hint build-error" role="alert" hidden></p>
+                            </div>
+                        </fieldset>
+                        <p id="detail-build-error" class="modal-error" role="alert" hidden></p>
+                        <div class="env-actions"><button id="detail-build-save-btn" class="primary-btn env-save-btn" type="button" disabled>Save build settings</button></div>
+                    </section>
                     <div class="settings-separator"></div>
                     <div class="settings-danger-zone">
                         <h4 class="settings-danger-title">Deletion Options</h4>

@@ -22,9 +22,25 @@ build_app_image() {
   local dockerfile_path=""
   local candidate_path=""
   local candidate_name=""
+  local config_tool="$(dirname "${BASH_SOURCE[0]}")/build-config.js"
+  local build_mode="auto"
 
   if [[ -n "${config_path}" ]]; then
-    dockerfile_path="$(node "$(dirname "${BASH_SOURCE[0]}")/build-config.js" resolve "${src_dir}" "${config_path}")" || return $?
+    build_mode="$(node "${config_tool}" mode "${config_path}")" || return $?
+    if [[ "${build_mode}" == "railpack" ]]; then
+      local railpack_config_path=""
+      local railpack_args=(build . --name "${image_name}")
+      railpack_config_path="$(node "${config_tool}" railpack "${src_dir}" "${config_path}")" || return $?
+      if [[ -n "${railpack_config_path}" ]]; then
+        railpack_args+=(--config-file "${railpack_config_path}")
+        echo "[build] Using Railpack with server-provided configuration"
+      else
+        echo "[build] Using Railpack with default configuration"
+      fi
+      (cd "${src_dir}" && railpack "${railpack_args[@]}")
+      return $?
+    fi
+    dockerfile_path="$(node "${config_tool}" resolve "${src_dir}" "${config_path}")" || return $?
   fi
 
   if [[ -n "${dockerfile_path}" ]]; then

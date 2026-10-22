@@ -28,19 +28,24 @@ The management experience takes inspiration from Portainer: users can inspect ap
 
 ### Turn repository source into an image with Railpack
 
-The app creation form offers three build modes:
+The app creation form and each deployed app's **Settings** offer four build modes:
 
 | Mode | Behavior |
 | --- | --- |
 | Detect Dockerfile automatically (default) | Prefer `Dockerfile`, then the first root-level regular file containing the case-sensitive string `Dockerfile` in bytewise filename order, including hidden files. Use Railpack if no file matches. |
 | Choose a root Dockerfile | Query the selected GitHub repository and branch over the web, then select a matching root file from the dropdown. Private repositories use the signed-in user's GitHub App connection. Subdirectories are excluded. |
 | Write a Dockerfile | Enter Dockerfile contents in the form, up to 64 KiB of UTF-8 text. The repository root remains the build context. |
+| Railpack | Always use Railpack, even when Dockerfiles exist. Optionally enter a JSON configuration object, up to 64 KiB of UTF-8 text, for the server to supply at build time. |
 
 Dockerfile builds use `docker build -f <file>`. A failed Docker build is reported without falling back to Railpack. Explicitly selected files must still exist in the repository root when the build starts; a missing file fails the build instead of selecting another file.
 
 In automatic mode, when no matching file exists, the platform runs `railpack build . --name <image>` against the cloned source. Railpack detects supported projects and produces a container image, removing the need to write platform-specific build configuration for conventional applications.
 
+In Railpack mode, a blank configuration runs the same plain `railpack build` command without injecting a server configuration. Any repository-provided `railpack.json` follows Railpack's normal behavior. A nonblank configuration is validated as a JSON object, written outside the cloned source, and passed through `--config-file` without modifying repository files.
+
 Build choices are saved with repository metadata in the application's `.paas-meta.json` outside its cloned source after successful creation and reused on redeployment. The metadata is replaced atomically so a failed recreation preserves the previous repository and build choices together. Custom Dockerfiles are materialized outside the cloned source, so they do not overwrite repository files or get replaced by `git pull`. Operations on the same app run in order to keep sources and build choices consistent. Existing apps without saved build configuration retain automatic detection.
+
+For an existing app, open **Settings**, load or edit its build configuration, and choose **Save build settings**. Saving preserves the running container; changes apply on the next **Redeploy**. Dockerfile lookup uses the app's stored repository and branch, including the owner's GitHub App connection when an administrator edits another user's app.
 
 The portal's runtime detector provides Node.js framework and dependency badges for the UI; Railpack performs the actual automatic build detection. Successful deployment still requires a supported project with a working startup command and an HTTP server listening on `0.0.0.0:5000` (the platform supplies `PORT=5000`).
 
@@ -176,7 +181,7 @@ Adjust the health-check port if you changed `PORTAL_PORT`. The first start build
 
 Open `https://portal.example.com` and sign in with **`admin` / `admin`**. On a new database, the bootstrap account is created automatically. Production mode requires changing its password before protected operations become available. Administrators can then create additional users.
 
-Create an application using a repository URL and branch, then choose automatic detection, an existing root Dockerfile, or a custom Dockerfile. The dropdown lookup supports GitHub repositories; automatic and custom builds also retain support for other repository URLs accepted by the platform. A repository that follows Railpack's supported build conventions does not need a custom Dockerfile or platform-specific build configuration. Its HTTP server must bind to `0.0.0.0` and use `PORT=5000`; this also applies when supplying your own Dockerfile. Persistent application files belong in `/data`.
+Create an application using a repository URL and branch, then choose automatic detection, an existing root Dockerfile, a custom Dockerfile, or Railpack. The dropdown lookup supports GitHub repositories; automatic and custom builds also retain support for other repository URLs accepted by the platform. A repository that follows Railpack's supported build conventions does not need a custom Dockerfile or platform-specific build configuration. Its HTTP server must bind to `0.0.0.0` and use `PORT=5000`; this also applies when supplying your own Dockerfile. Persistent application files belong in `/data`.
 
 An application named `demo` owned by `admin` is served at:
 
