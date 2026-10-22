@@ -13,6 +13,7 @@
 // ── 모듈 연결 ─────────────────────────────────────────────────────────────────
 
 import { DEFAULT_VIEW, el, state } from "./app-state.js";
+import { initBuildOptions } from "./app-build.js";
 import { parsePath, buildPath } from "./app-router.js";
 import {
   canManageUsers,
@@ -97,6 +98,8 @@ import {
   stopAutoRefresh,
   verifyCustomDomain,
 } from "./app-api.js";
+
+initBuildOptions(apiFetch);
 
 // 로그 새로고침 버튼 UI 상태 동기화 (data-auto 속성 + 텍스트)
 function syncLogRefreshBtn(btn, isAuto) {

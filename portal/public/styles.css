@@ -348,7 +348,8 @@ input[type="text"],
 input[type="password"],
 input[type="number"],
 input[type="url"],
-select {
+select,
+.build-mode-panel textarea {
   width: 100%;
   border: 1px solid rgba(33, 72, 110, 0.22);
   border-radius: 11px;
@@ -370,7 +371,8 @@ input[type="text"]:focus,
 input[type="password"]:focus,
 input[type="number"]:focus,
 input[type="url"]:focus,
-select:focus {
+select:focus,
+.build-mode-panel textarea:focus {
   border-color: rgba(42, 134, 241, 0.54);
   box-shadow: 0 0 0 4px rgba(42, 134, 241, 0.14);
   transform: translateY(-1px);
@@ -709,6 +711,46 @@ form label,
 :is(.create-panel, .ops-panel, .app-panel, .users-panel) {
   padding: var(--panel-padding);
 }
+
+.build-options {
+  display: grid;
+  gap: 8px;
+  margin: 20px 0;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+}
+
+.build-options legend {
+  padding: 0 6px;
+  color: var(--ink-main);
+  font-weight: 700;
+}
+
+.build-option {
+  display: flex !important;
+  align-items: center;
+  gap: 9px;
+  margin: 0 !important;
+  color: var(--ink-main) !important;
+}
+
+.build-option input { margin: 0; }
+.build-options .field-hint { margin: -3px 0 8px 24px; }
+.build-mode-panel { margin: 0 0 8px 24px; }
+.build-file-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.build-file-heading label { margin-top: 8px; }
+.build-mode-panel select,
+.build-mode-panel textarea { width: 100%; }
+.build-mode-panel textarea {
+  min-height: 190px;
+  padding: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+.build-options .build-error { margin-left: 0; color: var(--danger); }
 
 .panel-head {
   display: flex;

@@ -9,6 +9,7 @@
 // ── 기본 API 통신 ─────────────────────────────────────────────────────────────
 
 import { AUTO_REFRESH_MS, el, state } from "./app-state.js";
+import { getBuildPayload, invalidateLookup, resetBuildOptions, setBuildSubmitting } from "./app-build.js";
 import { renderApps, renderUsers, renderAdminApps, renderDomains } from "./app-render.js";
 import { navigateToApp, switchView, updateAuthUi, renderJobIndicator } from "./app-ui.js";
 import {
@@ -472,24 +473,26 @@ async function handleCreate(event) {
     throw new Error("Enter an app name and repository.");
   }
 
-  const body = { appname: el.appnameInput.value.trim(), repoUrl, branch };
+  const body = { appname: el.appnameInput.value.trim(), repoUrl, branch, build: getBuildPayload() };
   // 내 GitHub 저장소는 installation 토큰으로 clone한다 (Private 접근 허용).
   if (source === "github") body.usePrivate = true;
 
   const submitBtn = el.createSubmitBtn;
+  setBuildSubmitting(true);
   submitBtn.disabled = true;
   submitBtn.textContent = "Submitting...";
   try {
     const data = await apiFetch("/apps", { method: "POST", body: JSON.stringify(body) });
     startJobPolling(data.jobId, `${body.appname}`, "Create App");
     el.createForm.reset();
+    resetBuildOptions();
     el.repoBranchInput.value = "main";
     renderRepoOptions();
     // reset이 라디오를 markup 기본값(github)으로 되돌리므로 서버 설정에 맞춰 재조정한다.
     setRepoSource(state.github.configured ? "github" : "url");
     syncDomainPreview();
   } finally {
-    submitBtn.disabled = false;
+    setBuildSubmitting(false);
     submitBtn.textContent = "Create App";
   }
 }
@@ -539,6 +542,7 @@ function connectGithub() {
 async function disconnectGithub() {
   await apiFetch("/github/disconnect", { method: "POST" });
   state.github.connected = false;
+  invalidateLookup("Connect GitHub or enter a repository URL to load root Dockerfiles.");
   state.githubRepos = [];
   renderGithubStatus();
   renderRepoOptions();
@@ -559,6 +563,7 @@ function renderRepoOptions() {
   if (!repos.length) {
     el.repoSelect.disabled = true;
     el.repoSelect.innerHTML = `<option value="">Connect GitHub to view repositories</option>`;
+    el.repoSelect.dispatchEvent(new Event("repo-options-updated"));
     return;
   }
   el.repoSelect.disabled = false;
@@ -567,6 +572,7 @@ function renderRepoOptions() {
     repos
       .map((r) => `<option value="${escapeHtml(r.cloneUrl)}" data-branch="${escapeHtml(r.defaultBranch)}">${escapeHtml(r.fullName)}${r.private ? " 🔒" : ""}</option>`)
       .join("");
+  el.repoSelect.dispatchEvent(new Event("repo-options-updated"));
 }
 
 // ── 커스텀 도메인 ─────────────────────────────────────────────────────────────
