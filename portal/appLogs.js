@@ -138,7 +138,8 @@ class AppLogSession {
     if (this.instanceId !== undefined && this.instanceId !== metadata.instanceId) throw new AppError(410, "App was replaced; reopen its logs");
     this.instanceId = metadata.instanceId;
     const project = projectName(this.userid, this.appname);
-    if (manifest && (manifest.project !== project || manifest.instanceId !== metadata.instanceId)) throw new AppError(409, "App deployment changed; reopen its logs");
+    // 이전 배포에는 manifest.instanceId가 없다. 현재 메타데이터의 세대와 소유권은 별도로 검증한다.
+    if (manifest && (manifest.project !== project || (manifest.instanceId !== undefined && manifest.instanceId !== metadata.instanceId))) throw new AppError(409, "App deployment changed; reopen its logs");
     if (manifest?.phase === "deleting") throw new AppError(410, "App is being deleted");
     const services = manifest?.services || [];
     const names = services.map((service) => service.name);

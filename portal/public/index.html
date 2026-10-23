@@ -293,11 +293,13 @@
                     <div class="panel-head logs-head">
                         <h3>Logs</h3>
                         <div class="logs-controls">
+                            <label class="timestamp-toggle"><input id="detail-log-timestamps" type="checkbox" /> Timestamps</label>
                             <input id="detail-log-lines-input" type="number" class="log-lines-input" min="1" max="1000"
                                 value="120" aria-label="Number of log lines" title="Number of log lines" />
-                            <button id="detail-live-logs-btn" class="ghost-btn" type="button">Live</button>
-                            <button id="detail-refresh-logs-btn" class="ghost-btn logs-refresh-btn" type="button">Refresh</button>
-                            <label class="timestamp-toggle"><input id="detail-log-timestamps" type="checkbox" /> Timestamps</label>
+                            <button id="detail-refresh-logs-btn" class="ghost-btn logs-refresh-btn" type="button"
+                                data-auto="true" aria-pressed="true" title="Pause automatic log streaming">
+                                <span class="refresh-icon">↻</span><span class="refresh-label">Auto</span>
+                            </button>
                         </div>
                     </div>
                     <div id="detail-log-services" class="log-service-toggles" role="group" aria-label="Log services"></div>
