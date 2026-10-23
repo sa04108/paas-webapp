@@ -4,7 +4,7 @@
 // 역할:
 //   pathname을 뷰 이름/파라미터로 파싱(parsePath)하고, 뷰 이름을 경로로
 //   변환(buildPath)한다. History API push/pop 등 부수효과는 여기 두지 않는다
-//   (app-ui.js의 switchView/navigateToApp과 app.js의 applyRouteFromUrl이 담당).
+//   React Router가 화면 전환을 담당하고 client/types.ts가 buildPath를 재사용한다.
 //   이 모듈은 아무것도 import하지 않는다 — node:test에서 dynamic import로
 //   그대로 로드해 단위 테스트한다.
 // =============================================================================

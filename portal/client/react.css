@@ -1,0 +1,141 @@
+/* 기존 레이아웃을 유지하면서 React의 링크와 네이티브 모달에 맞춘다. */
+a.gnb-item,
+a.app-name-btn,
+a.action-btn,
+a.ghost-btn {
+  text-decoration: none;
+}
+a.gnb-item {
+  display: inline-flex;
+  align-items: center;
+}
+.form-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.react-modal {
+  position: fixed;
+  inset: 0;
+  border: 0;
+  margin: 0;
+  padding: 20px;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  background: transparent;
+  color: var(--ink-main);
+}
+.react-modal[open] {
+  display: grid;
+  place-items: center;
+}
+.react-modal::backdrop {
+  background: rgba(6, 17, 31, 0.55);
+}
+.react-modal .modal-card {
+  max-height: calc(100dvh - 40px);
+  overflow: auto;
+  margin: auto;
+  min-width: 0;
+}
+.react-modal .modal-head {
+  gap: 12px;
+}
+.react-modal .modal-head h3 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.react-modal .modal-head .icon-btn {
+  flex: 0 0 auto;
+}
+.app-detail-gnb-left {
+  min-width: 0;
+}
+.app-detail-appname {
+  overflow-wrap: anywhere;
+}
+.domain-preview {
+  overflow-wrap: anywhere;
+}
+#detail-panel-settings + .app-card {
+  margin-top: 18px;
+}
+@media (max-width: 600px) {
+  .react-modal {
+    padding: 12px;
+  }
+  .react-modal .modal-card {
+    max-height: calc(100dvh - 24px);
+  }
+}
+#detail-panel-settings label:not(.checkbox-row):not(.build-option) {
+  display: block;
+  margin: 12px 0 8px;
+  color: var(--ink-soft);
+  font-size: 0.83rem;
+  font-weight: 600;
+}
+#detail-panel-settings .build-file-heading label {
+  margin: 0;
+}
+#detail-panel-settings h4 {
+  margin-top: 0;
+  color: var(--ink-main);
+}
+#detail-panel-settings .build-mode-panel > .build-option {
+  margin: 10px 0 !important;
+}
+.form-fields > .build-options,
+.settings-runtime .build-options {
+  min-width: 0;
+}
+.build-options {
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+.build-mode-panel {
+  min-width: 0;
+}
+.build-option span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.job-log-btn {
+  width: 30px;
+  min-width: 30px;
+  height: 28px;
+  padding: 4px;
+  border-radius: 8px;
+}
+@media (max-width: 600px) {
+  #job-list-table tbody tr {
+    grid-template-columns: minmax(0, 1fr) 36px auto;
+  }
+  .job-action-group {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+.portal-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 20px 32px;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  border-top: 1px solid var(--surface-border);
+}
+.portal-footer a {
+  text-underline-offset: 3px;
+}
+@media (max-width: 640px) {
+  .portal-footer {
+    padding: 20px 16px;
+  }
+}

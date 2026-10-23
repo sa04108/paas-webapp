@@ -290,3 +290,27 @@ Layout MCP is configured per project: Claude Code reads the root `.mcp.json`, wh
 The upstream [Layout CLI](https://github.com/uselayout/cli) currently publishes as `@layoutdesign/context`; this project pins version `0.19.0`. No global package installation or credentials are required for this project's local design context; Node.js and npm must be available.
 
 In the managed cloud environment, global Codex configuration is read-only. Use the prepared `/workspace/.tools/codex-with-layout` launcher to enable Layout for a Codex CLI session without changing the managed configuration. Reload the MCP client after changing its project configuration.
+
+## Portal frontend development
+
+The interactive portal uses React, TypeScript and Vite. Express still owns authentication, APIs and the existing page URLs. The public landing page remains static. See [the migration design](docs/react-portal.md).
+
+The portal has an original neutral light/dark theme with system fonts and the existing Hyunbbai branding. Browser dependency license notices are generated during the build and available through the footer's **Open source licenses** link.
+
+Use Node.js 22.12+ (the Compose image uses Node 22):
+
+```bash
+cd portal
+npm ci --include=dev
+npm start
+```
+
+`npm start` and `npm run dev` run the type check and frontend build before starting Express. Compose installs build dependencies even when `NODE_ENV=production`. Generated files in `portal/dist` are not committed; do not run `node server.js` on a clean checkout until `npm run build` succeeds. HTML is never cached, while Vite's hashed assets are cached for a year.
+
+For local development, run `npm run dev` for Express and `npm run dev:client` in a second terminal to rebuild the frontend when files change, then reload the browser. Both browser requests and APIs use the Express origin, including cookies, SSE and terminal WebSockets. The terminal package is bundled locally and loaded when opening Exec.
+
+```bash
+npm run typecheck
+npm run build
+npm test
+```

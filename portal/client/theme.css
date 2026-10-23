@@ -1,0 +1,797 @@
+/* 일반적인 원칙을 바탕으로 독자적인 시각 스타일을 적용한다. */
+:root {
+  color-scheme: light;
+  --bg-base: #fafafa;
+  --surface: #fff;
+  --surface-strong: #f5f5f5;
+  --surface-border: #e5e5e5;
+  --surface-border-strong: #d4d4d4;
+  --ink-main: #171717;
+  --ink-subtle: #525252;
+  --ink-soft: #666;
+  --accent-blue: #171717;
+  --accent-blue-rgb: 23, 23, 23;
+  --accent-teal: #171717;
+  --danger: #b42318;
+  --danger-rgb: 180, 35, 24;
+  --radius-xl: 9px;
+  --radius-lg: 9px;
+  --radius-md: 6px;
+  --shadow-lg: none;
+  --shadow-md: none;
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-code: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-base: #0a0a0a;
+  --surface: #111;
+  --surface-strong: #181818;
+  --surface-border: #2a2a2a;
+  --surface-border-strong: #444;
+  --ink-main: #ededed;
+  --ink-subtle: #a3a3a3;
+  --ink-soft: #929292;
+  --accent-blue: #ededed;
+  --accent-blue-rgb: 237, 237, 237;
+  --accent-teal: #ededed;
+  --danger: #ff7168;
+  --danger-rgb: 255, 113, 104;
+}
+html,
+body {
+  background: var(--bg-base);
+  color: var(--ink-main);
+  font-family: var(--font-ui);
+}
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-ui);
+}
+code,
+pre,
+.logs-output,
+.exec-terminal-container,
+.compose-sample,
+.domain-name,
+.domain-cname-target,
+.domains-cname-value,
+.domain-type-badge,
+.app-domain {
+  font-family: var(--font-code);
+}
+.gnb {
+  background: var(--surface);
+  border-color: var(--surface-border);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.gnb-logo {
+  color: #fff;
+  background: #171717;
+  border-radius: 7px;
+}
+html[data-theme="dark"] .gnb-logo {
+  color: #0a0a0a;
+  background: #ededed;
+}
+.gnb-brand-text .eyebrow,
+.app-detail-label {
+  color: var(--ink-subtle);
+}
+.gnb-brand-text strong,
+.view-header h2,
+.app-name,
+.app-name-btn,
+.app-detail-appname,
+.modal-head h2,
+.react-modal .modal-head h3 {
+  font-family: var(--font-ui);
+  letter-spacing: normal;
+}
+.gnb-item,
+.detail-tab-btn {
+  border-radius: 6px;
+  color: var(--ink-subtle);
+  background: transparent;
+  border-color: transparent;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+.gnb-item:hover,
+.detail-tab-btn:hover {
+  color: var(--ink-main);
+  background: var(--surface-strong);
+}
+.gnb-item.active,
+.detail-tab-btn.active,
+html[data-theme="dark"] .gnb-item.active,
+html[data-theme="dark"] .detail-tab-btn.active {
+  color: var(--ink-main);
+  background: var(--surface-strong);
+  border-color: var(--surface-border);
+}
+.gnb-item.admin-menu,
+html[data-theme="dark"] .gnb-item.admin-menu,
+.gnb-item.admin-menu:hover,
+.gnb-item.admin-menu.active,
+html[data-theme="dark"] .gnb-item.admin-menu:hover,
+html[data-theme="dark"] .gnb-item.admin-menu.active {
+  color: var(--ink-main);
+}
+.auth-state,
+html[data-theme="dark"] .auth-state {
+  color: var(--ink-subtle);
+  background: var(--surface);
+  border-color: var(--surface-border);
+  border-radius: 6px;
+}
+.main-content {
+  max-width: 1120px;
+  padding: 32px 32px 48px;
+}
+.dashboard-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+}
+.dashboard-heading > :first-child {
+  min-width: 0;
+}
+.dashboard-create-btn {
+  width: auto;
+  min-height: 34px;
+  margin: 0;
+  padding: 7px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.view-section,
+.panel,
+.detail-panel,
+.app-card,
+.toast,
+.job-indicator {
+  animation: none;
+  backdrop-filter: none;
+}
+.panel,
+.app-card,
+.app-detail-gnb,
+.dashboard-stat-card,
+.build-mode-panel,
+.repo-source-panel,
+.control-section,
+.tab-row,
+.users-table-wrap,
+.domains-table-wrap,
+.panel-inset,
+.react-modal .modal-card {
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: 9px;
+  box-shadow: none;
+}
+.panel-inset,
+.react-modal .modal-card {
+  background: var(--surface);
+  border-color: var(--surface-border-strong);
+}
+.panel {
+  backdrop-filter: none;
+}
+.app-card,
+html[data-theme="dark"] .app-card {
+  background: var(--surface);
+  border-color: var(--surface-border);
+  box-shadow: none;
+  border-radius: 9px;
+}
+.panel-head,
+.app-detail-gnb,
+.users-table-wrap,
+.domains-table-wrap,
+.job-indicator {
+  border-color: var(--surface-border);
+}
+.app-detail-gnb {
+  box-shadow: none;
+}
+.app-name-btn,
+.app-name-btn:hover,
+.app-domain,
+.app-domain a:hover,
+.domain-name,
+.domain-name:hover,
+.domain-cname-target,
+.domains-cname-value,
+.domain-type-badge,
+.app-branch-badge,
+html[data-theme="dark"] .app-domain,
+html[data-theme="dark"] .app-branch-badge,
+html[data-theme="dark"] .domain-type-badge {
+  color: var(--ink-main);
+}
+.runtime-badge,
+.runtime-badge.nextjs,
+.runtime-badge.nestjs,
+.runtime-badge.nuxt,
+.runtime-badge.vite,
+.runtime-badge.express,
+.runtime-badge.fastify,
+.runtime-badge.koa,
+.runtime-badge.nodejs,
+html[data-theme="dark"] .runtime-badge.express {
+  color: var(--ink-main);
+  background: var(--surface-strong);
+  border: 1px solid var(--surface-border-strong);
+  border-radius: 5px;
+}
+.ghost-btn,
+.action-btn,
+.icon-btn,
+html[data-theme="dark"] .ghost-btn,
+html[data-theme="dark"] .action-btn,
+html[data-theme="dark"] .icon-btn,
+.job-retry-all-btn,
+html[data-theme="dark"] .job-retry-all-btn {
+  color: var(--ink-main);
+  background: var(--surface);
+  border: 1px solid var(--surface-border-strong);
+  box-shadow: none;
+}
+.ghost-btn:hover,
+.action-btn:hover,
+.icon-btn:hover,
+.job-retry-all-btn:hover {
+  color: var(--ink-main);
+  background: var(--surface-strong);
+  border-color: var(--ink-subtle);
+  box-shadow: none;
+}
+.primary-btn,
+html[data-theme="dark"] .primary-btn,
+.primary-btn:hover,
+html[data-theme="dark"] .primary-btn:hover {
+  color: #fff;
+  background: #171717;
+  border: 1px solid #171717;
+  box-shadow: none;
+}
+html[data-theme="dark"] .primary-btn,
+html[data-theme="dark"] .primary-btn:hover {
+  color: #0a0a0a;
+  background: #ededed;
+  border-color: #ededed;
+}
+.action-btn.danger,
+.action-btn.danger:hover,
+.danger-ghost-btn,
+.danger-ghost-btn:hover,
+html[data-theme="dark"] .danger-ghost-btn,
+html[data-theme="dark"] .danger-ghost-btn:hover {
+  color: var(--danger);
+  background: var(--surface);
+  border-color: rgba(var(--danger-rgb), 0.45);
+}
+button,
+.app-name-btn {
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+button:hover,
+button:active,
+.app-name-btn:hover,
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="url"],
+select,
+textarea,
+.build-mode-panel textarea {
+  transform: none;
+}
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="url"],
+select,
+textarea,
+.build-mode-panel textarea,
+.env-textarea,
+html[data-theme="dark"] input[type="text"],
+html[data-theme="dark"] input[type="password"],
+html[data-theme="dark"] input[type="number"],
+html[data-theme="dark"] input[type="url"],
+html[data-theme="dark"] select,
+html[data-theme="dark"] .build-mode-panel textarea,
+html[data-theme="dark"] .env-textarea {
+  color: var(--ink-main);
+  background: var(--surface);
+  border-color: var(--surface-border-strong);
+  border-radius: 6px;
+  box-shadow: none;
+}
+input::placeholder,
+textarea::placeholder,
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: var(--ink-soft);
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+a:focus-visible,
+.react-modal:focus-visible {
+  outline: 2px solid var(--ink-main);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+.field-invalid,
+html[data-theme="dark"] .field-invalid {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 2px rgba(var(--danger-rgb), 0.14);
+}
+.status-banner,
+.toast {
+  border-radius: 7px;
+  backdrop-filter: none;
+}
+.status-banner.info,
+.toast.info {
+  --status-banner-bg: var(--surface-strong);
+  --status-banner-border: var(--surface-border-strong);
+  --status-banner-color: var(--ink-main);
+  background: var(--surface-strong);
+  border-color: var(--surface-border-strong);
+  color: var(--ink-main);
+}
+.status-banner.success,
+.toast.success {
+  --status-banner-bg: #ecfdf3;
+  --status-banner-border: #86efac;
+  --status-banner-color: #166534;
+  background: var(--status-banner-bg);
+  border-color: var(--status-banner-border);
+  color: var(--status-banner-color);
+}
+.status-banner.error,
+.toast.error,
+.modal-error {
+  --status-banner-bg: #fef2f2;
+  --status-banner-border: #fca5a5;
+  --status-banner-color: #991b1b;
+  background: var(--status-banner-bg);
+  border-color: var(--status-banner-border);
+  color: var(--status-banner-color);
+}
+html[data-theme="dark"] .status-banner.success,
+html[data-theme="dark"] .toast.success {
+  --status-banner-bg: #10271a;
+  --status-banner-border: #286341;
+  --status-banner-color: #9ae6b4;
+  background: var(--status-banner-bg);
+  border-color: var(--status-banner-border);
+  color: var(--status-banner-color);
+}
+html[data-theme="dark"] .status-banner.error,
+html[data-theme="dark"] .toast.error,
+html[data-theme="dark"] .modal-error {
+  --status-banner-bg: #2a1414;
+  --status-banner-border: #713131;
+  --status-banner-color: #fca5a5;
+  background: var(--status-banner-bg);
+  border-color: var(--status-banner-border);
+  color: var(--status-banner-color);
+}
+.modal-error {
+  border-radius: 6px;
+}
+.status-pill,
+.domain-status-badge,
+.role-badge {
+  border-radius: 5px;
+}
+.status-running,
+.status-done,
+.status-completed,
+.domain-status-active,
+.role-badge.role-admin {
+  --status-pill-bg: #ecfdf3;
+  --status-pill-border: #86efac;
+  --status-pill-color: #166534;
+  color: #166534;
+  background: #ecfdf3;
+  border-color: #86efac;
+}
+.status-starting,
+.status-created,
+.status-restarting,
+.status-pending,
+.status-warn,
+.domain-status-pending {
+  --status-pill-bg: #fffbeb;
+  --status-pill-border: #fcd34d;
+  --status-pill-color: #92400e;
+  color: #92400e;
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+.status-stopped,
+.status-unhealthy,
+.status-degraded,
+.status-deleting,
+.status-delete-failed,
+.status-not-found,
+.status-failed,
+.status-interrupted,
+.status-docker-unavailable,
+.status-unknown,
+.domain-status-error,
+.role-badge.role-user {
+  --status-pill-bg: #fef2f2;
+  --status-pill-border: #fca5a5;
+  --status-pill-color: #991b1b;
+  color: #991b1b;
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+html[data-theme="dark"] .status-running,
+html[data-theme="dark"] .status-done,
+html[data-theme="dark"] .status-completed,
+html[data-theme="dark"] .domain-status-active,
+html[data-theme="dark"] .role-badge.role-admin {
+  --status-pill-bg: #10271a;
+  --status-pill-border: #286341;
+  --status-pill-color: #9ae6b4;
+  color: #9ae6b4;
+  background: #10271a;
+  border-color: #286341;
+}
+html[data-theme="dark"] .status-starting,
+html[data-theme="dark"] .status-created,
+html[data-theme="dark"] .status-restarting,
+html[data-theme="dark"] .status-pending,
+html[data-theme="dark"] .status-warn,
+html[data-theme="dark"] .domain-status-pending {
+  --status-pill-bg: #2a2110;
+  --status-pill-border: #6a501e;
+  --status-pill-color: #fcd98b;
+  color: #fcd98b;
+  background: #2a2110;
+  border-color: #6a501e;
+}
+html[data-theme="dark"] .status-stopped,
+html[data-theme="dark"] .status-unhealthy,
+html[data-theme="dark"] .status-degraded,
+html[data-theme="dark"] .status-deleting,
+html[data-theme="dark"] .status-delete-failed,
+html[data-theme="dark"] .status-not-found,
+html[data-theme="dark"] .status-failed,
+html[data-theme="dark"] .status-interrupted,
+html[data-theme="dark"] .status-docker-unavailable,
+html[data-theme="dark"] .status-unknown,
+html[data-theme="dark"] .domain-status-error,
+html[data-theme="dark"] .role-badge.role-user {
+  --status-pill-bg: #2a1414;
+  --status-pill-border: #713131;
+  --status-pill-color: #fca5a5;
+  color: #fca5a5;
+  background: #2a1414;
+  border-color: #713131;
+}
+.users-table-wrap,
+.domains-table-wrap,
+.users-table th,
+.users-table td,
+#job-list-table tbody tr,
+html[data-theme="dark"] .users-table th,
+html[data-theme="dark"] .users-table td,
+html[data-theme="dark"] #job-list-table tbody tr {
+  border-color: var(--surface-border);
+}
+.users-table th,
+html[data-theme="dark"] .users-table th {
+  color: var(--ink-subtle);
+  background: var(--surface-strong);
+}
+.users-table-wrap,
+html[data-theme="dark"] .users-table-wrap {
+  background: var(--surface);
+}
+.logs-output {
+  color: #ededed;
+  background: #0a0a0a;
+  border-color: #2a2a2a;
+  border-radius: 7px;
+  overflow-wrap: anywhere;
+}
+.log-timestamp {
+  color: #999;
+}
+.log-service-prefix {
+  color: #d4d4d4;
+}
+.exec-terminal-container {
+  color: #ededed;
+  background: #0a0a0a;
+  border-color: #2a2a2a;
+  border-radius: 7px;
+}
+.react-modal::backdrop {
+  background: rgba(0, 0, 0, 0.42);
+}
+.react-modal .modal-card {
+  border-radius: 9px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+}
+html[data-theme="dark"] .react-modal .modal-card {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+.job-indicator,
+html[data-theme="dark"] .job-indicator {
+  color: var(--ink-main);
+  background: var(--surface);
+  border: 1px solid var(--surface-border-strong);
+  border-radius: 8px;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.job-alert,
+.warning-section p,
+.promote-warning-desc,
+html[data-theme="dark"] .warning-section p,
+html[data-theme="dark"] .job-alert,
+html[data-theme="dark"] .promote-warning-desc {
+  color: #92400e;
+}
+.promote-warning-box {
+  background: #fffbeb;
+  border-color: #fcd34d;
+  border-radius: 7px;
+}
+html[data-theme="dark"] .job-alert,
+html[data-theme="dark"] .warning-section p,
+html[data-theme="dark"] .promote-warning-desc {
+  color: #fcd98b !important;
+}
+html[data-theme="dark"] .promote-warning-box {
+  background: #2a2110;
+  border-color: #6a501e;
+}
+.domain-name,
+.domain-cname-target,
+.domains-cname-value {
+  background: var(--surface-strong);
+  border-radius: 4px;
+}
+.service-toggle,
+.tab-btn,
+.chip,
+.app-branch-badge,
+.domain-type-badge,
+.domain-status-badge {
+  border-radius: 5px;
+}
+.service-toggle,
+html[data-theme="dark"] .service-toggle {
+  color: var(--ink-subtle);
+  background: var(--surface);
+  border-color: var(--surface-border-strong);
+}
+.service-toggle[aria-pressed="true"],
+html[data-theme="dark"] .service-toggle[aria-pressed="true"] {
+  color: var(--ink-main);
+  background: var(--surface-strong);
+  border-color: var(--ink-subtle);
+}
+.job-log-btn {
+  width: 30px;
+  min-width: 30px;
+  height: 28px;
+  padding: 4px;
+  border-radius: 6px;
+}
+.job-list-modal-card,
+.job-log-modal-card {
+  border-radius: 9px;
+}
+a {
+  color: inherit;
+}
+.role-badge.role-admin,
+.role-badge.role-user,
+html[data-theme="dark"] .role-badge.role-admin,
+html[data-theme="dark"] .role-badge.role-user {
+  color: var(--ink-main);
+  background: var(--surface-strong);
+  border-color: var(--surface-border-strong);
+}
+.config-redeploy-warning {
+  color: #92400e;
+  background: #fffbeb;
+  border-color: #fcd34d;
+  border-radius: 7px;
+}
+html[data-theme="dark"] .config-redeploy-warning {
+  color: #fcd98b;
+  background: #2a2110;
+  border-color: #6a501e;
+}
+@media (max-width: 640px) {
+  .main-content {
+    padding: 16px;
+  }
+  .dashboard-heading {
+    align-items: flex-start;
+  }
+  .dashboard-create-btn {
+    max-width: 100%;
+  }
+}
+@media (max-width: 360px) {
+  .main-content {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+  .gnb {
+    gap: 4px;
+    padding-right: 6px;
+    padding-left: 6px;
+  }
+  .gnb-right {
+    gap: 3px;
+  }
+  .gnb-right .icon-btn,
+  .gnb .gnb-hamburger {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+  }
+  .react-modal {
+    padding: 10px;
+  }
+  .react-modal .modal-card {
+    max-height: calc(100dvh - 20px);
+    padding: 12px;
+  }
+  #job-list-table tbody tr {
+    grid-template-columns: minmax(0, 1fr) 32px auto;
+  }
+  .users-table-wrap,
+  .domains-table-wrap,
+  .react-modal .modal-card {
+    min-width: 0;
+  }
+}
+/* 기존 스타일의 구체도 높은 예외를 중립 테마에 맞춘다. */
+.ghost-btn,
+.action-btn,
+.icon-btn,
+html[data-theme="dark"] .ghost-btn,
+html[data-theme="dark"] .action-btn,
+html[data-theme="dark"] .icon-btn,
+.primary-btn,
+html[data-theme="dark"] .primary-btn {
+  border-radius: 6px;
+}
+.chip,
+html[data-theme="dark"] .chip {
+  color: var(--ink-main);
+  background: var(--surface-strong);
+  border-color: var(--surface-border);
+  border-radius: 7px;
+}
+.gnb,
+html[data-theme="dark"] .gnb {
+  box-shadow: none;
+}
+.panel-head h2,
+.panel-head h3,
+.control-section h3,
+.settings-danger-title {
+  font-family: var(--font-ui);
+}
+.env-textarea,
+.build-mode-panel textarea,
+.build-mode-panel textarea#build-railpack-config,
+.build-mode-panel textarea#detail-build-railpack-config,
+.compose-sample,
+html[data-theme="dark"] .env-textarea,
+html[data-theme="dark"] .build-mode-panel textarea {
+  font-family: var(--font-code);
+}
+.runtime-badge[class],
+html[data-theme="dark"] .runtime-badge[class] {
+  color: var(--ink-main);
+  background: var(--surface-strong);
+  border: 1px solid var(--surface-border-strong);
+}
+.logs-refresh-btn[data-auto="true"],
+.logs-refresh-btn[data-auto="true"]:hover,
+html[data-theme="dark"] .logs-refresh-btn[data-auto="true"],
+html[data-theme="dark"] .logs-refresh-btn[data-auto="true"]:hover {
+  color: var(--ink-main);
+  background: var(--surface-strong);
+  border-color: var(--surface-border-strong);
+}
+.status-banner.info,
+.toast.info,
+html[data-theme="dark"] .status-banner.info,
+html[data-theme="dark"] .toast.info {
+  --status-banner-bg: var(--surface-strong);
+  --status-banner-border: var(--surface-border-strong);
+  --status-banner-color: var(--ink-main);
+  color: var(--ink-main);
+  background: var(--surface-strong);
+  border-color: var(--surface-border-strong);
+}
+.build-mode-panel {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.tab-row,
+.control-section {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+.repo-source-toggle,
+html[data-theme="dark"] .repo-source-toggle {
+  background: var(--surface-strong);
+  border-color: var(--surface-border);
+  border-radius: 7px;
+}
+.repo-source-option-label {
+  border-radius: 5px;
+}
+.repo-source-option input:checked + .repo-source-option-label,
+html[data-theme="dark"]
+  .repo-source-option
+  input:checked
+  + .repo-source-option-label {
+  color: var(--ink-main);
+  background: var(--surface);
+  box-shadow: none;
+}
+.repo-source-option input:focus-visible + .repo-source-option-label {
+  outline: 2px solid var(--ink-main);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--ink-main);
+}
+.status-stopped,
+.status-unknown,
+.status-not-found,
+.status-deleting,
+html[data-theme="dark"] .status-stopped,
+html[data-theme="dark"] .status-unknown,
+html[data-theme="dark"] .status-not-found,
+html[data-theme="dark"] .status-deleting {
+  --status-pill-bg: var(--surface-strong);
+  --status-pill-border: var(--surface-border-strong);
+  --status-pill-color: var(--ink-subtle);
+  color: var(--ink-subtle);
+  background: var(--surface-strong);
+  border-color: var(--surface-border-strong);
+}

@@ -66,7 +66,7 @@ services:
         working_dir: ${PAAS_ROOT:-/paas}/portal
         # If .env is missing, copy .env.example to bootstrap local runtime config.
         # start/dev is selected by RUN_MODE (development -> dev, otherwise start).
-        command: sh -c "if [ ! -f ${PAAS_ROOT:-/paas}/.env ] && [ -f ${PAAS_ROOT:-/paas}/.env.example ]; then cp ${PAAS_ROOT:-/paas}/.env.example ${PAAS_ROOT:-/paas}/.env; fi; npm ci && if [ \"$$RUN_MODE\" = \"development\" ]; then npm run dev; else npm run start; fi"
+        command: sh -c "if [ ! -f ${PAAS_ROOT:-/paas}/.env ] && [ -f ${PAAS_ROOT:-/paas}/.env.example ]; then cp ${PAAS_ROOT:-/paas}/.env.example ${PAAS_ROOT:-/paas}/.env; fi; npm ci --include=dev && if [ \"$$RUN_MODE\" = \"development\" ]; then npm run dev; else npm run start; fi"
         restart: ${DEFAULT_RESTART_POLICY:-unless-stopped}
         init: true
         ports:
