@@ -69,8 +69,6 @@ services:
         command: sh -c "if [ ! -f ${PAAS_ROOT:-/paas}/.env ] && [ -f ${PAAS_ROOT:-/paas}/.env.example ]; then cp ${PAAS_ROOT:-/paas}/.env.example ${PAAS_ROOT:-/paas}/.env; fi; npm ci --include=dev && if [ \"$$RUN_MODE\" = \"development\" ]; then npm run dev; else npm run start; fi"
         restart: ${DEFAULT_RESTART_POLICY:-unless-stopped}
         init: true
-        ports:
-            - '${PORTAL_PORT:-3000}:${PORTAL_PORT:-3000}'
         environment:
             - PAAS_HOST_ROOT=${PWD}
             # buildkit에 TCP가 아닌 공유 unix 소켓으로 접속한다 (buildkit-sock 볼륨).

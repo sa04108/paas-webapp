@@ -1,5 +1,8 @@
 services:
   portal:
+    # 개발용 직접 접속은 호스트 루프백에서만 허용한다.
+    ports:
+      - "127.0.0.1:${PORTAL_PORT:-3000}:${PORTAL_PORT:-3000}"
     environment:
       - RUN_MODE=development
       - APP_HEALTH_DEV_ORIGIN=http://traefik:80

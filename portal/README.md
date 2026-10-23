@@ -11,6 +11,7 @@ npm start
 ```
 
 - 기본 주소: `http://localhost:3000`
+- Docker Compose 운영 구성은 이 포트를 호스트에 공개하지 않고 Traefik을 통해서만 접근합니다. 개발 Compose는 `PORTAL_PORT`(기본 3000)를 loopback에만 바인딩합니다.
 - 기본 관리자 계정: `admin / admin` (첫 로그인 후 비밀번호 변경 필수)
 - `.env`가 있으면 루트(`../.env`) 값을 우선 로드합니다.
 - UI 라우트: `/auth`(로그인), `/`(대시보드, 미로그인 시 `/auth`로 리다이렉트)
