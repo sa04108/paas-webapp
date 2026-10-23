@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: paas-sample
+  labels:
+    app.kubernetes.io/name: paas-sample
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  progressDeadlineSeconds: 120
+  # 샘플 워커는 동시 실행을 피하도록 먼저 이전 Pod를 종료한다.
+  # 실제 작업의 중복 방지는 별도의 큐·잠금·멱등성 처리가 필요하다.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: paas-sample
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: paas-sample
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: app
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 10
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: busybox:1.37.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -ec]
+          args:
+            - |
+              test -n "$DEMO_TOKEN"
+              trap 'exit 0' TERM INT
+              while :; do
+                if reply=$(wget -q -T 3 -O - http://web:5000/health); then
+                  printf '%s worker=%s web=%s\n' "$(date -u +%FT%TZ)" "$POD_NAME" "$reply"
+                  touch /run/worker/ready
+                else
+                  rm -f /run/worker/ready
+                  printf 'Web service is unavailable; retrying.\n' >&2
+                fi
+                sleep "$WORKER_INTERVAL_SECONDS" &
+                wait "$!"
+              done
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: app-secrets
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          readinessProbe:
+            exec:
+              command: [sh, -ec, test -f /run/worker/ready]
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 25m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: runtime
+              mountPath: /run/worker
+      volumes:
+        - name: runtime
+          emptyDir:
+            sizeLimit: 1Mi

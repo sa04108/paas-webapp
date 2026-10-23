@@ -306,6 +306,10 @@ npm test
 
 Additional documentation: [GitHub App setup](docs/github-app-setup.md), [security review](docs/security-threats.md), and [GitHub Actions deployment design notes](docs/github-actions-deploy.md).
 
+## Kubernetes deployment sample
+
+The isolated [k3s app sample](deploy/k3s/sample/README.md) demonstrates a web Deployment, worker Deployment, preparation Job, and app-wide namespace cleanup. See the [two-machine lab guide](docs/k3s-lab.md) for cluster setup. This sample does not change the portal's Docker Compose runtime or implement shared account storage.
+
 ## UI tooling
 
 Layout MCP is configured per project: Claude Code reads the root `.mcp.json`, while Codex reads `.codex/config.toml`. Both configurations use the same stdio command, `npx --yes @layoutdesign/context@0.19.0 serve`. Open the MCP client from the repository root so Layout can load `.layout/layout.md`; trust the project and enable its MCP server when the client requests it, then reload the client's MCP configuration. A root JSON file is only auto-loaded by clients that support that filename.

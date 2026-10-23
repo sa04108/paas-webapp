@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: paas-sample
+data:
+  APP_LABEL: paas-k3s-sample
+  WORKER_INTERVAL_SECONDS: "5"
