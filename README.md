@@ -156,7 +156,7 @@ Start with DNS-only records so requests reach Traefik directly. Create a Cloudfl
 
 The production portal is served only at `portal.example.com`. The root domain has no portal router or redirect to the portal; its DNS record is only needed if another record uses it as a CNAME target. The global HTTP-to-HTTPS redirect remains in place.
 
-Allow inbound TCP ports **80** and **443** through the host firewall and any router/NAT. Port 80 is needed for the custom-domain HTTP-01 challenge and HTTP-to-HTTPS redirects. The Compose file also publishes the portal on `PORTAL_PORT` (default **3000**); restrict public access to that port and use the HTTPS portal URL for production.
+Allow inbound TCP ports **80** and **443** through the host firewall and any router/NAT. Port 80 is needed for the custom-domain HTTP-01 challenge and HTTP-to-HTTPS redirects. The portal listens on `PORTAL_PORT` (default **3000**) inside Docker and is reached through Traefik; production Compose does not publish this port on the host.
 
 If you use custom domains, their generated CNAME targets have the form `<app>-<random>.example.com`. Make those target names resolve to this server by adding individual DNS records or an additional `*.example.com` wildcard record. The `*.apps.example.com` record alone does not cover these targets.
 
@@ -175,10 +175,16 @@ docker compose --env-file .env -f docker-compose.yml config --quiet
 docker compose --env-file .env -f docker-compose.yml up -d --build
 docker compose --env-file .env -f docker-compose.yml ps
 docker compose --env-file .env -f docker-compose.yml logs --tail=100 portal traefik buildkit
-curl --fail http://127.0.0.1:3000/health
+curl --fail https://portal.example.com/health
 ```
 
-Adjust the health-check port if you changed `PORTAL_PORT`. The first start builds the portal image, installs portal dependencies with `npm ci`, and starts `paas-portal`, `paas-proxy`, and `paas-buildkit`. Certificate issuance can take additional time; inspect the Traefik logs if HTTPS is not yet available.
+Replace `portal.example.com` with your configured portal hostname and run the health check after DNS and certificate issuance are ready. `PORTAL_PORT` changes the portal's internal listener and Traefik target; it is not a host port in production. The first start builds the portal image, installs portal dependencies with `npm ci`, and starts `paas-portal`, `paas-proxy`, and `paas-buildkit`. Certificate issuance can take additional time; inspect the Traefik logs if HTTPS is not yet available.
+
+When upgrading an existing deployment from a Compose file that published the portal port, recreate the portal container to remove the old host binding:
+
+```bash
+docker compose --env-file .env -f docker-compose.yml up -d --no-deps --force-recreate portal
+```
 
 ### 5. Sign in and deploy the first application
 
@@ -238,7 +244,7 @@ docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml u
 docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml logs --tail=100 portal traefik
 ```
 
-The override sets `RUN_MODE=development`, watches both the Express server and the React frontend, and routes applications over HTTP. React source edits rebuild the browser assets automatically; reload the browser after the build finishes. Open the portal at `http://localhost:3000` or `http://portal.localhost:3000`, and an application at `http://<user>-<app>.apps.localhost:18080`. Both portal addresses serve the same UI without redirecting between hosts; login sessions belong to the host where you sign in. If your browser does not resolve these names to loopback, add the individual names to your local hosts file.
+The override sets `RUN_MODE=development`, watches both the Express server and the React frontend, and routes applications over HTTP. React source edits rebuild the browser assets automatically; reload the browser after the build finishes. The portal's `PORTAL_PORT` (default **3000**) is published on loopback only, so open it at `http://localhost:3000` or `http://portal.localhost:3000`; both addresses serve the same UI without redirecting between hosts, and login sessions belong to the host where you sign in. Applications are available at `http://<user>-<app>.apps.localhost:18080`. If your browser does not resolve these names to loopback, add the individual names to your local hosts file.
 
 The shared application network still needs to exist. The current override also retains the base Compose port mappings for 80 and 443 while adding 18080, so those host ports must be available even in development. Development mode bypasses the mandatory password-change gate.
 
