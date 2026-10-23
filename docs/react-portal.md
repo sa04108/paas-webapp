@@ -60,3 +60,22 @@ GitHub OAuth와 비공개 저장소 접근, 실제 외부 DNS/TLS 인증은 연�
 클라우드 네트워크에서 `get.docker.com` 접속이 403으로 차단되어 원본 Dockerfile의 설치 단계는 실행하지 못했다. 임시 오버라이드로 동일한 `node:22` 베이스에 기존 Docker CLI/Compose/Buildx/Railpack 바이너리를 읽기 전용 마운트하고, 클라우드 CA와 Traefik의 로컬 Docker 서브넷 프록시 예외를 제공했다. 애플리케이션 명령·의존성 설치·개발 모드는 저장소 설정을 그대로 사용했다. 이 환경용 설정과 검증 코드는 커밋하지 않는다.
 
 설치 과정의 npm audit은 기존 백엔드 의존성에서 11건(critical 2, high 3, moderate 6)을 보고했다. React 전환 전부터 존재한 Express/Dockerode 계열 등의 잠금 버전이며, 이번 개발 실행 수정에서는 의존성 업데이트나 취약점 재현을 수행하지 않았다.
+
+## 프런트엔드 최신 안정 버전 적용
+
+2026-10-23 npm 레지스트리의 `latest` 태그를 기준으로 프런트엔드 프레임워크와 빌드 도구를 갱신했다. `package-lock.json`에 실제 설치 버전을 고정한다.
+
+| 패키지 | 적용 버전 |
+| --- | --- |
+| React / React DOM | 19.3.1 |
+| React Router DOM | 7.18.4 |
+| Vite | 8.3.5 |
+| Vite React 플러그인 | 6.1.2 |
+| TypeScript | 7.0.2 |
+| React / React DOM 타입 | 19.3.0 |
+
+React와 Router는 이미 해당 버전이 설치되어 있었으며 선언한 최소 버전도 맞췄다. Node.js 실행 조건은 유지한다. Vite 설정과 라이선스 생성 플러그인을 `.mts`로 명시하고 `import.meta.dirname`을 사용해 ESM 설정 로딩 경고를 해결했다. `client/vite-env.d.ts`로 CSS 가져오기 타입을 제공하여 TypeScript 7의 검사를 통과한다. 백엔드 패키지의 잠금 버전은 변경하지 않았다.
+
+Node.js 22에서 타입 검사와 프로덕션 빌드, 기존 회귀 검사 13개가 통과했다. 별도의 Compose 프로젝트와 빈 의존성 볼륨에서도 `npm ci --include=dev`부터 개발 서버 기동까지 확인했다. Vite 자동 재빌드와 Node 자동 재시작, 실제 Traefik을 통한 앱의 HTTP 200 응답을 확인했다. Chromium에서 1440/1024/390/320px와 라이트/다크 테마의 레이아웃 64개, 실제 컨테이너 로그 163개, 로그인·설정 저장·Jobs·Exec 등의 기능 28개 검증을 통과했다. 검증 코드는 임시 경로에만 작성했다.
+
+Compose 검증은 앞 절과 동일한 클라우드 오버라이드를 사용했다. 원본 Dockerfile의 외부 설치 단계와 신규 원격 저장소의 전체 빌드·배포는 이번 검증에 포함하지 않았다.

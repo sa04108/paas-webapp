@@ -10,7 +10,8 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowJs": true,
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true
   },
-  "include": ["client", "vite.config.ts"]
+  "include": ["client", "vite.config.mts"]
 }

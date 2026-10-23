@@ -15,7 +15,7 @@ export function clientLicenses(): Plugin {
         "@xterm/xterm",
         "@xterm/addon-fit",
       ];
-      const pending = roots.map((name) => ({ name, from: __dirname }));
+      const pending = roots.map((name) => ({ name, from: import.meta.dirname }));
       const visited = new Set<string>();
       const notices: string[] = [];
       while (pending.length) {
