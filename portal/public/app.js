@@ -13,6 +13,7 @@
 // ── 모듈 연결 ─────────────────────────────────────────────────────────────────
 
 import { DEFAULT_VIEW, el, state } from "./app-state.js";
+import { setLogsActive } from "./app-logs.js";
 import { initBuildOptions } from "./app-build.js";
 import { initBuildSettings, loadDetailBuild } from "./app-build-settings.js";
 import { initRuntime, loadDetailRuntime } from "./app-runtime.js";
@@ -83,7 +84,6 @@ import {
   loadPortalLogs,
   loadConfig,
   loadDetailEnv,
-  loadDetailLogs,
   loadSession,
   loadUsers,
   performAction,
@@ -93,8 +93,6 @@ import {
   cancelJob,
   clearCompletedJobs,
   saveDetailEnv,
-  startDetailLogsAutoRefresh,
-  stopDetailLogsAutoRefresh,
   startAdminLogsAutoRefresh,
   stopAdminLogsAutoRefresh,
   stopAutoRefresh,
@@ -116,7 +114,6 @@ configureUiHandlers({
   fetchJob: async (id) => (await apiFetch(`/jobs/${encodeURIComponent(id)}`)).job,
   handleRequestError,
   loadDetailEnv,
-  loadDetailLogs,
   loadDetailDomains,
   loadDetailBuild,
   loadDetailRuntime,
@@ -189,7 +186,6 @@ el.detailTabBtns.forEach((btn) => {
   btn.addEventListener("click", () => {
     const tab = btn.dataset.detailTab;
     switchDetailTab(tab);
-    if (tab === "logs" && state.selectedApp) loadDetailLogs().catch(handleRequestError);
     if (tab === "exec" && state.selectedApp) { openExecSocket(); }
     if (tab === "settings" && state.selectedApp) loadDetailEnv().catch(handleRequestError);
     if (tab === "settings" && state.selectedApp) loadDetailRuntime().catch(handleRequestError);
@@ -199,7 +195,6 @@ el.detailTabBtns.forEach((btn) => {
   });
 });
 
-el.detailLogService.addEventListener("change", () => loadDetailLogs().catch(handleRequestError));
 el.detailExecService.addEventListener("change", () => {
   closeExecSocket();
   openExecSocket();
@@ -296,18 +291,6 @@ el.detailPanelDomains.addEventListener("click", async (event) => {
 });
 
 // ── 로그 ─────────────────────────────────────────────────────────────────
-
-// 클릭: Auto On → 타이머 Off / Auto Off → 1회 로드 + 타이머 On
-el.detailRefreshLogsBtn.addEventListener("click", async () => {
-  if (state.detailLogsTimer) {
-    stopDetailLogsAutoRefresh();
-    syncLogRefreshBtn(el.detailRefreshLogsBtn, false);
-  } else {
-    await loadDetailLogs().catch(handleRequestError);
-    startDetailLogsAutoRefresh();
-    syncLogRefreshBtn(el.detailRefreshLogsBtn, true);
-  }
-});
 
 // ── Exec ──────────────────────────────────────────────────────────────────────
 
@@ -782,11 +765,8 @@ async function bootstrap() {
     window.history.replaceState(null, "", window.location.pathname);
   }
 
-  // 로그 자동 갱신 타이머는 항상 켜진 상태로 유지한다.
-  // 타이머 내부에서 activeView를 체크하므로 원치 않는 빗치는 발생하지 않는다.
-  startDetailLogsAutoRefresh();
+  setLogsActive(state.activeView === "app-detail" && state.activeDetailTab === "logs");
   startAdminLogsAutoRefresh();
-  syncLogRefreshBtn(el.detailRefreshLogsBtn, true);
   syncLogRefreshBtn(el.adminRefreshPortalLogsBtn, true);
 
   // 새로고침/재방문 시 진행중 job 복원

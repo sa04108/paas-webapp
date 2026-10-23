@@ -443,14 +443,6 @@ async function findDockerApp(userid, appname) {
   );
 }
 
-// 앱 디렉터리를 기준으로 docker compose logs를 조회한다. (다중 컨테이너 지원)
-async function getComposeLogs(appDir, lines, service) {
-  if (service) await findDockerService(path.basename(path.dirname(appDir)), path.basename(appDir), service);
-  const result = await runDockerCompose(appDir, ["logs", "--no-color", "--tail", String(lines), ...(service ? [service] : [])]);
-  // docker compose logs는 stdout + stderr에 출력될 수 있으므로 병합한다.
-  return [result.stdout, result.stderr].filter(Boolean).join("\n");
-}
-
 async function findDockerService(userid, appname, requested) {
   const app = await findDockerApp(userid, appname);
   const name = requested || app?.primaryService;
@@ -689,7 +681,6 @@ module.exports = {
   readEnvFile,
   writeEnvFile,
   // 컨테이너 Exec
-  getComposeLogs,
   runContainerExec,
   runContainerComplete,
   runContainerExecStream,

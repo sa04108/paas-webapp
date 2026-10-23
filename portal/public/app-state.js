@@ -47,7 +47,6 @@ export const state = {
   pendingPromoteUser: null,
   user: null,
   refreshTimer: null,
-  detailLogsTimer: null, // App Detail 로그 자동 갱신
   adminLogsTimer: null, // Admin Portal 로그 자동 갱신
   activeView: DEFAULT_VIEW,
   activeDetailTab: DEFAULT_DETAIL_TAB,
@@ -168,7 +167,6 @@ export const el = {
 
   // Logs 탭
   detailLogLinesInput: document.getElementById("detail-log-lines-input"),
-  detailLogService: document.getElementById("detail-log-service"),
   detailRefreshLogsBtn: document.getElementById("detail-refresh-logs-btn"),
   detailLogsTitle: document.getElementById("detail-logs-title"),
   detailLogsOutput: document.getElementById("detail-logs-output"),

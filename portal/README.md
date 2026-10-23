@@ -77,7 +77,12 @@ npm start
 - `POST /apps/:userid/:appname/stop`
 - `POST /apps/:userid/:appname/deploy`
 - `DELETE /apps/:userid/:appname`
-- `GET /apps/:userid/:appname/logs?lines=<n>&service=<name>` (`1..1000`, 기본 120, 서비스 생략 시 전체)
+- `GET /apps/:userid/:appname/logs?lines=<n>&services=app,worker` (`1..1000`, 기본 120, 병합된 전체 로그의 줄 수)
+  - `entries`에 `{id, timestamp, service, stream, message}`, `services`에 서비스 이름 목록, `warnings`에 수집 오류를 반환합니다.
+  - `services` 생략 시 전체, 빈 값이면 선택 없음입니다. 한 서비스 조회에는 기존 `service=<name>`도 사용할 수 있습니다.
+- `GET /apps/:userid/:appname/logs/stream` (같은 쿼리, SSE)
+  - 최초 `snapshot`, 이후 `entries`, 서비스 목록 변경 시 `services`, 오류 시 `warning` 또는 종료를 알리는 `end` 이벤트를 JSON `data`로 전송합니다.
+  - 앱 로그 화면은 서비스 토글로 여러 서비스를 선택하고 Live/Pause로 실시간 수신을 제어합니다. 타임스탬프 표시는 기본으로 꺼져 있습니다.
 - Exec HTTP 본문과 WebSocket 쿼리의 `service`로 앱 내부 서비스를 선택하며 생략하면 웹 서비스
 
 ### 앱 준비 상태

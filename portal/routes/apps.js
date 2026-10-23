@@ -37,7 +37,6 @@ const {
   patchComposeEnvFile,
   readEnvFile,
   writeEnvFile,
-  getComposeLogs,
   runContainerExec,
   runContainerComplete,
 } = require("../appManager");
@@ -49,6 +48,7 @@ const appReadiness = require("../appReadiness");
 const { normalizeRuntime } = require("../composeConfig");
 const { withDeploymentBaseline, deploymentStatus } = require("../../scripts/lib/deployment-config");
 const { confirmDeployment } = require("../../scripts/lib/compose-project");
+const { AppLogSession, parseLogOptions } = require("../appLogs");
 
 const router = express.Router();
 
@@ -443,18 +443,69 @@ router.delete("/:userid/:appname", async (req, res, next) => {
 
 // ── 로그 ──────────────────────────────────────────────────────────────────────
 
-// GET /apps/:userid/:appname/logs?lines=N — docker compose logs (동기, 멀티 컨테이너 지원)
+// 선택한 서비스들의 Docker 로그를 기록 시각으로 병합한다.
 router.get("/:userid/:appname/logs", async (req, res, next) => {
+  const controller = new AbortController();
+  res.on("close", () => controller.abort());
+  let session;
   try {
-    const { appDir } = await resolveAppRequestContext(req);
-    const requestedLines = Number.parseInt(String(req.query.lines || "120"), 10);
-    const lines = Number.isFinite(requestedLines) ? Math.max(1, Math.min(1000, requestedLines)) : 120;
-
-    const service = req.query.service === undefined || req.query.service === "" ? undefined : req.query.service;
-    const logs = await getComposeLogs(appDir, lines, service);
-    return sendOk(res, { lines, logs });
+    const context = await resolveAppRequestContext(req);
+    session = new AppLogSession(context, parseLogOptions(req.query), controller.signal);
+    const snapshot = await session.snapshot();
+    if (!controller.signal.aborted) return sendOk(res, snapshot);
   } catch (error) {
-    return next(error);
+    if (!controller.signal.aborted) return next(error);
+  } finally { session?.close(); controller.abort(); }
+});
+
+let resolveLogSessionAuth = () => null;
+const logConnections = new Map();
+
+router.get("/:userid/:appname/logs/stream", async (req, res, next) => {
+  const controller = new AbortController();
+  let session, keepalive, reserved = false;
+  const owner = req.auth.user.username;
+  const cleanup = () => {
+    controller.abort(); session?.close(); clearInterval(keepalive);
+    if (reserved) {
+      const count = logConnections.get(owner) - 1;
+      if (count) logConnections.set(owner, count); else logConnections.delete(owner);
+      reserved = false;
+    }
+  };
+  res.on("close", cleanup);
+  function send(message) {
+    if (controller.signal.aborted) return;
+    // 느린 브라우저가 Docker 로그를 무제한으로 쌓게 하지 않는다.
+    if (res.writableLength > 2 * 1024 * 1024) { cleanup(); res.destroy(); return; }
+    res.write(`data: ${JSON.stringify(message)}\n\n`);
+  }
+  try {
+    const context = await resolveAppRequestContext(req);
+    const options = parseLogOptions(req.query);
+    if (controller.signal.aborted) return;
+    if ((logConnections.get(owner) || 0) >= 8 || [...logConnections.values()].reduce((a, b) => a + b, 0) >= 128) throw new AppError(429, "Too many live log connections");
+    logConnections.set(owner, (logConnections.get(owner) || 0) + 1); reserved = true;
+    session = new AppLogSession(context, options, controller.signal);
+    const snapshot = await session.snapshot();
+    if (controller.signal.aborted) return;
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+    send({ type: "snapshot", ...snapshot });
+    session.start(send, () => { cleanup(); res.end(); });
+    keepalive = setInterval(() => {
+      const auth = resolveLogSessionAuth(req);
+      if (!auth || auth.user.mustChangePassword || (auth.user.role !== ROLE_ADMIN && auth.user.username !== context.userid)) {
+        send({ type: "end", message: "Log access expired; sign in again" }); cleanup(); res.end();
+      } else if (!controller.signal.aborted) res.write(": ping\n\n");
+    }, 15000);
+  } catch (error) {
+    cleanup();
+    if (!res.headersSent && !res.destroyed) return next(error);
+    res.end();
   }
 });
 
@@ -635,5 +686,6 @@ router.setOnAppDeletedHook         = setOnAppDeletedHook;
 router.setOnAppDeployedHook        = setOnAppDeployedHook;
 router.setListActiveDomainsForApp  = setListActiveDomainsForApp;
 router.setGithubService            = setGithubService;
+router.setLogSessionAuthResolver   = (resolve) => { resolveLogSessionAuth = resolve; };
 
 module.exports = router;
