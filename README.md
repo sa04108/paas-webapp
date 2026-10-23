@@ -148,11 +148,13 @@ For `PAAS_DOMAIN=example.com`, create the following records pointing to your ser
 
 | DNS name | Record | Purpose |
 | --- | --- | --- |
-| `example.com` | A | Landing page |
+| `example.com` | A | Optional CNAME target for the portal DNS record |
 | `portal.example.com` | A, or CNAME to `example.com` | Management portal |
 | `*.apps.example.com` | A, or CNAME to `example.com` | Application subdomains |
 
 Start with DNS-only records so requests reach Traefik directly. Create a Cloudflare API token with **Zone / Zone / Read** and **Zone / DNS / Edit** permissions for the relevant zone and assign it to `CF_DNS_API_TOKEN`. These are the permissions documented by the [Cloudflare ACME provider](https://go-acme.github.io/lego/dns/cloudflare/#api-tokens).
+
+The production portal is served only at `portal.example.com`. The root domain has no portal router or redirect to the portal; its DNS record is only needed if another record uses it as a CNAME target. The global HTTP-to-HTTPS redirect remains in place.
 
 Allow inbound TCP ports **80** and **443** through the host firewall and any router/NAT. Port 80 is needed for the custom-domain HTTP-01 challenge and HTTP-to-HTTPS redirects. The Compose file also publishes the portal on `PORTAL_PORT` (default **3000**); restrict public access to that port and use the HTTPS portal URL for production.
 
@@ -236,7 +238,7 @@ docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml u
 docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml logs --tail=100 portal traefik
 ```
 
-The override sets `RUN_MODE=development`, watches both the Express server and the React frontend, and routes applications over HTTP. React source edits rebuild the browser assets automatically; reload the browser after the build finishes. Open the landing page at `http://localhost:3000`, the portal at `http://portal.localhost:3000`, and an application at `http://<user>-<app>.apps.localhost:18080`. If your browser does not resolve these names to loopback, add the individual names to your local hosts file.
+The override sets `RUN_MODE=development`, watches both the Express server and the React frontend, and routes applications over HTTP. React source edits rebuild the browser assets automatically; reload the browser after the build finishes. Open the portal at `http://localhost:3000` or `http://portal.localhost:3000`, and an application at `http://<user>-<app>.apps.localhost:18080`. Both portal addresses serve the same UI without redirecting between hosts; login sessions belong to the host where you sign in. If your browser does not resolve these names to loopback, add the individual names to your local hosts file.
 
 The shared application network still needs to exist. The current override also retains the base Compose port mappings for 80 and 443 while adding 18080, so those host ports must be available even in development. Development mode bypasses the mandatory password-change gate.
 
@@ -293,7 +295,7 @@ In the managed cloud environment, global Codex configuration is read-only. Use t
 
 ## Portal frontend development
 
-The interactive portal uses React, TypeScript and Vite. Express still owns authentication, APIs and the existing page URLs. The public landing page remains static. See [the migration design](docs/react-portal.md).
+The portal uses React, TypeScript and Vite. Express owns authentication, APIs and the page URLs. Unauthenticated visitors go to `/auth` on the same host, and authenticated visitors see the dashboard. There is no public landing page or redirect between the root domain and the portal. Use `portal.<domain>` in production, matching the GitHub App callback host. See [the migration design](docs/react-portal.md) and [UI/UX audit](docs/ui-ux-audit.md).
 
 The portal has an original neutral light/dark theme with system fonts and the existing Hyunbbai branding. Browser dependency license notices are generated during the build and available through the footer's **Open source licenses** link.
 

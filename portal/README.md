@@ -14,8 +14,8 @@ npm start
 - 기본 관리자 계정: `admin / admin` (첫 로그인 후 비밀번호 변경 필수)
 - `.env`가 있으면 루트(`../.env`) 값을 우선 로드합니다.
 - UI 라우트: `/auth`(로그인), `/`(대시보드, 미로그인 시 `/auth`로 리다이렉트)
-- 호스트 분기: 루트 도메인(`{PAAS_DOMAIN}`)은 랜딩 페이지(`public/landing/`), 포털 UI는 `portal.{PAAS_DOMAIN}`에서 서빙됩니다.
-  dev에서도 동일합니다 — 랜딩: `http://localhost:3000`, 포털: `http://portal.localhost:3000`
+- 운영 Traefik은 `portal.{PAAS_DOMAIN}`에서 포털을 제공합니다. 루트 도메인의 랜딩 라우터와 호스트 간 리다이렉트는 없습니다.
+- 개발 서버에는 `http://localhost:3000` 또는 `http://portal.localhost:3000`으로 직접 접속합니다. 로그인 세션은 접속한 호스트에만 적용되므로 GitHub 연동은 설정한 콜백 URL과 같은 호스트에서 시작합니다.
 
 ## 컨테이너 실행
 
