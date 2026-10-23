@@ -10,6 +10,11 @@ services:
   # dev 모드: ACME/HTTPS 없이 HTTP 전용으로 오버라이드
   # (localhost는 Let's Encrypt 인증서 발급 불가)
   traefik:
+    image: traefik:v3.6
+    container_name: paas-proxy
+    networks:
+      - paas-app
+    restart: unless-stopped
     command:
       - "--api.insecure=true"
       - "--providers.docker=true"
@@ -24,8 +29,3 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./portal-data/traefik-dynamic:/traefik-dynamic:ro
-
-networks:
-  proxy:
-    name: ${APP_NETWORK:-paas-app}
-    external: false # In dev mode, create the APP_NETWORK automatically.

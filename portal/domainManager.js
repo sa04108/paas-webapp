@@ -14,6 +14,8 @@ const path = require("node:path");
 const fs = require("node:fs/promises");
 const crypto = require("node:crypto");
 const dns = require("node:dns").promises;
+const YAML = require("yaml");
+const proxyConfig = require("./proxyConfig");
 
 const { AppError } = require("./utils");
 const { config, IS_DEV } = require("./config");
@@ -40,73 +42,55 @@ function generateCnameTarget(appname) {
 
 // ── Traefik YAML 생성 ─────────────────────────────────────────────────────────
 
-async function rebuildTraefikConfig(statements) {
+let rebuildQueue = Promise.resolve();
+function rebuildTraefikConfig(statements) {
+  // 저장과 도메인 갱신이 겹쳐도 이전 스냅샷이 최신 파일을 덮어쓰지 않게 직렬화한다.
+  const operation = rebuildQueue.catch(() => {}).then(() => writeTraefikConfig(statements));
+  rebuildQueue = operation;
+  return operation;
+}
+
+async function writeTraefikConfig(statements) {
   await fs.mkdir(DYNAMIC_CONFIG_DIR, { recursive: true });
 
   const activeDomains = statements.listAllActiveCustomDomains.all();
-
-  if (activeDomains.length === 0) {
-    // Traefik v3 file provider는 `http: {}` 를 허용하지 않는다.
-    // 빈 YAML 객체 `{}` 는 유효하며 "설정 없음"으로 해석된다.
-    await fs.writeFile(DYNAMIC_CONFIG_FILE, "{}\n", "utf8");
-    return;
-  }
-
-  const routerLines = [];
-  const serviceLines = [];
-  const middlewareLines = [];
-
+  const saved = proxyConfig.read();
+  if (saved.loadError) throw new Error(saved.loadError);
+  const settings = saved.settings;
+  const prefix = proxyConfig.namespace(config.PAAS_DOMAIN);
+  const portalKey = `${prefix}-portal`;
+  const tls = (resolver) => IS_DEV ? {} : { tls: resolver ? { certResolver: resolver } : {} };
+  const routers = {
+    [portalKey]: {
+      rule: `Host(\`portal.${config.PAAS_DOMAIN}\`)`, entryPoints: [settings.entrypoint],
+      service: portalKey, ...tls(settings.certificateResolver),
+    },
+  };
+  const services = {
+    [portalKey]: { loadBalancer: { servers: [{ url: `http://${process.env.PORTAL_CONTAINER_NAME || "paas-portal"}:${config.PORTAL_PORT}` }] } },
+  };
+  const middlewares = {};
   for (const row of activeDomains) {
     const containerName = appContainerName(row.userid, row.appname, "", true);
-    const routerKey = `custom-${row.id}`;
-
-    routerLines.push(
-      `    ${routerKey}:`,
-      `      rule: "Host(\`${row.domain}\`)"`,
-      `      entryPoints:`,
-      `        - ${IS_DEV ? "web" : "websecure"}`,
-      `      service: ${routerKey}-svc`,
-      `      middlewares:`,
-      `        - ${routerKey}-rewrite-host`,
-      // 고객 도메인은 우리 DNS 존 밖이라 DNS-01(letsencrypt)이 성립하지 않는다.
-      // CNAME 검증 완료 = 트래픽이 이미 이 서버로 온다 → HTTP-01로 즉시 발급 가능.
-      ...(IS_DEV ? [] : [
-        `      tls:`,
-        `        certResolver: letsencrypt-http`,
-      ]),
-    );
-
-    serviceLines.push(
-      `    ${routerKey}-svc:`,
-      `      loadBalancer:`,
-      `        servers:`,
-      `          - url: "http://${containerName}:${row.port}"`,
-    );
-
-    middlewareLines.push(
-      `    ${routerKey}-rewrite-host:`,
-      `      headers:`,
-      `        customRequestHeaders:`,
-      `          Host: "localhost"`,
-    );
+    const key = `${prefix}-custom-${row.id}`;
+    routers[key] = {
+      rule: `Host(\`${row.domain}\`)`, entryPoints: [settings.entrypoint],
+      service: `${key}-svc`, middlewares: [`${key}-rewrite-host`],
+      ...tls(settings.customCertificateResolver),
+    };
+    services[`${key}-svc`] = { loadBalancer: { servers: [{ url: `http://${containerName}:${row.port}` }] } };
+    middlewares[`${key}-rewrite-host`] = { headers: { customRequestHeaders: { Host: "localhost" } } };
   }
-
-  const yaml = [
-    "# managed by portal — do not edit manually",
-    "http:",
-    "  routers:",
-    ...routerLines,
-    "  services:",
-    ...serviceLines,
-    "  middlewares:",
-    ...middlewareLines,
-    "",
-  ].join("\n");
+  const yaml = "# 포털이 관리하는 파일입니다. 직접 수정하지 마세요.\n" + YAML.stringify({
+    http: { routers, services, ...(Object.keys(middlewares).length ? { middlewares } : {}) },
+  });
 
   // 원자적 쓰기: tmp 파일에 먼저 쓴 뒤 rename
-  const tmpPath = `${DYNAMIC_CONFIG_FILE}.tmp`;
-  await fs.writeFile(tmpPath, yaml, "utf8");
-  await fs.rename(tmpPath, DYNAMIC_CONFIG_FILE);
+  const tmpPath = `${DYNAMIC_CONFIG_FILE}.${crypto.randomUUID()}.tmp`;
+  try {
+    await fs.writeFile(tmpPath, yaml, { encoding: "utf8", flag: "wx" });
+    await fs.rename(tmpPath, DYNAMIC_CONFIG_FILE);
+  } finally { await fs.rm(tmpPath, { force: true }); }
 }
 
 // ── 팩토리 ───────────────────────────────────────────────────────────────────
@@ -115,7 +99,9 @@ function createDomainManager({ statements }) {
   async function init() {
     await fs.mkdir(DYNAMIC_CONFIG_DIR, { recursive: true });
     // 시작 시 현재 active 도메인으로 YAML 재빌드 (재시작 후 상태 복구)
-    await rebuildTraefikConfig(statements);
+    // 손상된 설정은 기존 라우팅을 유지하고 관리자 화면에서 복구하도록 한다.
+    if (proxyConfig.read().loadError) console.error("[domainManager] Saved proxy settings require repair; keeping existing routes.");
+    else await rebuildTraefikConfig(statements);
 
     // ── 자동 도메인 검증 ────────────────────────────────────────────────────
     // pending/error 도메인: 5분마다 재검증 (DNS TTL 60~300s 고려)
@@ -274,6 +260,7 @@ function createDomainManager({ statements }) {
 
   return {
     init,
+    refreshProxyRoutes: () => rebuildTraefikConfig(statements),
     listDomains,
     listActiveDomains,
     addDomain,

@@ -50,13 +50,13 @@ For an existing app, open **Settings**, load or edit its build configuration, an
 
 The portal's runtime detector provides Node.js framework and dependency badges for the UI; Railpack performs the actual automatic build detection. Successful deployment still requires a supported project with a working startup command and an HTTP server listening on `0.0.0.0:5000` (the platform supplies `PORT=5000`).
 
-### Route applications through one shared proxy
+### Route applications through a reverse proxy
 
-Traefik discovers application containers through Docker labels. Applications do not publish individual host ports; traffic reaches them through the proxy. Platform subdomains share a wildcard certificate issued through Cloudflare DNS-01, while custom domains use HTTP-01 after CNAME verification.
+Application containers do not publish individual host ports. The portal stack (`docker-compose.yml`) does not bind public ports; attach a Traefik proxy to the external `APP_NETWORK` and configure it to route application and portal traffic. The supplied Traefik stack is a separate Compose project (`docker-compose.proxy.yml`), so it can be started or managed independently. The admin-only Proxy setup screen explains the managed Traefik and existing Traefik profiles. Nginx Proxy Manager is not currently supported as a direct integration.
 
 ```text
 GitHub repository -> clone -> Compose validation -> Railpack / Dockerfile / image pull -> app services
-Browser -> Traefik -> portal or application
+Browser -> reverse proxy -> portal or application
 Portal -> Docker API / Compose -> lifecycle, logs, and exec
 ```
 
@@ -69,7 +69,7 @@ Portal -> Docker API / Compose -> lifecycle, logs, and exec
 | Persistence and authentication | SQLite via `better-sqlite3`, bcrypt password hashes, session cookies |
 | Container management | Docker Engine, Docker Compose, `dockerode`, Bash scripts |
 | Application builds | Railpack, BuildKit, repository-provided Dockerfiles |
-| Routing and TLS | Traefik 3.6, Let's Encrypt, Cloudflare DNS-01, HTTP-01 |
+| Routing and TLS | Traefik 3.6 (optional supplied stack), Let's Encrypt, Cloudflare DNS-01, HTTP-01 |
 | Live communication | WebSockets for exec, Server-Sent Events for job output |
 | Private repository access | GitHub App OAuth, app JWTs, installation access tokens |
 
@@ -93,7 +93,7 @@ Node.js and Railpack do not need to be installed on the host for the Compose wor
 
 ## Initial bootstrap
 
-Run the following steps from the repository root. The production setup uses a domain hosted in Cloudflare and exposes HTTP/HTTPS through Traefik.
+Run the following steps from the repository root. This guide uses the supplied Traefik stack and a domain hosted in Cloudflare. The portal stack and edge proxy are independent Compose projects; see [proxy setup](docs/proxy-setup.md) to connect an existing Traefik instead.
 
 ### 1. Clone and prepare local configuration
 
@@ -152,11 +152,11 @@ For `PAAS_DOMAIN=example.com`, create the following records pointing to your ser
 | `portal.example.com` | A, or CNAME to `example.com` | Management portal |
 | `*.apps.example.com` | A, or CNAME to `example.com` | Application subdomains |
 
-Start with DNS-only records so requests reach Traefik directly. Create a Cloudflare API token with **Zone / Zone / Read** and **Zone / DNS / Edit** permissions for the relevant zone and assign it to `CF_DNS_API_TOKEN`. These are the permissions documented by the [Cloudflare ACME provider](https://go-acme.github.io/lego/dns/cloudflare/#api-tokens).
+For the supplied Traefik stack, start with DNS-only records so requests reach the proxy directly. Create a Cloudflare API token with **Zone / Zone / Read** and **Zone / DNS / Edit** permissions for the relevant zone and assign it to `CF_DNS_API_TOKEN`. These are the permissions documented by the [Cloudflare ACME provider](https://go-acme.github.io/lego/dns/cloudflare/#api-tokens).
 
-The production portal is served only at `portal.example.com`. The root domain has no portal router or redirect to the portal; its DNS record is only needed if another record uses it as a CNAME target. The global HTTP-to-HTTPS redirect remains in place.
+The production portal is served at `portal.example.com`. The root domain has no portal router or redirect to the portal; its DNS record is only needed if another record uses it as a CNAME target.
 
-Allow inbound TCP ports **80** and **443** through the host firewall and any router/NAT. Port 80 is needed for the custom-domain HTTP-01 challenge and HTTP-to-HTTPS redirects. The portal listens on `PORTAL_PORT` (default **3000**) inside Docker and is reached through Traefik; production Compose does not publish this port on the host.
+If using the supplied Traefik stack, allow inbound TCP ports **80** and **443** through the host firewall and any router/NAT. Port 80 is needed for custom-domain HTTP-01 challenges and HTTP-to-HTTPS redirects. The portal listens on `PORTAL_PORT` (default **3000**) inside Docker. The base portal Compose file publishes no host ports; the proxy reaches the portal over `APP_NETWORK`.
 
 If you use custom domains, their generated CNAME targets have the form `<app>-<random>.example.com`. Make those target names resolve to this server by adding individual DNS records or an additional `*.example.com` wildcard record. The `*.apps.example.com` record alone does not cover these targets.
 
@@ -168,23 +168,32 @@ The application network is declared external, so it must exist before starting t
 docker network inspect paas-app >/dev/null 2>&1 || docker network create paas-app
 ```
 
-### 4. Build and start the platform
+### 4. Build and start the portal
 
 ```bash
 docker compose --env-file .env -f docker-compose.yml config --quiet
 docker compose --env-file .env -f docker-compose.yml up -d --build
 docker compose --env-file .env -f docker-compose.yml ps
-docker compose --env-file .env -f docker-compose.yml logs --tail=100 portal traefik buildkit
+docker compose --env-file .env -f docker-compose.yml logs --tail=100 portal buildkit
+```
+
+The first start builds the portal image, installs dependencies with `npm ci`, and starts `paas-portal` and `paas-buildkit`. Set up ingress after signing in through the loopback admin access described in [proxy setup](docs/proxy-setup.md). For the supplied Traefik, start its separate project with:
+
+```bash
+docker compose --env-file .env -f docker-compose.proxy.yml up -d
+```
+
+Do not combine `docker-compose.proxy.yml` with the base file: it has its own `paas-edge` project lifecycle. After DNS and certificate issuance are ready, verify the public portal:
+
+```bash
 curl --fail https://portal.example.com/health
 ```
 
-Replace `portal.example.com` with your configured portal hostname and run the health check after DNS and certificate issuance are ready. `PORTAL_PORT` changes the portal's internal listener and Traefik target; it is not a host port in production. The first start builds the portal image, installs portal dependencies with `npm ci`, and starts `paas-portal`, `paas-proxy`, and `paas-buildkit`. Certificate issuance can take additional time; inspect the Traefik logs if HTTPS is not yet available.
+Replace `portal.example.com` with your configured portal hostname. `PORTAL_PORT` changes the portal's internal listener and proxy target; it is not a published host port. Certificate issuance can take additional time; inspect the relevant proxy logs if HTTPS is not yet available. The selected proxy profile and connection settings are stored in `portal-data/proxy-settings.json`.
 
-When upgrading an existing deployment from a Compose file that published the portal port, recreate the portal container to remove the old host binding:
+To configure ingress, sign in as the bootstrap administrator, change the default password, then open **Admin Dashboard → Proxy Setup**. The setup page is available again at `/admin/proxy`; its connection check is read-only. Saved portal and custom-domain routes update immediately through the dynamic file provider, while changes to application entrypoints or certificate resolvers require redeploying those applications. Details and SSH access steps are in [proxy setup](docs/proxy-setup.md).
 
-```bash
-docker compose --env-file .env -f docker-compose.yml up -d --no-deps --force-recreate portal
-```
+When upgrading an older deployment, recreate the portal to remove its previous proxy labels or port binding. If the old Compose definition includes a `traefik` service, stop and remove only that PaaS proxy before starting the new `paas-edge` project; preserve `portal-data/letsencrypt/acme.json`. Do not run `docker compose down` against a shared external network or stop/remove an unrelated proxy. Follow the [migration instructions](docs/proxy-setup.md#migrating-an-existing-deployment).
 
 ### 5. Sign in and deploy the first application
 
@@ -244,9 +253,9 @@ docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml u
 docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml logs --tail=100 portal traefik
 ```
 
-The override sets `RUN_MODE=development`, watches both the Express server and the React frontend, and routes applications over HTTP. React source edits rebuild the browser assets automatically; reload the browser after the build finishes. The portal's `PORTAL_PORT` (default **3000**) is published on loopback only, so open it at `http://localhost:3000` or `http://portal.localhost:3000`; both addresses serve the same UI without redirecting between hosts, and login sessions belong to the host where you sign in. Applications are available at `http://<user>-<app>.apps.localhost:18080`. If your browser does not resolve these names to loopback, add the individual names to your local hosts file.
+The development override sets `RUN_MODE=development`, watches both the Express server and React frontend, and starts its own HTTP Traefik on port **18080**. React source edits rebuild browser assets automatically; reload after the build finishes. The portal's `PORTAL_PORT` (default **3000**) is published on loopback only, so open it at `http://localhost:3000` or `http://portal.localhost:3000`; both addresses serve the same UI without redirecting between hosts, and login sessions belong to the host where you sign in. Applications are available at `http://<user>-<app>.apps.localhost:18080`. If your browser does not resolve these names to loopback, add the individual names to your local hosts file.
 
-The shared application network still needs to exist. The current override also retains the base Compose port mappings for 80 and 443 while adding 18080, so those host ports must be available even in development. Development mode bypasses the mandatory password-change gate.
+The shared application network still needs to exist. Development does not bind ports 80 or 443. Development mode bypasses the mandatory password-change gate. Do not combine the production admin port override with the development override.
 
 ## Operations and persistent data
 
@@ -255,8 +264,9 @@ The host checkout stores the following runtime files:
 | Path | Contents |
 | --- | --- |
 | `portal-data/portal.sqlite3` | Users, sessions, jobs, GitHub installation links, and custom-domain metadata |
+| `portal-data/proxy-settings.json` | Selected proxy profile and connection settings |
 | `portal-data/letsencrypt/acme.json` | ACME account and certificates |
-| `portal-data/traefik-dynamic/` | Generated custom-domain routing configuration |
+| `portal-data/traefik-dynamic/` | Generated portal and custom-domain routing configuration |
 | `apps/<user>/<app>/app/` | Cloned repository source |
 | `apps/<user>/<app>/data/` | Application files mounted at `/data` |
 | `apps/<user>/<app>/logs/` | Lifecycle script logs |
@@ -269,15 +279,20 @@ Back up `.env`, `portal-data/`, and application data with a consistent SQLite ba
 For the production stack:
 
 ```bash
-# Follow platform logs.
-docker compose --env-file .env -f docker-compose.yml logs -f --tail=100 portal traefik
+# 포털과 BuildKit 로그를 확인한다.
+docker compose --env-file .env -f docker-compose.yml logs -f --tail=100 portal buildkit
+
+# 별도 프록시 프로젝트의 로그를 확인한다.
+docker compose --env-file .env -f docker-compose.proxy.yml logs -f --tail=100 traefik
 
 # Apply platform configuration or image changes.
 docker compose --env-file .env -f docker-compose.yml up -d --build
 
-# Stop platform services.
+# 포털과 BuildKit을 종료한다. 프록시는 별도 프로젝트로 유지된다.
 docker compose --env-file .env -f docker-compose.yml down
 ```
+
+Stop the supplied proxy separately with `docker compose --env-file .env -f docker-compose.proxy.yml down`. Do not remove the external `APP_NETWORK`; it may still be used by running applications or another proxy.
 
 User applications have separate Compose projects and keep running when the platform stack is stopped; manage them through the portal before shutdown if needed. The portal has access to the host Docker socket and BuildKit is privileged, so the platform's administrators control the Docker host.
 

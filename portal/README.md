@@ -11,12 +11,15 @@ npm start
 ```
 
 - 기본 주소: `http://localhost:3000`
-- Docker Compose 운영 구성은 이 포트를 호스트에 공개하지 않고 Traefik을 통해서만 접근합니다. 개발 Compose는 `PORTAL_PORT`(기본 3000)를 loopback에만 바인딩합니다.
+- 운영용 기본 Compose는 포털 포트를 공개하지 않습니다. 개발 Compose는 `PORTAL_PORT`(기본 3000)를 loopback에만 바인딩하며 HTTP용 Traefik을 18080에 실행합니다.
+- 프록시 설정은 비밀번호 변경 후 관리자 전용 `/admin/proxy`에서 합니다. 기본 관리 경로는 별도 Compose 오버라이드로 서버 루프백에만 공개하고 SSH 터널로 접속합니다. [프록시 설정 안내](../docs/proxy-setup.md)를 참고하세요.
 - 기본 관리자 계정: `admin / admin` (첫 로그인 후 비밀번호 변경 필수)
 - `.env`가 있으면 루트(`../.env`) 값을 우선 로드합니다.
 - UI 라우트: `/auth`(로그인), `/`(대시보드, 미로그인 시 `/auth`로 리다이렉트)
-- 운영 Traefik은 `portal.{PAAS_DOMAIN}`에서 포털을 제공합니다. 루트 도메인의 랜딩 라우터와 호스트 간 리다이렉트는 없습니다.
+- 프로덕션의 `portal.{PAAS_DOMAIN}` 라우팅은 선택한 역방향 프록시가 담당합니다. 루트 도메인의 랜딩 라우터와 호스트 간 리다이렉트는 없습니다.
 - 개발 서버에는 `http://localhost:3000` 또는 `http://portal.localhost:3000`으로 직접 접속합니다. 로그인 세션은 접속한 호스트에만 적용되므로 GitHub 연동은 설정한 콜백 URL과 같은 호스트에서 시작합니다.
+
+프로덕션 기본 Compose에는 포털과 BuildKit만 포함되며 호스트 포트를 공개하지 않습니다. `docker-compose.proxy.yml`은 별도 `paas-edge` 프로젝트입니다. 두 Compose 파일을 하나의 명령에 함께 넣지 말고, 외부 `APP_NETWORK`를 미리 만들어 공유하세요. 프록시 프로필 선택, SSH 터널을 통한 관리자 접속, 기존 Traefik 마이그레이션은 [프록시 설정 안내](../docs/proxy-setup.md)에 있습니다.
 
 ## 컨테이너 실행
 
