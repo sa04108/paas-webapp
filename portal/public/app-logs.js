@@ -3,7 +3,7 @@ import { el, state } from "./app-state.js";
 const output = el.detailLogsOutput;
 const title = el.detailLogsTitle;
 const controls = document.getElementById("detail-log-services");
-const liveButton = document.getElementById("detail-live-logs-btn");
+const liveToggle = el.detailRefreshLogsBtn;
 const timestampToggle = document.getElementById("detail-log-timestamps");
 let stream = null;
 let entries = [];
@@ -26,6 +26,22 @@ let probeController = null;
 function lineCount() {
   const n = Number.parseInt(el.detailLogLinesInput.value, 10);
   return Number.isFinite(n) ? Math.max(1, Math.min(1000, n)) : 120;
+}
+
+function syncLiveToggle() {
+  liveToggle.dataset.auto = String(liveMode);
+  liveToggle.setAttribute("aria-pressed", String(liveMode));
+  liveToggle.title = liveMode ? "Pause automatic log streaming" : "Resume automatic log streaming";
+  liveToggle.querySelector(".refresh-label").textContent = liveMode ? "Auto" : "Refresh";
+}
+
+function showLogError(error) {
+  if (error.name === "AbortError" || !active) return;
+  cancelRequests();
+  liveMode = false;
+  syncLiveToggle();
+  title.textContent = error.message;
+  if (!entries.length) output.textContent = `Unable to load logs: ${error.message}`;
 }
 
 function nearBottom() { return output.scrollHeight - output.scrollTop - output.clientHeight < 48; }
@@ -61,6 +77,7 @@ function render() {
     frag.append(row);
   }
   output.replaceChildren(frag);
+  if (!sorted.length) output.textContent = selected.size ? "No logs available for the selected services." : "Choose services to view logs.";
   output.scrollTop = follow ? output.scrollHeight : previousTop;
 }
 
@@ -138,6 +155,9 @@ async function refresh() {
   const payload = await response.json().catch(() => ({}));
   if (currentGeneration !== generation || controller.signal.aborted || !active || !state.selectedApp || `${state.selectedApp.userid}/${state.selectedApp.appname}` !== key || query !== queryUrl()) return;
   if (!response.ok || payload.ok === false) throw Object.assign(new Error(payload.error || "Failed to load logs"), { status: response.status });
+  if (!Array.isArray(payload.data?.entries) || !Array.isArray(payload.data?.services)) {
+    throw new Error("The portal backend needs to be updated. Restart the portal and reload this page.");
+  }
   refreshController = null;
   if (!servicesKnown && !selectionAll && selected.size > 0 && Array.isArray(payload.data?.services)) {
     if (Array.isArray(payload.data.warnings)) warnings = payload.data.warnings;
@@ -153,7 +173,7 @@ async function refresh() {
 function reloadSelection() {
   if (!active) return;
   if (liveMode) connect(true);
-  else refresh().catch((error) => { if (error.name !== "AbortError") title.textContent = error.message; });
+  else refresh().catch(showLogError);
 }
 
 function connect(force = false) {
@@ -165,7 +185,7 @@ function connect(force = false) {
   const currentGeneration = generation;
   stream = new EventSource(queryUrl(true), { withCredentials: true });
   const thisStream = stream;
-  liveButton.textContent = "Pause";
+  syncLiveToggle();
   stream.onopen = () => {
     if (currentGeneration === generation && thisStream === stream) {
       title.dataset.connection = "connected";
@@ -180,7 +200,7 @@ function connect(force = false) {
       else if (data.type === "entries") applyPayload(data, false);
       else if (data.type === "services") { servicesKnown = true; renderServices(data.services || []); render(); connect(true); }
       else if (data.type === "warning") { warnings.push(data.message); warnings = warnings.slice(-20); title.textContent = warnings.join(" · "); }
-      else if (data.type === "end") { title.textContent = data.message || "Log stream ended"; cancelRequests(); liveMode = false; liveButton.textContent = "Live"; }
+      else if (data.type === "end") { title.textContent = data.message || "Log stream ended"; cancelRequests(); liveMode = false; syncLiveToggle(); }
     } catch { /* 잘못된 이벤트 하나는 스트림을 중단하지 않는다. */ }
   };
   stream.onerror = async () => {
@@ -194,8 +214,8 @@ function connect(force = false) {
       const probeUrl = queryUrl(false);
       const response = await fetch(probeUrl, { credentials: "same-origin", cache: "no-store", signal: controller.signal });
       if (currentGeneration !== generation || thisStream !== stream || !active) return;
-      if (response.status === 401 || response.status === 403) { cancelRequests(); liveMode = false; liveButton.textContent = "Live"; title.textContent = "Log access expired. Please sign in again."; }
-      else if (response.status === 404 || response.status === 410) { cancelRequests(); liveMode = false; liveButton.textContent = "Live"; title.textContent = "Log stream has ended."; }
+      if (response.status === 401 || response.status === 403) { cancelRequests(); liveMode = false; syncLiveToggle(); title.textContent = "Log access expired. Please sign in again."; }
+      else if (response.status === 404 || response.status === 410) { cancelRequests(); liveMode = false; syncLiveToggle(); title.textContent = "Log stream has ended."; }
     } catch { /* EventSource가 연결을 다시 시도한다. */ }
     finally {
       clearTimeout(timeout);
@@ -221,23 +241,24 @@ function setActive(next) {
     selected = new Set(selectionByApp.get(key) || []);
     selectionAll = selectionAllByApp.get(key) ?? true;
     entries = [];
+    warnings = [];
     activeAppKey = key;
     renderServices();
   }
-  refresh().then((updated) => { if (updated && active && liveMode) connect(true); }).catch((error) => { if (error.name !== "AbortError") title.textContent = error.message; });
+  if (!entries.length) output.textContent = "Loading logs…";
+  refresh().then((updated) => { if (updated && active && liveMode) connect(true); }).catch(showLogError);
 }
 
-liveButton.addEventListener("click", () => {
+liveToggle.addEventListener("click", () => {
   liveMode = !liveMode;
-  if (!liveMode) { cancelRequests(); liveButton.textContent = "Live"; }
-  else reloadSelection();
-});
-document.getElementById("detail-refresh-logs-btn").addEventListener("click", () => {
-  if (active && liveMode) connect(true);
-  else refresh().catch((error) => { if (error.name !== "AbortError") title.textContent = error.message; });
+  syncLiveToggle();
+  if (!liveMode) cancelRequests();
+  else refresh().then((updated) => { if (updated && active && liveMode) connect(true); })
+    .catch(showLogError);
 });
 el.detailLogLinesInput.addEventListener("change", () => { render(); reloadSelection(); });
 timestampToggle.addEventListener("change", () => { showTimestamps = timestampToggle.checked; render(); });
 document.addEventListener("app-logs-visibility", (event) => setActive(event.detail));
 window.addEventListener("pagehide", cancelRequests);
+syncLiveToggle();
 export { setActive as setLogsActive };
