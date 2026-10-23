@@ -56,8 +56,9 @@ const authService = createAuthService({
 
 const app = express();
 const publicDir = path.join(__dirname, "public");
-const dashboardPagePath = path.join(publicDir, "index.html");
-const authPagePath = path.join(publicDir, "auth.html");
+const distDir = path.join(__dirname, "dist");
+const dashboardPagePath = path.join(distDir, "index.html");
+const authPagePath = dashboardPagePath;
 const landingPagePath = path.join(publicDir, "landing", "index.html");
 
 app.set("trust proxy", config.PORTAL_TRUST_PROXY);
@@ -104,7 +105,7 @@ function serveHtml(res, filePath) {
 }
 
 // UI 경로(SPA): 어떤 화면이든 index.html을 서빙하고, 실제 뷰 결정은
-// 프론트 라우터(app-router.js)가 pathname을 파싱해 수행한다.
+// React Router가 pathname을 파싱해 수행한다.
 const UI_PATHS = ["/", "/index.html", "/dashboard", "/create", "/users", "/admin", "/apps/:userid/:appname"];
 
 // ── 루트 도메인(랜딩) 라우팅 ──────────────────────────────────────────────────
@@ -150,6 +151,9 @@ app.get("/auth", (req, res) => {
 // 정적 파일 서빙 (JS/CSS 포함): 파일 mtime+size 기반 ETag + max-age=0 으로
 // 매 요청 재검증 — 파일이 바뀌면 재시작 없이 다음 새로고침에 즉시 반영된다.
 // (index: false 로 자동 index.html 서빙 비활성화 — 위 UI 라우트에서 인증 후 서빙)
+// 해시가 포함된 번들만 장기 캐시한다. HTML은 인증 경로에서만 제공한다.
+app.use("/assets", express.static(path.join(distDir, "assets"), { immutable: true, maxAge: "1y", index: false }));
+app.get("/third-party-notices.txt", (_req, res) => res.sendFile(path.join(distDir, "third-party-notices.txt"), { maxAge: 0 }));
 app.use(express.static(publicDir, { index: false }));
 
 // ── 인증 라우트 (/api/auth/login, /api/auth/logout, /api/auth/me, /api/auth/change-password) ──
