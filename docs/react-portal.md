@@ -48,3 +48,15 @@ Hyunbbai의 기존 P 브랜드와 시스템 글꼴을 사용한다. 테마용 CS
 - 생성 폼은 요청을 가로채 Dockerfile/Railpack/Compose/환경변수의 API 전송 형식과 늦은 응답이 화면을 바꾸지 않는 동작을 확인했다. 신규 원격 저장소의 전체 빌드·배포는 실행하지 않았다.
 
 GitHub OAuth와 비공개 저장소 접근, 실제 외부 DNS/TLS 인증은 연결 정보가 없어 검증하지 않았다. 재시작/시작 검증의 도메인 readiness는 로컬 HTTP 200 응답기로 제공했다. 공개 랜딩 페이지와 배포 백엔드는 이번 전환 범위에 포함하지 않았다.
+
+## Docker Compose 개발 모드 추가 검증
+
+앞선 검증에서 포털은 호스트의 Node 프로세스로 실행했고, 테스트 앱만 Docker Compose로 실행했다. 이후 `docker-compose.yml`과 `docker-compose.dev.yml`을 함께 사용해 포털·Traefik·BuildKit 전체를 별도 임시 디렉터리와 Compose 프로젝트로 기동했다.
+
+개발 명령이 서버만 감시해 React 파일 수정이 반영되지 않는 문제를 재현했다. `portal/dev.js`가 Vite 빌드 감시와 Node 서버 감시를 함께 실행하도록 수정했다. 최초 타입 검사/빌드는 `predev`가 수행한다. 화면 소스 변경 후 자동 재빌드와 브라우저 새로고침 반영, 서버 소스 변경 후 프로세스 재시작을 확인했다. 종료 신호나 감시 프로세스 종료 시 다른 자식 프로세스도 정리되는지 임시 프로세스 검증을 수행했다.
+
+컨테이너 안의 `npm ci --include=dev`, 타입 검사, 초기 빌드, 개발 서버 기동이 성공했다. 포털 `/health`와 실제 Traefik을 거친 `admin-demo.apps.localhost:18080`의 HTTP 200 응답을 확인했다. 1440/1024/390/320px의 양쪽 테마에서 레이아웃 및 실제 컨테이너 로그 검증도 통과했다. 로그인, 사용자 관리, 설정 저장, Jobs 로그, Exec 서비스 전환, 도메인 추가/삭제도 확인했다. 환경변수 저장 후 재시작 작업은 완료 상태이며, 실제 Traefik readiness 검증 후 앱이 running 상태가 되는 것을 확인했다.
+
+클라우드 네트워크에서 `get.docker.com` 접속이 403으로 차단되어 원본 Dockerfile의 설치 단계는 실행하지 못했다. 임시 오버라이드로 동일한 `node:22` 베이스에 기존 Docker CLI/Compose/Buildx/Railpack 바이너리를 읽기 전용 마운트하고, 클라우드 CA와 Traefik의 로컬 Docker 서브넷 프록시 예외를 제공했다. 애플리케이션 명령·의존성 설치·개발 모드는 저장소 설정을 그대로 사용했다. 이 환경용 설정과 검증 코드는 커밋하지 않는다.
+
+설치 과정의 npm audit은 기존 백엔드 의존성에서 11건(critical 2, high 3, moderate 6)을 보고했다. React 전환 전부터 존재한 Express/Dockerode 계열 등의 잠금 버전이며, 이번 개발 실행 수정에서는 의존성 업데이트나 취약점 재현을 수행하지 않았다.

@@ -89,7 +89,7 @@ By default, each application is limited to `256m` of memory and `0.5` CPU, with 
 
 The host needs Git, Docker Engine, and Docker Compose 2.17.0 or later with build support because the portal image uses [`dockerfile_inline`](https://docs.docker.com/reference/compose-file/build/#dockerfile_inline). Use the `docker compose` command. The bundled setup expects a rootful Docker daemon at `/var/run/docker.sock` and supports a privileged BuildKit container. Your shell user must be able to run Docker commands.
 
-Node.js and Railpack do not need to be installed on the host for the Compose workflow: the portal image installs its own tools. For direct portal development, `portal/package.json` requires Node.js 20 or later.
+Node.js and Railpack do not need to be installed on the host for the Compose workflow: the portal image installs its own tools. For direct portal development, use Node.js 22.12 or later.
 
 ## Initial bootstrap
 
@@ -236,7 +236,7 @@ docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml u
 docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml logs --tail=100 portal traefik
 ```
 
-The override sets `RUN_MODE=development`, starts Node.js in watch mode, and routes applications over HTTP. Open the landing page at `http://localhost:3000`, the portal at `http://portal.localhost:3000`, and an application at `http://<user>-<app>.apps.localhost:18080`. If your browser does not resolve these names to loopback, add the individual names to your local hosts file.
+The override sets `RUN_MODE=development`, watches both the Express server and the React frontend, and routes applications over HTTP. React source edits rebuild the browser assets automatically; reload the browser after the build finishes. Open the landing page at `http://localhost:3000`, the portal at `http://portal.localhost:3000`, and an application at `http://<user>-<app>.apps.localhost:18080`. If your browser does not resolve these names to loopback, add the individual names to your local hosts file.
 
 The shared application network still needs to exist. The current override also retains the base Compose port mappings for 80 and 443 while adding 18080, so those host ports must be available even in development. Development mode bypasses the mandatory password-change gate.
 
@@ -307,7 +307,7 @@ npm start
 
 `npm start` and `npm run dev` run the type check and frontend build before starting Express. Compose installs build dependencies even when `NODE_ENV=production`. Generated files in `portal/dist` are not committed; do not run `node server.js` on a clean checkout until `npm run build` succeeds. HTML is never cached, while Vite's hashed assets are cached for a year.
 
-For local development, run `npm run dev` for Express and `npm run dev:client` in a second terminal to rebuild the frontend when files change, then reload the browser. Both browser requests and APIs use the Express origin, including cookies, SSE and terminal WebSockets. The terminal package is bundled locally and loaded when opening Exec.
+For local development, `npm run dev` watches Express and rebuilds the frontend when files change; reload the browser after the build finishes. This also runs automatically with the Compose development override. `npm run dev:client` remains available when only the frontend watcher is needed. Both browser requests and APIs use the Express origin, including cookies, SSE and terminal WebSockets. The terminal package is bundled locally and loaded when opening Exec.
 
 ```bash
 npm run typecheck
