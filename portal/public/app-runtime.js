@@ -152,10 +152,6 @@ function setServiceOptions(runtime = null, appInfo = null) {
   const names = services.map((service) => service?.name).filter((name) => typeof name === "string" && name);
   const webService = item?.primaryService || activeRuntime?.webService || "app";
   if (!names.includes(webService)) names.unshift(webService);
-  const previousLogSelection = switchedApp ? "" : el.detailLogService.value;
-  el.detailLogService.replaceChildren(new Option("All services", ""));
-  names.forEach((name) => el.detailLogService.add(new Option(name, name)));
-  el.detailLogService.value = names.includes(previousLogSelection) ? previousLogSelection : "";
   el.detailExecService.replaceChildren();
   names.forEach((name) => el.detailExecService.add(new Option(name, name)));
   const preserveExecSelection = !switchedApp && !provisionalExecDefault && names.includes(oldExecSelection);

@@ -155,6 +155,7 @@ app.use(express.static(publicDir, { index: false }));
 // ── 인증 라우트 (/api/auth/login, /api/auth/logout, /api/auth/me, /api/auth/change-password) ──
 
 authService.attachRoutes(api);
+appsRouter.setLogSessionAuthResolver((req) => authService.resolveSessionAuth(req));
 
 // ── 보호된 라우트 ─────────────────────────────────────────────────────────────
 

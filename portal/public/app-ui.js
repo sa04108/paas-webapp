@@ -38,7 +38,6 @@ import { createJobLogViewer } from "./app-job-log.js";
 
 const uiHandlers = {
   loadDetailEnv: async () => { },
-  loadDetailLogs: async () => { },
   loadDetailDomains: async () => { },
   loadDetailBuild: async () => { },
   loadDetailRuntime: async () => { },
@@ -64,6 +63,7 @@ function configureUiHandlers(handlers = {}) {
 function switchView(viewName, { updateUrl = true } = {}) {
   const nextView = AVAILABLE_VIEWS.includes(viewName) ? viewName : DEFAULT_VIEW;
   state.activeView = nextView;
+  document.dispatchEvent(new CustomEvent("app-logs-visibility", { detail: nextView === "app-detail" && state.activeDetailTab === "logs" }));
 
   el.viewDashboard.hidden = nextView !== "dashboard";
   el.viewCreate.hidden = nextView !== "create";
@@ -101,6 +101,7 @@ function toggleMobileMenu() {
 function switchDetailTab(tabName) {
   const nextTab = AVAILABLE_DETAIL_TABS.includes(tabName) ? tabName : DEFAULT_DETAIL_TAB;
   state.activeDetailTab = nextTab;
+  document.dispatchEvent(new CustomEvent("app-logs-visibility", { detail: state.activeView === "app-detail" && nextTab === "logs" }));
 
   el.detailTabBtns.forEach((btn) => {
     const isActive = btn.dataset.detailTab === nextTab;
@@ -131,9 +132,7 @@ function switchAdminTab(tabName) {
 }
 
 // 앱 관리 화면으로 진입한다.
-// exec cwd를 초기화하고, 로그를 자동 로드하며 env 데이터를 백그라운드로 미리 로드한다.
-// (loadDetailLogs, loadDetailEnv, initExecCwd는 app-api.js / app-exec.js에 정의되어 있으며,
-//  이 함수는 항상 이벤트 핸들러에서만 호출되므로 실행 시점엔 이미 정의가 완료된다.)
+// exec cwd를 초기화하고 env 데이터를 백그라운드로 미리 로드한다.
 async function navigateToApp(userid, appname, { updateUrl = true } = {}) {
   uiHandlers.closeExecSocket(); // 이전 앱 소켓 정리
   state.selectedApp = { userid, appname };
@@ -148,11 +147,6 @@ async function navigateToApp(userid, appname, { updateUrl = true } = {}) {
     if (window.location.pathname !== path) {
       window.history.pushState(null, "", path);
     }
-  }
-  try {
-    await uiHandlers.loadDetailLogs();
-  } catch (error) {
-    await uiHandlers.handleRequestError(error);
   }
   uiHandlers.loadDetailEnv().catch(() => { });
   uiHandlers.loadDetailDomains().catch(() => { });
@@ -337,6 +331,7 @@ function closeJobLogModal() {
 // (stopAutoRefresh는 app-api.js에 정의되어 있으며, 런타임에만 호출된다.)
 function updateAuthUi() {
   if (!isLoggedIn()) {
+    document.dispatchEvent(new CustomEvent("app-logs-visibility", { detail: false }));
     closeJobLogModal();
     el.authState.textContent = "Login required";
     el.logoutBtn.hidden = true;

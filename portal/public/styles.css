@@ -1943,6 +1943,43 @@ code {
   gap: 8px;
 }
 
+.log-service-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.service-toggle {
+  max-width: 100%;
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: var(--surface-strong);
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.service-toggle[aria-pressed="true"] {
+  border-color: var(--accent, #3987d7);
+  background: rgba(57, 135, 215, 0.14);
+  color: var(--ink-main);
+}
+
+.timestamp-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-subtle);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.log-timestamp { color: #8fa6ba; }
+.log-service-prefix { color: #83c7ff; }
+
 .log-lines-input {
   width: 72px !important;
   padding: 7px 10px !important;

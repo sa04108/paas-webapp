@@ -207,21 +207,6 @@ async function loadPortalLogs() {
 // 타이머 시작/중지만 담당한다.
 // 버튼 UI 상태 동기화는 호출측(app.js)의 역할.
 
-/** App Detail Logs 타이머 시작. 이미 실행 중이면 no-op. */
-function startDetailLogsAutoRefresh() {
-  if (state.detailLogsTimer) return;
-  state.detailLogsTimer = setInterval(async () => {
-    if (state.activeView !== "app-detail" || state.activeDetailTab !== "logs") return;
-    await loadDetailLogs().catch(() => {});
-  }, AUTO_REFRESH_MS);
-}
-
-/** App Detail Logs 타이머 중지. 이미 중지된 상태면 no-op. */
-function stopDetailLogsAutoRefresh() {
-  clearInterval(state.detailLogsTimer);
-  state.detailLogsTimer = null;
-}
-
 /** Admin Portal Logs 타이머 시작. 이미 실행 중이면 no-op. */
 function startAdminLogsAutoRefresh() {
   if (state.adminLogsTimer) return;
@@ -484,24 +469,6 @@ async function performAction(target) {
 
 // ── 앱 관리 > Logs ────────────────────────────────────────────────────────────
 
-async function loadDetailLogs() {
-  if (!state.selectedApp) return;
-  const selectedKey = `${state.selectedApp.userid}/${state.selectedApp.appname}`;
-  const { userid, appname } = state.selectedApp;
-  const rawLines = Number.parseInt(el.detailLogLinesInput.value, 10);
-  const lines = Number.isFinite(rawLines)
-    ? Math.max(1, Math.min(1000, rawLines))
-    : 120;
-  const service = el.detailLogService.value;
-  el.detailLogsTitle.textContent = `${userid}/${appname} Fetching logs...`;
-  const query = new URLSearchParams({ lines: String(lines) });
-  if (service) query.set("service", service);
-  const data = await apiFetch(`/apps/${encodeURIComponent(userid)}/${encodeURIComponent(appname)}/logs?${query}`);
-  if (!state.selectedApp || `${state.selectedApp.userid}/${state.selectedApp.appname}` !== selectedKey || service !== el.detailLogService.value) return;
-  el.detailLogsTitle.textContent = `${userid}/${appname} (${lines} lines)`;
-  el.detailLogsOutput.textContent = data.logs || "(empty)";
-}
-
 // ── 앱 관리 > Settings (env vars) ────────────────────────────────────────────
 
 async function loadDetailEnv() {
@@ -696,7 +663,6 @@ function stopAutoRefresh() {
     clearInterval(state.refreshTimer);
     state.refreshTimer = null;
   }
-  stopDetailLogsAutoRefresh();
   stopAdminLogsAutoRefresh();
   stopAppStatusRefresh(true);
 }
@@ -720,7 +686,6 @@ export {
   loadAndRecoverJobs,
   loadConfig,
   loadDetailEnv,
-  loadDetailLogs,
   loadSession,
   loadUsers,
   performAction,
@@ -728,8 +693,6 @@ export {
   removeCustomDomain,
   retryJob,
   saveDetailEnv,
-  startDetailLogsAutoRefresh,
-  stopDetailLogsAutoRefresh,
   startAdminLogsAutoRefresh,
   stopAdminLogsAutoRefresh,
   stopAutoRefresh,
