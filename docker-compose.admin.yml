@@ -1,0 +1,5 @@
+services:
+  portal:
+    # 설정·복구 화면은 서버의 루프백에만 공개하고 SSH 터널로 접속한다.
+    ports:
+      - "127.0.0.1:${PORTAL_ADMIN_PORT:-3000}:${PORTAL_PORT:-3000}"

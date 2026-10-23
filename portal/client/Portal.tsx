@@ -13,6 +13,7 @@ import {
   Route,
   Routes,
   useLocation,
+  useNavigate,
   useParams,
 } from "react-router-dom";
 import { api, errorMessage } from "./api";
@@ -33,6 +34,7 @@ import { AppLogs } from "./AppLogs";
 import { AppSettings } from "./AppSettings";
 import { CreateApp } from "./CreateApp";
 import { Domains } from "./Domains";
+import { ProxySettings } from "./ProxySettings";
 
 const AppExec = lazy(() =>
   import("./AppExec").then((module) => ({ default: module.AppExec })),
@@ -127,6 +129,7 @@ export function Portal({
   onLogout: () => Promise<void>;
 }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobile, setMobile] = useState(false);
   const [settings, setSettings] = useState(user.mustChangePassword);
   const [notice, setNotice] = useState<{
@@ -139,6 +142,22 @@ export function Portal({
   );
   const { theme, toggle } = useTheme();
   const allowed = !user.mustChangePassword;
+  const proxySetupRedirected = useRef(false);
+  useEffect(() => {
+    if (user.role !== "admin" || !allowed || proxySetupRedirected.current)
+      return;
+    const controller = new AbortController();
+    api<{ configured: boolean }>("/admin/proxy", { signal: controller.signal })
+      .then(({ configured }) => {
+        if (controller.signal.aborted) return;
+        proxySetupRedirected.current = true;
+        if (!configured) navigate("/admin/proxy", { replace: true });
+      })
+      .catch(() => {
+        // 설정 상태 조회가 실패해도 기존 관리 화면을 사용할 수 있게 둔다.
+      });
+    return () => controller.abort();
+  }, [allowed, navigate, user.role]);
   const apps = useResource<{ apps: AppInfo[]; hasLabelErrors?: boolean }>(
     "/apps",
     { apps: [] },
@@ -187,6 +206,7 @@ export function Portal({
     ...(user.role === "admin" && allowed
       ? [
           ["/admin", "Admin Dashboard"],
+          ["/admin/proxy", "Proxy Setup"],
           ["/users", "User Management"],
         ]
       : []),
@@ -219,6 +239,7 @@ export function Portal({
                   `gnb-item${isActive || (path === "/dashboard" && location.pathname.startsWith("/apps/")) ? " active" : ""}`
                 }
                 to={path}
+                end
               >
                 <span>{label}</span>
               </NavLink>
@@ -426,6 +447,16 @@ export function Portal({
                 element={
                   user.role === "admin" ? (
                     <AdminPage config={config} notify={notify} onJob={onJob} />
+                  ) : (
+                    <Navigate to="/dashboard" replace />
+                  )
+                }
+              />
+              <Route
+                path="/admin/proxy"
+                element={
+                  user.role === "admin" ? (
+                    <ProxySettings />
                   ) : (
                     <Navigate to="/dashboard" replace />
                   )

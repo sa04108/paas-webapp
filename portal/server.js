@@ -30,6 +30,8 @@ const createUsersRouter = require("./routes/users");
 const createDomainsRouter = require("./routes/domains");
 const createGithubRouter = require("./routes/github");
 const { createGithubService } = require("./githubService");
+const { createProxySetup } = require("./proxySetup");
+const createProxyRouter = require("./routes/proxy");
 const jobsRouter = require("./routes/jobs");
 const jobStore = require("./jobStore");
 const appReadiness = require("./appReadiness");
@@ -116,6 +118,17 @@ app.get(UI_PATHS, (req, res) => {
 app.get("/auth", (req, res) => {
   if (canAccessDashboardUi(req)) return res.redirect("/");
   return serveHtml(res, authPagePath);
+});
+
+// 직접 주소로 접근해도 관리자 권한과 초기 비밀번호 변경을 먼저 확인한다.
+app.get("/admin/proxy", (req, res, next) => {
+  const auth = authService.resolveSessionAuth(req);
+  if (!auth) return res.redirect("/auth");
+  req.auth = auth;
+  return authService.requirePaasAdmin(req, res, () => {
+    if (auth.user.mustChangePassword) return res.redirect("/dashboard");
+    return serveHtml(res, dashboardPagePath);
+  });
 });
 
 // 정적 파일 서빙 (JS/CSS 포함): 파일 mtime+size 기반 ETag + max-age=0 으로
@@ -222,6 +235,10 @@ async function start() {
   // domainManager 초기화 (authService DB가 열린 뒤에 prepared statements 사용)
   const domainManager = createDomainManager({ statements: authService.getStatements() });
   await domainManager.init();
+
+  const proxySetup = createProxySetup({ refreshRoutes: domainManager.refreshProxyRoutes });
+  api.use("/admin/proxy", authService.requireSessionAuth, authService.requirePaasAdmin,
+    authService.requirePasswordUpdated, createProxyRouter(proxySetup));
 
   // 앱 삭제 시 커스텀 도메인 정리 훅
   setOnAppDeletedHook((userid, appname) => domainManager.removeAppDomains(userid, appname));
