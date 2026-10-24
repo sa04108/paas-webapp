@@ -1,27 +1,30 @@
 # Application proxy setup
 
-The server operator manages the portal as an ordinary web service: its public hostname, reverse proxy and HTTPS are configured outside PaaS. Proxy Setup manages **user application routing only**. It does not register a portal route, replace an existing Traefik, change its networks or manage its certificates and domain rules.
+The server operator manages the portal as an ordinary web service: its public hostname, reverse proxy and HTTPS are configured outside PaaS. Proxy Setup manages **user application routing only**. It adds the application-network connection while preserving the existing Traefik container, infrastructure networks, certificates and domain rules. The portal route remains server-managed.
 
 ## Networks
 
-- The portal joins its own `PORTAL_NETWORK` (default `paas-portal`). BuildKit uses its separate network and shared Unix socket.
-- Each application has a private network for its web service, workers and databases.
-- Only the web service also joins the selected application proxy network, which must already be connected to Traefik. New application Compose files include this attachment and the explicit `traefik.docker.network` label, so recreation preserves the connection.
-- Workers and databases do not join the proxy network. The portal does not join it either.
+| Network | Members |
+| --- | --- |
+| Infrastructure (`infra_proxy`) | Existing Traefik, PaaS portal, existing infrastructure services |
+| Application (`paas-app` by default) | Traefik and application web services |
+| Each app's private network | That app's web service, workers and databases |
 
-Web services share the proxy network with other web services. This arrangement separates the portal and private app services; it does not provide full isolation between untrusted web containers or from the shared Docker host.
+The portal's infrastructure attachment is declared directly in `docker-compose.yml` under `networks.infra.name`. This external network must already exist. Edit that Compose value if the server uses a different name; a separate portal-network environment variable is not required. BuildKit keeps its private network and Unix socket.
 
-`APP_NETWORK` supplies the initial/default app proxy network name (`paas-app`). The network selected and saved in Proxy Setup takes precedence for generated application deployments. Use a different name from `PORTAL_NETWORK` and the BuildKit network. Existing applications must be redeployed after changing the network; editing a saved profile does not mutate their running containers or labels.
+Proxy Setup reads the initial application network name from `networks.paas-app.name` in `docker-compose.proxy.yml` (or `docker-compose.dev.yml` in development). These Compose files declare `paas-app`; there is no environment-variable or JavaScript fallback. After saving, the profile supplies the network name for generated app and proxy Compose files. Web services join that network and their own private app network, never the infrastructure network. Workers/databases join only their private app network.
+
+Existing apps must be redeployed when migrating from the infrastructure network or changing their app network. PaaS does not silently restart or disconnect running application containers. Shared app-network membership is not full isolation between untrusted web services; all containers still share the host.
 
 ## Portal access and server configuration
 
-The base Compose publishes no host ports. For local administration or a host reverse proxy upstream, expose the portal on loopback:
+The base Compose publishes no host ports. The existing server proxy can reach `paas-portal:3000` through `infra_proxy` (use the configured internal `PORTAL_PORT` if different). The server operator supplies the portal route and certificate. For local administration or a host reverse proxy upstream, optionally expose the portal on loopback:
 
 ```bash
 docker compose --env-file .env -f docker-compose.yml -f docker-compose.admin.yml up -d
 ```
 
-This maps `127.0.0.1:PORTAL_ADMIN_PORT` (default `3000`) to the internal `PORTAL_PORT`. A reverse proxy running on the host can forward the portal hostname to this upstream. A containerized server proxy needs its own operator-managed upstream connection; its `localhost` refers to that proxy container, not the Docker host. Keep the application proxy network separate from the portal.
+This maps `127.0.0.1:PORTAL_ADMIN_PORT` (default `3000`) to the internal `PORTAL_PORT`. A reverse proxy running on the host can forward the portal hostname to this upstream. A containerized server proxy can use the portal container on the shared infrastructure network; its `localhost` refers to itself, not the Docker host. Keep web applications on the separate application network.
 
 For remote administration, run this on your workstation and visit `http://localhost:13000`:
 
@@ -33,24 +36,29 @@ Sign in as administrator, change the initial password, and open **Admin Dashboar
 
 ## Use an existing Traefik
 
-1. Discover and select the running Traefik. Its launch method is irrelevant: both Compose and directly created containers work.
-2. Select one of its existing, user-defined bridge networks as the **Application connection network**. The page suggests the network when there is one suitable candidate. The selected network must be separate from the portal.
-3. Enter the existing entrypoint and certificate resolver names. These reference settings already owned by the proxy operator; saving does not change them.
-4. Save, check the connection, and deploy or redeploy applications. PaaS generates Docker labels for their default domains and attaches only their web services to the selected network.
+1. Discover and select the running Traefik. The page shows its running state, without requiring its launch method.
+2. Choose a separate **Application-only network**, normally `paas-app`. Do not select `infra_proxy` or another infrastructure network already used by the proxy.
+3. Enter the existing entrypoint and certificate resolver names. PaaS references these settings without changing them.
+4. Use **Save and connect**. PaaS creates the application bridge network if needed, labels it as PaaS-owned, and attaches the existing Traefik using its container ID. Docker Engine 28+ (API 1.48+) is required for a new attachment so a lower gateway priority preserves the proxy's existing default route.
+5. Deploy or redeploy apps. Their generated Compose connects only web services to the application network and includes the matching `traefik.docker.network` label.
 
-The existing proxy must have a Docker provider whose constraints allow `paas.type=user-app`. An operator-defined constraint that excludes these containers must be adjusted by that operator. Do not run `docker-compose.proxy.yml` when reusing a proxy.
+The proxy's existing networks, name, image, ports, mounts, domain rules and certificate configuration are retained. PaaS neither recreates the proxy nor rewrites its Compose/YAML source. New attachment is refused for incompatible network modes, networks owned by another PaaS instance, or networks containing unrelated services. A failed save may leave an empty application network or a completed attachment; retrying is idempotent and does not remove existing connections.
+
+The proxy's Docker provider must allow PaaS web-service labels. An operator-defined constraint that excludes them must be adjusted by that operator. Do not run the dedicated proxy Compose when reusing an existing proxy.
 
 For custom application domains, the existing file provider must watch the PaaS dynamic directory (`portal-data/traefik-dynamic`). Mount the whole directory at the watched root, not a nested directory or an individual file. Traefik v3.6 does not reliably watch nested directories, and PaaS replaces its file atomically. Preserve all pre-existing route files when configuring a shared watched directory. PaaS owns `custom-domains.yml` in its own dynamic directory; do not replace an unrelated file with that name. This file now contains application domains only, never portal routes.
 
-Network attachment and labels are part of the generated application Compose files. The portal never edits an unrelated proxy's Compose/YAML files, stops it, changes its image or joins it to another network.
+Application network attachment and routing labels are part of the generated app Compose files. The only change made to the existing Traefik container is adding its application-network connection.
 
 ## Status and dependency checks
 
-The portal checks the selected proxy and app connections at startup and every 30 seconds. The page shows **Running / Stopped / Status unavailable** and whether attention is needed. Checks are read-only. They detect a stopped/missing proxy, missing network, portal network sharing, app web services that need redeployment, and workers incorrectly attached to the proxy network.
+The portal checks the saved connection at startup and every 30 seconds. The page shows the selected proxy's running state and any required action. After an explicit **Save and connect**, it also restores a lost application-network attachment when it recognizes a recreated proxy. It does not start a stopped proxy.
 
-Proxy recreation normally needs no PaaS repair because the web services already belong to the network retained by the proxy operator. Keep this shared network outside a proxy-only teardown lifecycle where possible. If the operator changes the network or container name, update the profile and redeploy affected applications. A failure does not stop apps or prevent portal administration.
+Recognition uses the saved container name and Compose project/service labels when available. For containers without Compose labels, the original ID or a matching SHA-256 fingerprint of the image and creation settings is used; secret values are not stored in the profile. A replacement with different ownership or different standalone creation settings requires the administrator to select it and save again. Previously saved profiles without this authorization record are checked read-only until saved again.
 
-**Check connection** also examines provider, entrypoint and certificate settings where visible. It does not rely on portal reachability, and does not claim a public application HTTP/TLS probe has passed. Validate each application's public URL after deployment. File-provider setup is required for custom domains; default application domains are discovered through Docker labels.
+The recovery interval can leave a short connection gap after proxy recreation, and recovery pauses while the portal is stopped. Operators who need the attachment independently of portal availability can include the application network in their own proxy deployment, using a lower gateway priority. PaaS never edits that deployment file. Switching profiles does not detach a previous proxy's networks.
+
+Checks also report web services still sharing the infrastructure network and app services that need redeployment. **Check connection** remains read-only and examines providers, entrypoints and certificate settings where visible. It does not depend on portal reachability or replace a public application HTTP/TLS test. File-provider setup is required for custom domains; default application domains use Docker labels.
 
 ## Install a dedicated application proxy
 
@@ -70,6 +78,6 @@ In an existing profile, the same fields reference names already defined by its o
 
 Before updating, configure the portal's public reverse proxy and HTTPS on the server. Deploying this change removes the PaaS-generated portal route from `custom-domains.yml`; without a server-managed replacement, the old portal address will stop working. The loopback admin path remains available.
 
-Recreate the portal with the updated base Compose to move it off the shared app network. Select the existing application proxy and network, then redeploy apps whose stored network or proxy labels differ. Existing application data and the external proxy's routing/certificate files are retained. Never use a whole-stack teardown to migrate an unrelated proxy.
+Recreate the portal with the updated base Compose to place it on `infra_proxy`, after verifying the external infrastructure network exists. Remove obsolete `APP_NETWORK` and `PORTAL_NETWORK` entries from `.env`; neither is read, even as a fallback. Choose the infrastructure network in Compose instead. Select the existing application proxy and network, then redeploy apps whose stored network or proxy labels differ. Existing application data and the external proxy's routing/certificate files are retained. Never use a whole-stack teardown to migrate an unrelated proxy.
 
-Development keeps the portal on loopback and the app proxy on host port `18080`. The portal reaches that development proxy via `host.docker.internal:18080`, using the host-gateway mapping; it does not share the proxy network. Create the external `APP_NETWORK` before running the development override.
+Development also attaches the portal to the external infrastructure network, exposes the portal on loopback and the app proxy on host port `18080`. The portal reaches that development proxy via `host.docker.internal:18080`, using the host-gateway mapping; it does not share the proxy network. Create the external `paas-app` network before running the development override.

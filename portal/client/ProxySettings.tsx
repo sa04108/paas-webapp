@@ -236,14 +236,6 @@ export function ProxySettings() {
     setMessage("");
   }
 
-  function selectContainer(value: string) {
-    update("container", value);
-    const candidate = discovery?.containers.find((item) => item.name === value || item.id === value);
-    if (!candidate || settings?.mode !== "external") return;
-    const networks = candidate.networks.filter((name) => !["bridge", "host", "none", "paas-buildkit-net"].includes(name)) || [];
-    setSettings((current) => current ? { ...current, network: networks.includes(current.network) ? current.network : networks.length === 1 ? networks[0] : "" } : current);
-  }
-
   function restoreDefaults() {
     if (!data) return;
     setSettings(copySettings(data.defaults));
@@ -314,7 +306,7 @@ export function ProxySettings() {
     if (
       !settings ||
       !data ||
-      (!dirty && data.configured && !data.loadError) ||
+      (!dirty && data.configured && !data.loadError && settings.mode !== "external") ||
       saving ||
       checking
     )
@@ -339,7 +331,7 @@ export function ProxySettings() {
       setMessage(
         settings.mode === "managed" && !data.environment.devMode
           ? "Configuration saved and the dedicated Traefik Compose file generated. Follow the connection guide to start or update the proxy. Redeploy existing apps to update their proxy routes."
-          : "Configuration saved. New deployments connect web services to the selected proxy network. Redeploy existing apps to apply changes; workers and databases stay on their private networks.",
+          : "Application network configured. New deployments keep web services separate from the portal and infrastructure. Redeploy existing apps to apply the network change.",
       );
     } catch (e) {
       if (!controller.signal.aborted && mounted.current)
@@ -452,7 +444,7 @@ export function ProxySettings() {
             <div className="panel-head">
               <div>
                 <h3>Connection mode</h3>
-                <p className="proxy-help">Choose who operates the Traefik proxy. Saving a profile does not start or restart it.</p>
+                <p className="proxy-help">Choose who operates the Traefik proxy. Save and connect adds the separate application network while preserving the existing proxy configuration.</p>
               </div>
               <button type="button" className="ghost-btn" onClick={restoreDefaults} disabled={controlsDisabled}>
                 Restore defaults
@@ -485,10 +477,12 @@ export function ProxySettings() {
 
             <div className="proxy-form-grid">
               <div className="proxy-field proxy-field-wide">
-                <label htmlFor="proxy-network">Application connection network</label>
+                <label htmlFor="proxy-network">Application-only network</label>
                 <input id="proxy-network" type="text" list="proxy-network-options" value={settings.network} onChange={(event) => update("network", event.target.value)} disabled={controlsDisabled} autoComplete="off" />
-                <datalist id="proxy-network-options">{(selectedContainer?.networks || discoveredNetworks).map((name) => <option key={name} value={name} />)}</datalist>
-                <small className="proxy-help">Choose a network already used by the proxy. Only application web services join it; the portal, workers and databases remain separate.</small>
+                <datalist id="proxy-network-options">{discoveredNetworks.filter((name) => !selectedContainer?.networks.includes(name) || name === data.settings.network).map((name) => <option key={name} value={name} />)}</datalist>
+                <small className="proxy-help">{settings.mode === "external"
+                  ? "Use a separate network such as paas-app. Saving creates it if needed and connects Traefik. Web services stay off the infrastructure network; workers and databases remain private."
+                  : "Use a separate network such as paas-app. Create it before starting the dedicated proxy; web services join it during deployment."}</small>
               </div>
 
               <div className="proxy-field proxy-field-wide">
@@ -498,7 +492,7 @@ export function ProxySettings() {
                     id="proxy-container"
                     value={settings.container}
                     disabled={controlsDisabled}
-                    onChange={(event) => selectContainer(event.target.value)}
+                    onChange={(event) => update("container", event.target.value)}
                   >
                     <option value="">Choose a discovered container</option>
                     {discovery.containers.map((container) => (
@@ -519,7 +513,7 @@ export function ProxySettings() {
                     type="text"
                     value={settings.container}
                     disabled={controlsDisabled}
-                    onChange={(event) => selectContainer(event.target.value)}
+                    onChange={(event) => update("container", event.target.value)}
                     placeholder="traefik"
                     autoComplete="off"
                   />
@@ -644,7 +638,7 @@ export function ProxySettings() {
                 <p className="proxy-help">The server operator configures the portal’s address, reverse proxy and HTTPS. This page manages application routing only.</p>
                 <p className="proxy-help">The base domain and portal listener come from the server environment. The application network is selected above.</p>
                 {discovery && discoveredNetworks.length > 0 && !discoveredNetworks.includes(data.environment.network) ? (
-                  <p className="proxy-alert info" role="status">The required network was not found during discovery. Create or configure it before connecting this proxy.</p>
+                  <p className="proxy-alert info" role="status">{settings.mode === "external" ? "This application network will be created when you save and connect." : "Create this application network before starting the dedicated proxy."}</p>
                 ) : null}
               </div>
             ) : null}
@@ -653,8 +647,8 @@ export function ProxySettings() {
               <button type="button" className="ghost-btn" onClick={checkConnection} disabled={checking || saving || loading}>
                 {checking ? "Checking…" : "Check connection"}
               </button>
-              <button type="button" className="primary-btn" onClick={save} disabled={(!dirty && data.configured && !data.loadError) || saving || checking || loading}>
-                {saving ? "Saving…" : "Save configuration"}
+              <button type="button" className="primary-btn" onClick={save} disabled={(!dirty && data.configured && !data.loadError && settings.mode !== "external") || saving || checking || loading}>
+                {saving ? "Applying…" : settings.mode === "external" ? "Save and connect" : "Save configuration"}
               </button>
             </div>
             {dirty || !data.configured ? (
@@ -703,7 +697,7 @@ export function ProxySettings() {
                   </details>
                 ))}
               </div>
-              <p className="proxy-help">External proxies are never changed or restarted by this portal. Check connection only reads the selected integration.</p>
+              <p className="proxy-help">The portal adds and maintains only the application network connection. Existing proxy names, images, infrastructure networks and certificate settings are preserved. Check connection is read-only.</p>
             </section>
           ) : null}
         </>

@@ -22,7 +22,7 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.constraints=Label(`paas.type`, `user-app`)"
-      - "--providers.docker.network=${APP_NETWORK:-paas-app}"
+      - "--providers.docker.network=paas-app"
       - "--providers.file.directory=/traefik-dynamic"
       - "--providers.file.watch=true"
       - "--entrypoints.web.address=:80"
@@ -35,4 +35,4 @@ services:
 networks:
   paas-app:
     external: true
-    name: ${APP_NETWORK:-paas-app}
+    name: paas-app

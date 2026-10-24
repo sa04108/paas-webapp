@@ -25,7 +25,7 @@ services:
             - /var/run/docker.sock:/var/run/docker.sock
             - buildkit-sock:/run/buildkit
         networks:
-            - portal-net
+            - infra
         # buildkit 소켓이 준비된 뒤 포털이 기동하도록 순서를 명시한다.
         depends_on:
             - buildkit
@@ -51,8 +51,9 @@ services:
             - buildkit-net
 
 networks:
-    portal-net:
-        name: ${PORTAL_NETWORK:-paas-portal}
+    infra:
+        external: true
+        name: infra_proxy
     # buildkit 전용 egress 네트워크: 베이스 이미지 pull만을 위한 격리 네트워크.
     # 테넌트 앱은 이 네트워크에 없으므로 buildkit에 네트워크로 접근할 수 없다.
     buildkit-net:

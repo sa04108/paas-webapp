@@ -19,7 +19,7 @@ npm start
 - 프로덕션의 `portal.{PAAS_DOMAIN}` 라우팅과 HTTPS는 서버 운영자가 별도로 설정합니다. 루트 도메인의 랜딩 라우터와 호스트 간 리다이렉트는 없습니다.
 - 개발 서버에는 `http://localhost:3000` 또는 `http://portal.localhost:3000`으로 직접 접속합니다. 로그인 세션은 접속한 호스트에만 적용되므로 GitHub 연동은 설정한 콜백 URL과 같은 호스트에서 시작합니다.
 
-프로덕션 기본 Compose에는 포털과 BuildKit만 포함되며 호스트 포트를 공개하지 않습니다. `docker-compose.proxy.yml`은 별도 `paas-edge` 프로젝트입니다. 두 Compose 파일은 별도로 실행합니다. 포털은 별도 `PORTAL_NETWORK`를 사용하고, 앱의 웹 서비스만 선택한 프록시 네트워크에 연결합니다. 포털의 공개 주소와 HTTPS는 서버에서 따로 설정하세요. 프록시 프로필 선택, SSH 터널을 통한 관리자 접속, 기존 Traefik 마이그레이션은 [프록시 설정 안내](../docs/proxy-setup.md)에 있습니다.
+프로덕션 기본 Compose에는 포털과 BuildKit만 포함되며 호스트 포트를 공개하지 않습니다. `docker-compose.proxy.yml`은 별도 `paas-edge` 프로젝트입니다. 두 Compose 파일은 별도로 실행합니다. 포털은 Compose에 선언된 `infra_proxy`에 연결합니다. 앱의 웹 서비스는 별도 `paas-app` 네트워크에 연결하고, 기존 Traefik만 두 네트워크에 연결합니다. 포털의 공개 주소와 HTTPS는 서버에서 따로 설정하세요. 프록시 프로필 선택, SSH 터널을 통한 관리자 접속, 기존 Traefik 마이그레이션은 [프록시 설정 안내](../docs/proxy-setup.md)에 있습니다.
 
 ## 컨테이너 실행
 

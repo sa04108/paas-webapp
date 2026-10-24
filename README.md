@@ -21,7 +21,7 @@ Hyunbbai PaaS is a self-hosted platform for deploying GitHub repositories as Doc
 
 Each application is one Docker Compose project containing its web service, workers, and initialization jobs. Services have separate filesystems and process namespaces; application data stays under that application's data directory. CPU and memory limits apply to the combined services. Application containers do not receive the host Docker socket. The portal owns project names, container identities, routing, networks, and ownership labels. See [Compose application configuration](docs/compose-apps.md) for the supported YAML fields and KTX example.
 
-Workers use a private application network; only the web service also joins the selected proxy network. The portal uses its own `PORTAL_NETWORK`. Web services still share their proxy network with other web services and the proxy, so isolation between users is incomplete. The Docker daemon and host remain shared. BuildKit runs on a separate network and exposes only a Unix socket shared with the portal. See the [security review](docs/security-threats.md) for remaining work.
+Workers use a private application network; only the web service also joins the separate application network. The portal uses `infra_proxy`, declared directly in Compose; Traefik joins both networks. Web services share their application network with other web services and the proxy, so isolation between users is incomplete. The Docker daemon and host remain shared. BuildKit runs on a separate network and exposes only a Unix socket shared with the portal. See the [security review](docs/security-threats.md) for remaining work.
 
 ### Bring Portainer-inspired logs and exec into the portal
 
@@ -52,7 +52,7 @@ The portal's runtime detector provides Node.js framework and dependency badges f
 
 ### Route applications through a reverse proxy
 
-Application containers do not publish individual host ports. The portal stack (`docker-compose.yml`) does not bind public ports; configure portal ingress separately on the server, then select an existing Traefik network for application web services in Proxy Setup. The supplied Traefik stack is a separate Compose project (`docker-compose.proxy.yml`), so it can be started or managed independently. The admin-only Proxy setup screen explains the managed Traefik and existing Traefik profiles. Nginx Proxy Manager is not currently supported as a direct integration.
+Application containers do not publish individual host ports. The portal stack (`docker-compose.yml`) does not bind public ports; configure portal ingress separately on the server, then select an existing Traefik and a separate application network in Proxy Setup. Saving creates the app network if needed and connects Traefik to it. The supplied Traefik stack is a separate Compose project (`docker-compose.proxy.yml`), so it can be started or managed independently. The admin-only Proxy setup screen explains the managed Traefik and existing Traefik profiles. Nginx Proxy Manager is not currently supported as a direct integration.
 
 ```text
 GitHub repository -> clone -> Compose validation -> Railpack / Dockerfile / image pull -> app services
@@ -122,7 +122,6 @@ SESSION_COOKIE_NAME=portal_session
 SESSION_TTL_HOURS=168
 BCRYPT_ROUNDS=10
 
-APP_NETWORK=paas-app
 DEFAULT_MEM_LIMIT=256m
 DEFAULT_CPU_LIMIT=0.5
 DEFAULT_RESTART_POLICY=unless-stopped
@@ -161,9 +160,11 @@ If using the supplied Traefik stack, allow inbound TCP ports **80** and **443** 
 
 If you use custom domains, their generated CNAME targets have the form `<app>-<random>.example.com`. Make those target names resolve to this server by adding individual DNS records or an additional `*.example.com` wildcard record. The `*.apps.example.com` record alone does not cover these targets.
 
-### 3. Create the shared Docker network
+### 3. Prepare Docker networks
 
-The application network is declared external, so it must exist before starting the stack. Use the same name as `APP_NETWORK` in `.env`:
+The portal joins the existing `infra_proxy` infrastructure network declared directly in Compose. Ensure it exists, or change `networks.infra.name` to the server’s actual infrastructure network.
+
+When reusing Traefik, **Save and connect** creates the separate application network if needed. For the standalone/development proxy templates, create their application network before starting them (the template defaults to `paas-app`):
 
 ```bash
 docker network inspect paas-app >/dev/null 2>&1 || docker network create paas-app
@@ -293,7 +294,7 @@ docker compose --env-file .env -f docker-compose.yml up -d --build
 docker compose --env-file .env -f docker-compose.yml down
 ```
 
-Stop the supplied proxy separately with `docker compose --env-file .env -f docker-compose.proxy.yml down`. Do not remove the external `APP_NETWORK`; it may still be used by running applications or another proxy.
+Stop the supplied proxy separately with `docker compose --env-file .env -f docker-compose.proxy.yml down`. Do not remove the application network; it may still be used by running applications or another proxy.
 
 User applications have separate Compose projects and keep running when the platform stack is stopped; manage them through the portal before shutdown if needed. The portal has access to the host Docker socket and BuildKit is privileged, so the platform's administrators control the Docker host.
 
