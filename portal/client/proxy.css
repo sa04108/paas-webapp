@@ -113,6 +113,86 @@
   min-width: 0;
 }
 
+.proxy-field input[type="email"] {
+  padding: 12px 13px;
+  border: 1px solid var(--surface-border-strong);
+  border-radius: 6px;
+  color: var(--ink-main);
+  background: var(--surface);
+  font: inherit;
+}
+
+.proxy-identifiers {
+  min-width: 0;
+  margin: 1.5rem 0 0;
+  padding: 1.25rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+}
+
+.proxy-identifiers legend {
+  padding: 0 0.5rem;
+  color: var(--ink-main);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.proxy-identifiers > .proxy-help {
+  margin: 0 0 1.1rem;
+}
+
+.proxy-certificate-panel {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--surface-border);
+}
+
+.proxy-certificate-panel h4 {
+  margin: 0;
+}
+
+.proxy-certificate-panel > .proxy-help {
+  margin-bottom: 1rem;
+}
+
+.proxy-ca-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.proxy-ca-facts > div {
+  min-width: 0;
+  padding: 0.875rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  background: var(--surface-strong);
+}
+
+.proxy-ca-facts strong,
+.proxy-ca-facts small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.proxy-ca-facts small {
+  margin-top: 0.45rem;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.proxy-eab-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  color: var(--ink-main);
+}
+
+.proxy-eab-toggle input {
+  margin-top: 0.2rem;
+}
+
 .proxy-inline-actions,
 .proxy-actions {
   display: flex;
@@ -270,12 +350,17 @@ html[data-theme="dark"] .proxy-guides pre code {
 
   .proxy-mode-grid,
   .proxy-form-grid,
+  .proxy-ca-facts,
   .proxy-environment dl {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .proxy-field-wide {
     grid-column: auto;
+  }
+
+  .proxy-identifiers {
+    padding: 1rem;
   }
 
   .proxy-check-list li {

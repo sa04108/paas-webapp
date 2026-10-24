@@ -20,8 +20,8 @@ function createProxyRouter(service) {
   router.post("/check", async (req, res, next) => {
     try { return sendOk(res, await service.check(req.body?.settings)); } catch (error) { return next(error); }
   });
-  router.post("/preview", (req, res, next) => {
-    try { return sendOk(res, service.preview(req.body?.settings)); } catch (error) { return next(error); }
+  router.post("/preview", async (req, res, next) => {
+    try { return sendOk(res, await service.preview(req.body?.settings)); } catch (error) { return next(error); }
   });
   router.put("/", async (req, res, next) => {
     try { return sendOk(res, await service.save(req.body?.settings, req.body?.revision)); } catch (error) { return next(error); }

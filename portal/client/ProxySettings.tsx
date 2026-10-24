@@ -4,12 +4,22 @@ import { api, errorMessage, json } from "./api";
 import "./proxy.css";
 
 type ProxyMode = "managed" | "external";
+type CertificateAuthority = "letsencrypt" | "zerossl" | "custom";
+const caServers = {
+  letsencrypt: "https://acme-v02.api.letsencrypt.org/directory",
+  zerossl: "https://acme.zerossl.com/v2/DV90",
+};
 type Settings = {
   mode: ProxyMode;
+  image: string;
   container: string;
   entrypoint: string;
   certificateResolver: string;
   customCertificateResolver: string;
+  certificateAuthority: CertificateAuthority;
+  acmeServer: string;
+  acmeEmail: string;
+  acmeEab: boolean;
 };
 type Check = {
   status: "ready" | "attention";
@@ -48,6 +58,13 @@ type Discovery = {
     networks: string[];
     entrypoints: string[];
     resolvers: string[];
+    resolverDetails: {
+      name: string;
+      caServer: string | null;
+      challenges: string[];
+      dnsProvider: string | null;
+      httpEntrypoint: string | null;
+    }[];
   }[];
   networks: string[];
   warnings: string[];
@@ -69,6 +86,7 @@ export function ProxySettings() {
   const [previewGuides, setPreviewGuides] = useState<Guide[] | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
+  const [imageSource, setImageSource] = useState<{ image: string; container: string | null } | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [manualContainer, setManualContainer] = useState(false);
@@ -82,6 +100,7 @@ export function ProxySettings() {
   const saveController = useRef<AbortController | null>(null);
   const previewController = useRef<AbortController | null>(null);
   const mounted = useRef(false);
+  const modeProfiles = useRef<Partial<Record<ProxyMode, Settings>>>({});
   dirtyRef.current = dirty;
 
   const load = useCallback(async () => {
@@ -97,6 +116,7 @@ export function ProxySettings() {
       if (controller.signal.aborted || !mounted.current) return;
       setData(result);
       setSettings(copySettings(result.settings));
+      modeProfiles.current = {};
       setMessage("");
     } catch (e) {
       if (!controller.signal.aborted && mounted.current) setError(errorMessage(e));
@@ -126,15 +146,22 @@ export function ProxySettings() {
     previewController.current = controller;
     setPreviewGuides(null);
     setPreviewError("");
+    setImageSource(null);
     const timer = window.setTimeout(() => {
       setPreviewLoading(true);
-      void api<{ guides: Guide[] }>("/admin/proxy/preview", {
+      void api<{ guides: Guide[]; imageSource: { image: string; container: string | null } }>("/admin/proxy/preview", {
         ...json("POST", { settings }),
         headers: { "X-Paas-Admin": "proxy" },
         signal: controller.signal,
       })
-        .then(({ guides }) => {
-          if (!controller.signal.aborted) setPreviewGuides(guides);
+        .then(({ guides, imageSource }) => {
+          if (!controller.signal.aborted) {
+            setPreviewGuides(guides);
+            setImageSource(imageSource);
+            if (settings.mode === "managed" && settings.image !== imageSource.image) {
+              setSettings((current) => current ? { ...current, image: imageSource.image } : current);
+            }
+          }
         })
         .catch((e) => {
           if (!controller.signal.aborted) setPreviewError(errorMessage(e));
@@ -197,6 +224,7 @@ export function ProxySettings() {
   function restoreDefaults() {
     if (!data) return;
     setSettings(copySettings(data.defaults));
+    modeProfiles.current = {};
     checkController.current?.abort();
     checkController.current = null;
     setChecking(false);
@@ -205,6 +233,27 @@ export function ProxySettings() {
     );
     setError("");
     setMessage("");
+  }
+
+  function switchMode(mode: ProxyMode) {
+    if (!settings || !data || mode === settings.mode) return;
+    modeProfiles.current[settings.mode] = copySettings(settings);
+    const previous = modeProfiles.current[mode];
+    const container = mode === "external"
+      ? discovery?.containers.find((item) => item.running)?.name || ""
+      : data.defaults.container;
+    update("mode", mode);
+    setSettings(previous ? copySettings(previous) : { ...data.defaults, mode, container });
+  }
+
+  function changeAuthority(certificateAuthority: CertificateAuthority) {
+    update("certificateAuthority", certificateAuthority);
+    setSettings((current) => current ? {
+      ...current,
+      certificateAuthority,
+      acmeServer: certificateAuthority === "custom" ? "" : caServers[certificateAuthority],
+      acmeEab: certificateAuthority === "zerossl",
+    } : current);
   }
 
   async function reloadConfiguration() {
@@ -264,7 +313,9 @@ export function ProxySettings() {
       setData(result);
       setSettings(copySettings(result.settings));
       setMessage(
-        "Configuration saved. Portal and custom-domain routes update now; redeploy existing apps to update their proxy routes.",
+        settings.mode === "managed" && !data.environment.devMode
+          ? "Configuration saved and the dedicated Traefik Compose file generated. Follow the connection guide to start or update the proxy. Redeploy existing apps to update their proxy routes."
+          : "Configuration saved. Portal and custom-domain routes update now; redeploy existing apps to update their proxy routes.",
       );
     } catch (e) {
       if (!controller.signal.aborted && mounted.current)
@@ -318,6 +369,16 @@ export function ProxySettings() {
   const discoveredNetworks = discovery?.networks ?? [];
   const controlsDisabled = loading || saving || checking;
   const guides = previewGuides ?? (dirty ? [] : data?.guides ?? []);
+
+  function resolverDescription(name: string) {
+    if (!name) return "Resolver 미지정 · 인증서는 Traefik의 다른 인증서 소스로 제공해야 합니다.";
+    const detail = selectedContainer?.resolverDetails?.find((item) => item.name === name.toLowerCase());
+    if (!detail) return "설정을 확인할 수 없습니다. Refresh discovery를 실행하고 기존 Traefik에 정의된 이름인지 확인하세요.";
+    const authority = detail.caServer === caServers.letsencrypt ? "Let’s Encrypt"
+      : detail.caServer === caServers.zerossl ? "ZeroSSL"
+        : detail.caServer || "CA 확인 불가 · 미지정 시 기본 CA는 Let’s Encrypt";
+    return [authority, ...detail.challenges, detail.dnsProvider, detail.httpEntrypoint ? `HTTP entrypoint: ${detail.httpEntrypoint}` : null].filter(Boolean).join(" · ");
+  }
 
   return (
     <section className="view-section proxy-settings" id="view-admin-proxy">
@@ -381,9 +442,9 @@ export function ProxySettings() {
                   value="managed"
                   checked={settings.mode === "managed"}
                   disabled={controlsDisabled}
-                  onChange={() => update("mode", "managed")}
+                  onChange={() => switchMode("managed")}
                 />
-                <span><strong>Install a new Traefik</strong><small>Run the supplied standalone Traefik Compose stack.</small></span>
+                <span><strong>Install a new Traefik</strong><small>새 프록시의 CA와 인증서 발급 방식을 설정합니다.</small></span>
               </label>
               <label className={`proxy-mode-card${settings.mode === "external" ? " selected" : ""}`}>
                 <input
@@ -392,16 +453,16 @@ export function ProxySettings() {
                   value="external"
                   checked={settings.mode === "external"}
                   disabled={controlsDisabled}
-                  onChange={() => update("mode", "external")}
+                  onChange={() => switchMode("external")}
                 />
-                <span><strong>Use existing Traefik</strong><small>Connect to a Traefik already running on the Docker host.</small></span>
+                <span><strong>Use existing Traefik</strong><small>기존 프록시에 정의된 entrypoint와 resolver를 연결합니다.</small></span>
               </label>
             </div>
 
             <div className="proxy-form-grid">
               <div className="proxy-field proxy-field-wide">
                 <label htmlFor="proxy-container">Traefik container</label>
-                {discovery && !manualContainer ? (
+                {settings.mode === "external" && discovery && !manualContainer ? (
                   <select
                     id="proxy-container"
                     value={settings.container}
@@ -432,16 +493,16 @@ export function ProxySettings() {
                     autoComplete="off"
                   />
                 )}
-                <div className="proxy-inline-actions">
+                {settings.mode === "external" ? <div className="proxy-inline-actions">
                   <button type="button" className="ghost-btn" onClick={refreshDiscovery} disabled={discovering || controlsDisabled}>
                     {discovering ? "Discovering…" : "Refresh discovery"}
                   </button>
-                  {discovery ? (
+                  {settings.mode === "external" && discovery ? (
                     <button type="button" className="ghost-btn" onClick={() => setManualContainer((value) => !value)} disabled={controlsDisabled}>
                       {manualContainer ? "Choose discovered container" : "Enter name manually"}
                     </button>
                   ) : null}
-                </div>
+                </div> : null}
                 {discovery?.warnings.map((warning) => <small className="proxy-help" key={warning}>{warning}</small>)}
                 {selectedContainer ? (
                   <small className="proxy-help">
@@ -450,25 +511,92 @@ export function ProxySettings() {
                 ) : null}
               </div>
 
+              {settings.mode === "managed" && imageSource ? <small className="proxy-help proxy-field-wide">
+                이미지: <code>{imageSource.image}</code> · {imageSource.container
+                  ? `${imageSource.container} 컨테이너에서 자동 반영`
+                  : "실행 중인 Traefik이 없어 서버 기본 이미지 사용"}
+              </small> : selectedContainer ? <small className="proxy-help proxy-field-wide">이미지: <code>{selectedContainer.image}</code> · 기존 컨테이너의 이미지는 변경하지 않습니다.</small> : null}
+
+            </div>
+
+            {settings.mode === "managed" && !data.environment.devMode ? (
+              <div className="proxy-certificate-panel">
+                <h4>인증서 발급</h4>
+                <p className="proxy-help">사용할 CA를 선택하세요. 선택한 CA와 검증 방식이 새 Traefik 구성에 반영됩니다.</p>
+                <div className="proxy-form-grid">
+                  <div className="proxy-field">
+                    <label htmlFor="proxy-ca">Certificate authority</label>
+                    <select id="proxy-ca" value={settings.certificateAuthority} disabled={controlsDisabled} onChange={(event) => changeAuthority(event.target.value as CertificateAuthority)}>
+                      <option value="letsencrypt">Let’s Encrypt · 기본값</option>
+                      <option value="zerossl">ZeroSSL · EAB 필요</option>
+                      <option value="custom">사용자 지정 ACME CA</option>
+                    </select>
+                  </div>
+                  <div className="proxy-field">
+                    <label htmlFor="proxy-acme-email">ACME email</label>
+                    <input id="proxy-acme-email" type="email" value={settings.acmeEmail} disabled={controlsDisabled} onChange={(event) => update("acmeEmail", event.target.value)} placeholder="admin@example.com" />
+                    <small className="proxy-help">비워 두면 서버 .env의 ACME_EMAIL을 사용합니다.</small>
+                  </div>
+                  <div className="proxy-field proxy-field-wide">
+                    <label htmlFor="proxy-acme-server">ACME directory URL</label>
+                    <input id="proxy-acme-server" type="url" value={settings.acmeServer} readOnly={settings.certificateAuthority !== "custom"} disabled={controlsDisabled} onChange={(event) => update("acmeServer", event.target.value)} placeholder="https://ca.example.com/acme/directory" />
+                    <small className="proxy-help">CA에서 제공하는 HTTPS ACME directory URL입니다. 해당 CA가 DNS-01·HTTP-01과 와일드카드 인증서를 지원해야 합니다.</small>
+                  </div>
+                  {settings.certificateAuthority === "custom" ? <label className="proxy-eab-toggle proxy-field-wide">
+                    <input type="checkbox" checked={settings.acmeEab} disabled={controlsDisabled} onChange={(event) => update("acmeEab", event.target.checked)} />
+                    이 CA는 EAB 계정 인증이 필요합니다.
+                  </label> : null}
+                </div>
+                {settings.acmeEab ? <p className="proxy-alert info">EAB Key ID와 HMAC 키는 서버 .env의 <code>ACME_EAB_KID</code>, <code>ACME_EAB_HMAC</code>으로 제공합니다.</p> : null}
+                <div className="proxy-ca-facts">
+                  <div><strong>플랫폼·포털 도메인</strong><small>DNS-01 · Cloudflare<br />플랫폼 앱의 와일드카드 인증서를 발급합니다.<br />서버 환경변수: <code>CF_DNS_API_TOKEN</code></small></div>
+                  <div><strong>사용자 커스텀 도메인</strong><small>HTTP-01 · HTTP entrypoint <code>web</code><br />도메인이 이 서버를 가리키고 외부에서 80번 포트에 접근할 수 있어야 합니다.</small></div>
+                </div>
+              </div>
+            ) : settings.mode === "external" ? (
+              <div className="proxy-certificate-panel">
+                <h4>기존 인증서 설정</h4>
+                <p className="proxy-help">CA와 검증 방식은 기존 Traefik에서 관리합니다. 아래 식별자로 참조할 resolver를 선택하세요.</p>
+                <div className="proxy-ca-facts">
+                  <div><strong>플랫폼·포털 도메인</strong><small>{resolverDescription(settings.certificateResolver)}</small></div>
+                  <div><strong>사용자 커스텀 도메인</strong><small>{resolverDescription(settings.customCertificateResolver)}</small></div>
+                </div>
+                <p className="proxy-help">컨테이너 실행 인자와 환경변수에서 확인한 공개 설정만 표시합니다. 정적 파일 등에만 정의된 설정은 확인할 수 없습니다.</p>
+              </div>
+            ) : <p className="proxy-help">개발 모드에서는 HTTP를 사용하며 ACME 인증서를 발급하지 않습니다.</p>}
+
+            <fieldset className="proxy-identifiers" aria-describedby="proxy-identifiers-help">
+              <legend>식별자</legend>
+              <p className="proxy-help" id="proxy-identifiers-help">{settings.mode === "managed"
+                ? "새 Traefik 구성에 정의할 이름입니다. 이름은 설정을 식별하며, CA와 검증 방식은 인증서 발급 설정으로 결정됩니다."
+                : "기존 Traefik 설정에 정의된 이름을 입력하세요. 이 이름으로 해당 설정을 참조하므로 기존 이름과 일치해야 합니다."}</p>
+              <div className="proxy-form-grid">
               <div className="proxy-field">
                 <label htmlFor="proxy-entrypoint">Routing entrypoint</label>
                 <input id="proxy-entrypoint" type="text" list="proxy-entrypoint-options" value={settings.entrypoint} disabled={controlsDisabled} onChange={(event) => update("entrypoint", event.target.value)} placeholder={data.environment.devMode ? "web" : "websecure"} />
                 <datalist id="proxy-entrypoint-options">{selectedContainer?.entrypoints.map((value) => <option key={value} value={value} />)}</datalist>
-                <small className="proxy-help">Used by application and portal routes. Production commonly uses <code>websecure</code>; development uses HTTP <code>web</code>.</small>
+                <small className="proxy-help">{settings.mode === "managed" && !data.environment.devMode
+                  ? <>HTTPS 443번 포트의 이름입니다. <code>web</code>은 HTTP-01용 80번 포트에 사용합니다.</>
+                  : <>Used by application and portal routes. Production commonly uses <code>websecure</code>; development uses HTTP <code>web</code>.</>}</small>
               </div>
               <div className="proxy-field">
                 <label htmlFor="proxy-resolver">Platform and portal certificate resolver</label>
                 <input id="proxy-resolver" type="text" list="proxy-resolver-options" value={settings.certificateResolver} disabled={controlsDisabled} onChange={(event) => update("certificateResolver", event.target.value)} placeholder="letsencrypt" />
                 <datalist id="proxy-resolver-options">{selectedContainer?.resolvers.map((value) => <option key={value} value={value} />)}</datalist>
-                <small className="proxy-help">Used for the portal and platform app hostnames, including the wildcard app certificate. Production commonly uses DNS-01. Leave blank only when another certificate source is configured or in development.</small>
+                <small className="proxy-help">{settings.mode === "managed" && !data.environment.devMode
+                  ? "포털과 플랫폼 앱의 DNS-01 인증서 발급 설정 이름입니다."
+                  : "Used for the portal and platform app hostnames, including the wildcard app certificate. Leave blank only when another certificate source is configured or in development."}</small>
               </div>
               <div className="proxy-field proxy-field-wide">
                 <label htmlFor="proxy-custom-resolver">Custom-domain certificate resolver</label>
                 <input id="proxy-custom-resolver" type="text" list="proxy-custom-resolver-options" value={settings.customCertificateResolver} disabled={controlsDisabled} onChange={(event) => update("customCertificateResolver", event.target.value)} placeholder="letsencrypt-http" />
                 <datalist id="proxy-custom-resolver-options">{selectedContainer?.resolvers.map((value) => <option key={value} value={value} />)}</datalist>
-                <small className="proxy-help">Used for customer-owned domains and their certificate challenge.</small>
+                <small className="proxy-help">{settings.mode === "managed" && !data.environment.devMode
+                  ? "사용자 커스텀 도메인의 HTTP-01 인증서 발급 설정 이름입니다. 플랫폼용 resolver와 다른 이름을 사용하세요."
+                  : "Used for customer-owned domains and their certificate challenge."}</small>
               </div>
-            </div>
+              </div>
+            </fieldset>
 
             {data.environment ? (
               <div className="proxy-environment">
