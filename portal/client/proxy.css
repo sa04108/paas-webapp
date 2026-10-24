@@ -7,32 +7,6 @@
   margin: 0;
 }
 
-.proxy-header-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-}
-
-.proxy-header-actions a {
-  display: inline-flex;
-  min-height: 38px;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 14px;
-  border: 1px solid var(--surface-border-strong);
-  border-radius: 6px;
-  color: var(--ink-main);
-  background: var(--surface);
-  font: inherit;
-  line-height: 1.2;
-  text-decoration: none;
-}
-
-.proxy-header-actions a:hover {
-  border-color: var(--ink-subtle);
-  background: var(--surface-strong);
-}
-
 .proxy-settings .panel-head h3,
 .proxy-settings .proxy-environment h4 {
   margin: 0;

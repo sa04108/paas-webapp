@@ -6,6 +6,7 @@ These instructions apply repository-wide.
 
 - Understand the user's goal and relevant code flow before acting.
 - Write new or modified code comments and docstrings in Korean.
+- Keep all product UI text in English, including headings, labels, help text, placeholders, notifications, validation messages, and API errors shown to users. Korean belongs only in source comments/docstrings, not in rendered interface copy.
 - Stay read-only for investigation, review, or design-only requests. Ask and wait if implementation intent is unclear; when changes are clearly requested, proceed within scope using reasonable defaults for minor details.
 
 ## Execution and Context

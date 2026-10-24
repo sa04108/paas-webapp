@@ -41,7 +41,7 @@ export function ErrorText({ message, id }: { message?: string; id?: string }) {
 export function formatDate(value?: string) {
   if (!value) return "-";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("en-US");
 }
 export function Modal({
   title,
