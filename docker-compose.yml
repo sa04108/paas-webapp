@@ -53,7 +53,7 @@ services:
 networks:
     infra:
         external: true
-        name: infra_proxy
+        name: infra-proxy
     # buildkit 전용 egress 네트워크: 베이스 이미지 pull만을 위한 격리 네트워크.
     # 테넌트 앱은 이 네트워크에 없으므로 buildkit에 네트워크로 접근할 수 없다.
     buildkit-net:

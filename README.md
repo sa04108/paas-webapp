@@ -21,7 +21,7 @@ Hyunbbai PaaS is a self-hosted platform for deploying GitHub repositories as Doc
 
 Each application is one Docker Compose project containing its web service, workers, and initialization jobs. Services have separate filesystems and process namespaces; application data stays under that application's data directory. CPU and memory limits apply to the combined services. Application containers do not receive the host Docker socket. The portal owns project names, container identities, routing, networks, and ownership labels. See [Compose application configuration](docs/compose-apps.md) for the supported YAML fields and KTX example.
 
-Workers use a private application network; only the web service also joins the separate application network. The portal uses `infra_proxy`, declared directly in Compose; Traefik joins both networks. Web services share their application network with other web services and the proxy, so isolation between users is incomplete. The Docker daemon and host remain shared. BuildKit runs on a separate network and exposes only a Unix socket shared with the portal. See the [security review](docs/security-threats.md) for remaining work.
+Workers use a private application network; only the web service also joins the separate application network. The portal uses `infra-proxy`, declared directly in Compose; Traefik joins both networks. Web services share their application network with other web services and the proxy, so isolation between users is incomplete. The Docker daemon and host remain shared. BuildKit runs on a separate network and exposes only a Unix socket shared with the portal. See the [security review](docs/security-threats.md) for remaining work.
 
 ### Bring Portainer-inspired logs and exec into the portal
 
@@ -162,7 +162,7 @@ If you use custom domains, their generated CNAME targets have the form `<app>-<r
 
 ### 3. Prepare Docker networks
 
-The portal joins the existing `infra_proxy` infrastructure network declared directly in Compose. Ensure it exists, or change `networks.infra.name` to the server’s actual infrastructure network.
+The portal joins the existing `infra-proxy` infrastructure network declared directly in Compose. Ensure it exists, or change `networks.infra.name` to the server’s actual infrastructure network.
 
 When reusing Traefik, **Save and connect** creates the separate application network if needed. For the standalone/development proxy templates, create their application network before starting them (the template defaults to `paas-app`):
 
