@@ -1,6 +1,7 @@
 "use strict";
 
 const path = require("node:path");
+const fs = require("node:fs");
 const net = require("node:net");
 const http = require("node:http");
 const https = require("node:https");
@@ -9,6 +10,7 @@ const { promisify } = require("node:util");
 const Docker = require("dockerode");
 const { config, IS_DEV } = require("./config");
 const proxyConfig = require("./proxyConfig");
+const proxyCompose = require("./proxyCompose");
 const { AppError } = require("./utils");
 
 const docker = new Docker({ timeout: 8000 });
@@ -20,14 +22,18 @@ const staticBoolean = (value, fallback) => value === undefined ? fallback :
   ["true", "t", "1"].includes(String(value).toLowerCase()) ? true :
   ["false", "f", "0"].includes(String(value).toLowerCase()) ? false : null;
 
-function hostDirectory() {
+function hostPath(file) {
   const root = path.resolve(process.env.PAAS_ROOT || path.join(__dirname, ".."));
-  const dir = path.resolve(dynamicDirectory());
+  const dir = path.resolve(file);
   if (process.env.PAAS_HOST_ROOT && (dir === root || dir.startsWith(root + path.sep))) {
     return path.join(process.env.PAAS_HOST_ROOT, path.relative(root, dir));
   }
   return dir;
 }
+
+function hostDirectory() { return hostPath(dynamicDirectory()); }
+
+const publicOption = /^(entrypoints\.[^.]+\.address|certificatesresolvers\.[^.]+\.acme\.(caserver|dnschallenge(?:\.provider)?|httpchallenge(?:\.entrypoint)?|tlschallenge)|providers\.(docker(\.constraints|\.exposedbydefault)?|file\.(directory|watch)))$/;
 
 // Docker inspect 전체나 환경변수는 응답에 넣지 않고 공개 설정만 추출한다.
 function inspectOptions(info) {
@@ -37,11 +43,12 @@ function inspectOptions(info) {
     const match = String(args[i]).match(/^--([^=]+)(?:=(.*))?$/);
     if (!match) continue;
     const key = match[1].toLowerCase();
-    if (!/^(entrypoints\.[^.]+\.address|certificatesresolvers\.[^.]+\.acme\.(dnschallenge\.provider|httpchallenge\.entrypoint)|providers\.(docker(\.constraints|\.exposedbydefault)?|file\.(directory|watch)))$/.test(key)) continue;
+    if (!publicOption.test(key)) continue;
     options[key] = match[2] ?? (args[i + 1] && !String(args[i + 1]).startsWith("--") ? String(args[++i]) : "true");
   }
   for (const entry of info.Config?.Env || []) {
     const equal = entry.indexOf("=");
+    if (equal < 0) continue;
     const key = entry.slice(0, equal);
     let target;
     if (key === "TRAEFIK_PROVIDERS_DOCKER") target = "providers.docker";
@@ -50,9 +57,22 @@ function inspectOptions(info) {
     if (key === "TRAEFIK_PROVIDERS_FILE_WATCH") target = "providers.file.watch";
     const address = key.match(/^TRAEFIK_ENTRYPOINTS_([A-Z0-9]+)_ADDRESS$/);
     if (address) target = `entrypoints.${address[1].toLowerCase()}.address`;
+    const resolver = key.match(/^TRAEFIK_CERTIFICATESRESOLVERS_(.+)_ACME_(CASERVER|DNSCHALLENGE_PROVIDER|HTTPCHALLENGE_ENTRYPOINT|DNSCHALLENGE|HTTPCHALLENGE|TLSCHALLENGE)$/);
+    if (resolver) target = `certificatesresolvers.${resolver[1].toLowerCase()}.acme.${resolver[2].toLowerCase().replace(/_/g, ".")}`;
     if (target && !Object.hasOwn(options, target)) options[target] = entry.slice(equal + 1);
   }
   return options;
+}
+
+function resolverDetails(options, name) {
+  const value = (suffix) => options[`certificatesresolvers.${name}.acme.${suffix}`];
+  let caServer = null;
+  try { if (value("caserver")) caServer = proxyConfig.validateAcmeServer(value("caserver")); } catch { /* 인증정보가 포함된 주소는 브라우저에 전달하지 않는다. */ }
+  const challenges = [];
+  if (value("dnschallenge.provider") || staticBoolean(value("dnschallenge"), false)) challenges.push("DNS-01");
+  if (value("httpchallenge.entrypoint") || staticBoolean(value("httpchallenge"), false)) challenges.push("HTTP-01");
+  if (staticBoolean(value("tlschallenge"), false)) challenges.push("TLS-ALPN-01");
+  return { name, caServer, challenges, dnsProvider: value("dnschallenge.provider") || null, httpEntrypoint: value("httpchallenge.entrypoint") || null };
 }
 
 function isTraefik(info) {
@@ -63,11 +83,13 @@ function isTraefik(info) {
 
 function summarize(info) {
   const options = inspectOptions(info);
+  const resolvers = [...new Set(Object.keys(options).map((key) => key.match(/^certificatesresolvers\.([^.]+)\./)?.[1]).filter(Boolean))];
   return {
     id: info.Id, name: String(info.Name || "").replace(/^\//, ""), image: info.Config?.Image || "",
     running: Boolean(info.State?.Running), networks: Object.keys(info.NetworkSettings?.Networks || {}),
     entrypoints: [...new Set(Object.keys(options).map((key) => key.match(/^entrypoints\.([^.]+)\./)?.[1]).filter(Boolean))],
-    resolvers: [...new Set(Object.keys(options).map((key) => key.match(/^certificatesresolvers\.([^.]+)\./)?.[1]).filter(Boolean))],
+    resolvers,
+    resolverDetails: resolvers.map((name) => resolverDetails(options, name)),
   };
 }
 
@@ -108,38 +130,80 @@ function createProxySetup({ refreshRoutes }) {
   let saving = false;
   let applyError = null;
 
+  async function managedImage(settings) {
+    if (settings.mode !== "managed" || IS_DEV) return { image: settings.image, container: null };
+    try {
+      let selected;
+      try { selected = await docker.getContainer(settings.container).inspect(); }
+      catch (error) { if (error.statusCode !== 404) throw error; }
+      if (selected?.State?.Running && isTraefik(selected)) return { image: selected.Config.Image, container: String(selected.Name).replace(/^\//, "") };
+      const running = await docker.listContainers();
+      const candidates = running.filter((item) => /traefik/i.test(item.Image || "") || item.Names?.some((name) => /traefik|paas-proxy/i.test(name)));
+      const inspected = await Promise.all(candidates.map((item) => docker.getContainer(item.Id).inspect()));
+      const proxies = inspected.filter((info) => info.State?.Running && isTraefik(info));
+      if (proxies.length > 1) throw new AppError(400, "Several Traefik containers are running. Enter the intended Traefik container name so its image can be used.");
+      if (proxies.length === 1) return { image: proxies[0].Config.Image, container: String(proxies[0].Name).replace(/^\//, "") };
+      return { image: process.env.TRAEFIK_IMAGE || "traefik:latest", container: null };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError(503, "Could not inspect the running Traefik image. Check Docker availability and the portal socket mount.");
+    }
+  }
+
   function guides(settings) {
     const source = hostDirectory();
     const configuredAdminPort = Number(process.env.PORTAL_ADMIN_PORT || 3000);
     const adminPort = Number.isInteger(configuredAdminPort) && configuredAdminPort > 0 && configuredAdminPort < 65536 ? configuredAdminPort : 3000;
+    let generated;
+    if (settings.mode === "managed" && !IS_DEV) {
+      try { generated = proxyCompose.generate(settings); }
+      catch (error) { generated = `# ${error.message}`; }
+    }
+    const compose = `docker compose --env-file .env --project-directory . -f ${shellQuote(hostPath(proxyCompose.composePath()))}`;
     return [
       { title: "Open local administration", description: "Run the Compose command on the server. Run SSH on your computer, then open http://localhost:13000. Keep the SSH connection open.",
         code: `docker compose --env-file .env -f docker-compose.yml -f docker-compose.admin.yml up -d\n# On your computer:\nssh -N -L 13000:127.0.0.1:${adminPort} user@server` },
-      ...(settings.mode === "managed" ? [{ title: "Start a dedicated Traefik", description: "Set PAAS_DOMAIN, ACME_EMAIL and CF_DNS_API_TOKEN in the server .env first. Only start this proxy if host ports 80 and 443 are available. Existing proxy containers are never replaced by this page.",
-        code: "docker compose --env-file .env -f docker-compose.proxy.yml up -d\ndocker compose --env-file .env -f docker-compose.proxy.yml logs --tail=100 traefik" }] : [
+      ...(settings.mode === "managed" ? IS_DEV ? [{ title: "Start the development proxy", description: "Development uses the HTTP proxy from the development Compose override; ACME certificates are not requested.", code: "docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml up -d" }] : [
+        { title: "Review the generated Traefik configuration", description: "Saving creates this dedicated Compose file with your selected CA, certificate settings and identifiers. Renaming identifiers updates both their definitions and references. DNS and EAB credentials remain in server environment variables. This preview does not start a proxy.", code: generated },
+        { title: "Start a dedicated Traefik", description: `Save the settings first, then run these commands from the repository root on the server. Configure CF_DNS_API_TOKEN${settings.acmeEmail ? "" : " and ACME_EMAIL"}${settings.acmeEab ? ", ACME_EAB_KID and ACME_EAB_HMAC" : ""} in .env. Only start this proxy if host ports 80 and 443 are available. Recreating an existing dedicated proxy applies the new CA and identifiers; it does not replace certificates that are already valid.`,
+          code: `${compose} up -d\n${compose} logs --tail=100 traefik` },
+      ] : [
         { title: "Connect the existing proxy network", description: "Add the same external network to the existing proxy's own Compose file for persistence. This command connects the current container only.",
           code: `docker network connect ${shellQuote(networkName())} ${shellQuote(settings.container)}` },
         { title: "Watch PaaS routing files", description: "Mount the whole PaaS directory exactly at the file-provider directory, not a subdirectory or a single file. Traefik 3.6 does not watch nested directories. Before changing an existing mount, its owner must back up and consolidate existing routing files in this shared directory; do not hide or overwrite them. PaaS owns custom-domains.yml, so resolve any filename conflict first. Recreating a shared proxy affects its other services.",
           code: `# Existing Traefik service, after preserving its current route files\nvolumes:\n  - type: bind\n    source: ${JSON.stringify(source)}\n    target: /etc/traefik/dynamic\n    read_only: true\n# Merge these flags with the existing command; do not replace it.\n# --providers.file.directory=/etc/traefik/dynamic\n# --providers.file.watch=true\n# --providers.docker=true\n# --providers.docker.exposedbydefault=false` },
       ]),
-      { title: "Configure DNS and certificates", description: "Point the portal and wildcard app records to the edge server. Default domains need a wildcard certificate from DNS-01, or a certificate already installed in Traefik. Custom domains use the selected HTTP-01 resolver. Resolver names must already exist in Traefik's static configuration; saving this form does not create resolvers or store DNS credentials.",
+      { title: "Configure DNS and certificates", description: `Point the portal and wildcard app records to the edge server. Default domains need a wildcard certificate from DNS-01, or a certificate already installed in Traefik. ${settings.mode === "managed" ? "The generated configuration uses Cloudflare DNS-01 for platform domains and HTTP-01 on web for custom domains. The CA must support both challenges and wildcard certificates." : "Resolver names must already exist in Traefik's static configuration; the portal does not change its CA, challenges or credentials."}`,
         code: `portal.${config.PAAS_DOMAIN}       A / CNAME → edge server\n*.apps.${config.PAAS_DOMAIN}       A / CNAME → edge server\n\n# Check the public route from a machine outside the server:\ncurl --fail https://portal.${config.PAAS_DOMAIN}/health` },
       { title: "Changing deployment-wide values", description: "Domain, application network and portal listener come from the server environment. Update .env and recreate the affected services to change them. Existing apps need redeployment when their route settings change.",
         code: `PAAS_DOMAIN=${config.PAAS_DOMAIN}\nAPP_NETWORK=${networkName()}\nPORTAL_PORT=${config.PORTAL_PORT}\n\ndocker compose --env-file .env -f docker-compose.yml -f docker-compose.admin.yml up -d --no-deps --force-recreate portal` },
     ];
   }
 
+  function generatedProblem(saved) {
+    if (!saved.configured || saved.settings.mode !== "managed" || IS_DEV) return null;
+    try {
+      if (fs.readFileSync(proxyCompose.composePath(), "utf8") === proxyCompose.generate(saved.settings)) return null;
+    } catch { /* 누락되거나 오래된 생성 파일은 설정 화면에서 다시 저장할 수 있게 한다. */ }
+    return "The generated Traefik Compose file is missing or outdated. Save the settings again before starting the proxy.";
+  }
+
   function status() {
     const saved = proxyConfig.read();
-    return { ...saved, ...(applyError ? { loadError: applyError } : {}), defaults: proxyConfig.defaults(), lastCheck,
+    const problem = applyError || generatedProblem(saved);
+    return { ...saved, ...(problem ? { loadError: problem } : {}), defaults: proxyConfig.defaults(), lastCheck,
       environment: { domain: config.PAAS_DOMAIN, network: networkName(), portalPort: config.PORTAL_PORT,
         portalContainer: process.env.PORTAL_CONTAINER_NAME || "paas-portal", dynamicDirectory: hostDirectory(), devMode: IS_DEV },
       guides: guides(saved.settings) };
   }
 
-  function preview(input) {
-    try { return { guides: guides(proxyConfig.normalize(input)) }; }
+  async function preview(input) {
+    let settings;
+    try { settings = proxyConfig.normalize(input); }
     catch (error) { throw new AppError(400, error.message); }
+    const imageSource = await managedImage(settings);
+    settings = { ...settings, image: imageSource.image };
+    return { guides: guides(settings), imageSource };
   }
 
   async function discovery() {
@@ -160,6 +224,8 @@ function createProxySetup({ refreshRoutes }) {
     catch (error) { throw new AppError(400, error.message); }
     const checks = [];
     const add = (id, title, state, detail) => checks.push({ id, title, status: state, detail });
+    const problem = generatedProblem(saved);
+    if (problem) add("generated", "Generated configuration", "warning", problem);
     const draft = !saved.configured || Boolean(applyError) || JSON.stringify(settings) !== JSON.stringify(saved.settings);
     if (draft) add("draft", "Unsaved settings", "warning", "Save these settings before checking portal routing. Container checks below use the draft; routing still uses the saved settings.");
     const finish = () => {
@@ -202,6 +268,12 @@ function createProxySetup({ refreshRoutes }) {
         const name = settings[field];
         const known = name && options[`certificatesresolvers.${name.toLowerCase()}.acme.${suffix}`];
         add(field, title, known ? "ok" : "warning", known ? `Resolver ${name} has the expected challenge configured.` : name ? `Confirm resolver ${name} in the existing proxy configuration. DNS-01 is required for wildcard certificates.` : "No resolver selected. Provide and maintain the required certificates in Traefik separately.");
+        if (settings.mode === "managed") {
+          const actual = resolverDetails(options, name.toLowerCase()).caServer;
+          add(`${field}-ca`, `${title} CA`, actual === settings.acmeServer ? "ok" : "warning", actual === settings.acmeServer
+            ? "The running resolver uses the selected ACME CA. Existing certificates remain valid until renewal."
+            : "The selected ACME CA could not be confirmed on the running proxy. Start or update it using the generated Compose file.");
+        }
       }
     }
     const address = network?.IPAddress;
@@ -230,18 +302,24 @@ function createProxySetup({ refreshRoutes }) {
     let settings;
     try { settings = proxyConfig.normalize(input); }
     catch (error) { throw new AppError(400, error.message); }
+    const imageSource = await managedImage(settings);
+    settings = { ...settings, image: imageSource.image };
+    let generated;
+    try { if (settings.mode === "managed" && !IS_DEV) generated = proxyCompose.generate(settings); }
+    catch (error) { throw new AppError(400, error.message); }
     const previous = proxyConfig.read();
     if (revision !== previous.revision) throw new AppError(409, "Proxy settings changed in another session. Reload this page before saving.");
     saving = true;
     try {
       proxyConfig.write(settings, previous.revision + 1);
+      if (generated) proxyCompose.write(generated);
       lastCheck = null;
       await refreshRoutes();
       applyError = null;
       return status();
     } catch {
       // 저장은 유지하고 재시도 가능한 오류를 알린다. 외부 프록시는 수정하지 않는다.
-      applyError = "Proxy settings could not be fully applied. Reload this page and retry saving; check the routing directory permissions.";
+      applyError = "Proxy settings could not be fully applied. Reload this page and retry saving; check the routing and generated Compose directory permissions.";
       throw new AppError(503, applyError);
     } finally { saving = false; }
   }
