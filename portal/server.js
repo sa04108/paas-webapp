@@ -321,11 +321,13 @@ async function start() {
   });
 
   server.listen(config.PORTAL_PORT, () => {
+    proxySetup.startDependencyChecks();
     console.log(`[portal] listening on http://localhost:${config.PORTAL_PORT}`);
     console.log(`[portal] env: ${envFilePath}`);
     console.log(`[portal] apps dir: ${config.PAAS_APPS_DIR}`);
     console.log(`[portal] db: ${authService.getDbPath()}`);
   });
+  server.on("close", () => proxySetup.stopDependencyChecks());
 }
 
 start().catch((error) => {

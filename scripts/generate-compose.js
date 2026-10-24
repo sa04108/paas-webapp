@@ -17,12 +17,12 @@ function compile(userid, appname, info, loaded, revision) {
   const memory = allocate(definition.services, "mem_limit", memoryBytes(process.env.DEFAULT_MEM_LIMIT || "256m"), memoryBytes);
   const parseCpu = (value) => { const cpu = Number(value); if (!Number.isFinite(cpu) || cpu < 0.01 || cpu > 1024) throw new Error("cpus must be at least 0.01"); return cpu; };
   const cpus = allocate(definition.services, "cpus", parseCpu(process.env.DEFAULT_CPU_LIMIT || "0.5"), parseCpu);
-  const network = process.env.APP_NETWORK || "paas-app";
   const domainRoot = process.env.PAAS_DOMAIN || "my.domain.com";
   const domain = `${userid}-${appname}.apps.${domainRoot}`;
   const savedProxy = proxyConfig.read();
   if (savedProxy.loadError) throw new Error(savedProxy.loadError);
-  const proxy = savedProxy.settings;
+  const proxy = proxyConfig.normalize(savedProxy.settings);
+  const network = proxy.network;
   const prefix = proxyConfig.namespace(domainRoot);
   const privateNetwork = `${info.project}-private`;
   const maxPids = Number(process.env.DEFAULT_PIDS_LIMIT || 128);

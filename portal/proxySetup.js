@@ -2,11 +2,6 @@
 
 const path = require("node:path");
 const fs = require("node:fs");
-const net = require("node:net");
-const http = require("node:http");
-const https = require("node:https");
-const { execFile } = require("node:child_process");
-const { promisify } = require("node:util");
 const Docker = require("dockerode");
 const { config, IS_DEV } = require("./config");
 const proxyConfig = require("./proxyConfig");
@@ -14,9 +9,7 @@ const proxyCompose = require("./proxyCompose");
 const { AppError } = require("./utils");
 
 const docker = new Docker({ timeout: 8000 });
-const execFileAsync = promisify(execFile);
 const shellQuote = (value) => `'${String(value).replace(/'/g, `'"'"'`)}'`;
-const networkName = () => process.env.APP_NETWORK || "paas-app";
 const dynamicDirectory = () => path.join(path.dirname(config.PORTAL_DB_PATH), "traefik-dynamic");
 const staticBoolean = (value, fallback) => value === undefined ? fallback :
   ["true", "t", "1"].includes(String(value).toLowerCase()) ? true :
@@ -98,37 +91,70 @@ function inspectFailure(error) {
     "Docker could not inspect the proxy. Check Docker availability and the portal socket mount.";
 }
 
-// 프록시 네트워크의 IP에만 접속하고 공개 Host/SNI로 실제 라우팅과 인증서를 검사한다.
-function probe(address, port, hostname) {
-  return new Promise((resolve) => {
-    let timer;
-    const finish = (result) => { clearTimeout(timer); resolve(result); };
-    const transport = IS_DEV ? http : https;
-    const request = transport.get({ hostname: address, port, path: "/health", servername: hostname,
-      headers: { Host: hostname, "User-Agent": "PaaS-Proxy-Check" }, timeout: 4000,
-    }, (response) => {
-      let body = "";
-      response.on("data", (chunk) => {
-        body += chunk;
-        if (body.length > 16384) request.destroy(new Error("Response is too large"));
-      });
-      response.on("end", () => {
-        let valid = false;
-        try { valid = JSON.parse(body)?.data?.service === "portal"; } catch { /* 다른 서비스의 응답은 성공으로 처리하지 않는다. */ }
-        finish(response.statusCode === 200 && valid ? null : "The proxy did not return a portal health response. Check the file provider, hostname and upstream network.");
-      });
-      response.on("error", () => finish("The proxy closed the health response before it completed."));
-    });
-    request.on("timeout", () => request.destroy(new Error("timeout")));
-    request.on("error", () => finish(IS_DEV ? "Could not reach the portal through the proxy." : "HTTPS routing failed. Check the certificate, entrypoint and network; certificate verification remains enabled."));
-    timer = setTimeout(() => request.destroy(new Error("timeout")), 4000);
-  });
-}
-
-function createProxySetup({ refreshRoutes }) {
+function createProxySetup({ refreshRoutes, dockerClient = docker }) {
+  const docker = dockerClient;
   let lastCheck = null;
   let saving = false;
   let applyError = null;
+  let dependency = null;
+  let timer = null;
+  let checkingDependencies = false;
+
+  async function connection(settings) {
+    let running = null;
+    try {
+      const info = await docker.getContainer(settings.container).inspect();
+      running = Boolean(info.State?.Running);
+      if (!isTraefik(info)) throw new AppError(400, "Select an existing Traefik container.");
+      if (!running) throw new AppError(409, "The selected proxy is stopped. Start it to restore application access.");
+      const network = await docker.getNetwork(settings.network).inspect();
+      if (network.Driver !== "bridge" || info.NetworkSettings?.Networks?.[settings.network]?.NetworkID !== network.Id) {
+        throw new AppError(409, "Select a bridge network already used by the running proxy.");
+      }
+      const containers = await docker.listContainers({ all: true });
+      const portal = containers.find((item) => item.Names?.includes(`/${process.env.PORTAL_CONTAINER_NAME || "paas-portal"}`));
+      if (portal?.NetworkSettings?.Networks?.[settings.network]) {
+        throw new AppError(409, "The portal shares this network. Recreate the portal with its separate portal network before using it for applications.");
+      }
+      const apps = containers.filter((item) => item.Labels?.["paas.type"] === "user-app" && item.Labels?.["paas.domain"]?.endsWith(`.apps.${config.PAAS_DOMAIN}`));
+      const mismatched = apps.filter((item) => item.Labels["paas.web"] === "true"
+        ? item.Labels["traefik.docker.network"] !== settings.network || item.NetworkSettings?.Networks?.[settings.network]?.NetworkID !== network.Id || Boolean(item.NetworkSettings?.Networks?.[process.env.PORTAL_NETWORK || "paas-portal"])
+        : Boolean(item.NetworkSettings?.Networks?.[settings.network]));
+      return { info, network, apps, mismatched };
+    } catch (error) {
+      const failure = error instanceof AppError ? error : new AppError(503, "Could not inspect the proxy connection. Check Docker, the selected proxy and its network.");
+      failure.proxyRunning = running;
+      throw failure;
+    }
+  }
+
+  async function checkDependencies() {
+    if (saving || checkingDependencies) return;
+    const saved = proxyConfig.read();
+    if (!saved.configured || saved.loadError) return;
+    checkingDependencies = true;
+    let result;
+    try {
+      const current = await connection(saved.settings);
+      result = { status: current.mismatched.length ? "attention" : "ready", running: true,
+        detail: current.mismatched.length ? `${current.mismatched.length} application services need redeployment to use the selected network.` : "Proxy running. Application network is available." };
+    } catch (error) {
+      result = { status: "attention", running: error.proxyRunning ?? null, detail: error.message };
+    } finally { checkingDependencies = false; }
+    if (proxyConfig.read().revision === saved.revision) {
+      dependency = { ...result, checkedAt: new Date().toISOString() };
+      if (result.status !== "ready") lastCheck = null;
+    }
+  }
+
+  function startDependencyChecks() {
+    if (timer) return;
+    void checkDependencies();
+    timer = setInterval(() => { void checkDependencies(); }, 30000);
+    timer.unref();
+  }
+  function stopDependencyChecks() { clearInterval(timer); timer = null; }
+
 
   async function managedImage(settings) {
     if (settings.mode !== "managed" || IS_DEV) return { image: settings.image, container: null };
@@ -168,15 +194,15 @@ function createProxySetup({ refreshRoutes }) {
         { title: "Start a dedicated Traefik", description: `Save the settings first, then run these commands from the repository root on the server. Configure CF_DNS_API_TOKEN${settings.acmeEmail ? "" : " and ACME_EMAIL"}${settings.acmeEab ? ", ACME_EAB_KID and ACME_EAB_HMAC" : ""} in .env. Only start this proxy if host ports 80 and 443 are available. Recreating an existing dedicated proxy applies the new CA and identifiers; it does not replace certificates that are already valid.`,
           code: `${compose} up -d\n${compose} logs --tail=100 traefik` },
       ] : [
-        { title: "Connect the existing proxy network", description: "Add the same external network to the existing proxy's own Compose file for persistence. This command connects the current container only.",
-          code: `docker network connect ${shellQuote(networkName())} ${shellQuote(settings.container)}` },
-        { title: "Watch PaaS routing files", description: "Mount the whole PaaS directory exactly at the file-provider directory, not a subdirectory or a single file. Traefik 3.6 does not watch nested directories. Before changing an existing mount, its owner must back up and consolidate existing routing files in this shared directory; do not hide or overwrite them. PaaS owns custom-domains.yml, so resolve any filename conflict first. Recreating a shared proxy affects its other services.",
+        { title: "Connect application web services", description: "Select a network already used by this proxy and save. New deployments attach only the application's web service to that network. Redeploy existing apps after changing it. The proxy's own configuration is kept intact.",
+          code: `# Application web-service network: ${settings.network}` },
+        { title: "Watch PaaS routing files", description: "For custom application domains, mount the whole PaaS directory exactly at the file-provider directory, not a subdirectory or a single file. Traefik 3.6 does not watch nested directories. Before changing an existing mount, its owner must back up and consolidate existing routing files in this shared directory; do not hide or overwrite them. PaaS owns custom-domains.yml, so resolve any filename conflict first. Recreating a shared proxy affects its other services.",
           code: `# Existing Traefik service, after preserving its current route files\nvolumes:\n  - type: bind\n    source: ${JSON.stringify(source)}\n    target: /etc/traefik/dynamic\n    read_only: true\n# Merge these flags with the existing command; do not replace it.\n# --providers.file.directory=/etc/traefik/dynamic\n# --providers.file.watch=true\n# --providers.docker=true\n# --providers.docker.exposedbydefault=false` },
       ]),
-      { title: "Configure DNS and certificates", description: `Point the portal and wildcard app records to the edge server. Default domains need a wildcard certificate from DNS-01, or a certificate already installed in Traefik. ${settings.mode === "managed" ? "The generated configuration uses Cloudflare DNS-01 for platform domains and HTTP-01 on web for custom domains. The CA must support both challenges and wildcard certificates." : "Resolver names must already exist in Traefik's static configuration; the portal does not change its CA, challenges or credentials."}`,
-        code: `portal.${config.PAAS_DOMAIN}       A / CNAME → edge server\n*.apps.${config.PAAS_DOMAIN}       A / CNAME → edge server\n\n# Check the public route from a machine outside the server:\ncurl --fail https://portal.${config.PAAS_DOMAIN}/health` },
-      { title: "Changing deployment-wide values", description: "Domain, application network and portal listener come from the server environment. Update .env and recreate the affected services to change them. Existing apps need redeployment when their route settings change.",
-        code: `PAAS_DOMAIN=${config.PAAS_DOMAIN}\nAPP_NETWORK=${networkName()}\nPORTAL_PORT=${config.PORTAL_PORT}\n\ndocker compose --env-file .env -f docker-compose.yml -f docker-compose.admin.yml up -d --no-deps --force-recreate portal` },
+      { title: "Configure DNS and certificates", description: `Point the wildcard app records to the edge server. Default domains need a wildcard certificate from DNS-01, or a certificate already installed in Traefik. ${settings.mode === "managed" ? "The generated configuration uses Cloudflare DNS-01 for application domains and HTTP-01 on web for custom domains. The CA must support both challenges and wildcard certificates." : "Resolver names must already exist in Traefik's static configuration; the portal does not change its CA, challenges or credentials."}`,
+        code: `*.apps.${config.PAAS_DOMAIN}       A / CNAME → application proxy\n# Configure the portal reverse proxy separately on the server.` },
+      { title: "Changing deployment-wide values", description: "The base domain and portal listener come from the server environment. Select the application network in this page. Redeploy existing apps to change their network or route identifiers.",
+        code: `PAAS_DOMAIN=${config.PAAS_DOMAIN}\nAPP_NETWORK=${settings.network}\nPORTAL_PORT=${config.PORTAL_PORT}\n\ndocker compose --env-file .env -f docker-compose.yml -f docker-compose.admin.yml up -d --no-deps --force-recreate portal` },
     ];
   }
 
@@ -191,8 +217,8 @@ function createProxySetup({ refreshRoutes }) {
   function status() {
     const saved = proxyConfig.read();
     const problem = applyError || generatedProblem(saved);
-    return { ...saved, ...(problem ? { loadError: problem } : {}), defaults: proxyConfig.defaults(), lastCheck,
-      environment: { domain: config.PAAS_DOMAIN, network: networkName(), portalPort: config.PORTAL_PORT,
+    return { ...saved, ...(problem ? { loadError: problem } : {}), defaults: proxyConfig.defaults(), lastCheck, dependency,
+      environment: { domain: config.PAAS_DOMAIN, network: saved.settings.network, portalPort: config.PORTAL_PORT,
         portalContainer: process.env.PORTAL_CONTAINER_NAME || "paas-portal", dynamicDirectory: hostDirectory(), devMode: IS_DEV },
       guides: guides(saved.settings) };
   }
@@ -227,7 +253,7 @@ function createProxySetup({ refreshRoutes }) {
     const problem = generatedProblem(saved);
     if (problem) add("generated", "Generated configuration", "warning", problem);
     const draft = !saved.configured || Boolean(applyError) || JSON.stringify(settings) !== JSON.stringify(saved.settings);
-    if (draft) add("draft", "Unsaved settings", "warning", "Save these settings before checking portal routing. Container checks below use the draft; routing still uses the saved settings.");
+    if (draft) add("draft", "Unsaved settings", "warning", "Save these settings before applying application routing. Container checks below use the draft; routing still uses the saved settings.");
     const finish = () => {
       const current = proxyConfig.read();
       const invalidated = saving || Boolean(applyError || current.loadError) || saved.revision !== current.revision ||
@@ -243,8 +269,8 @@ function createProxySetup({ refreshRoutes }) {
     catch (error) { add("container", "Traefik container", "error", inspectFailure(error)); return finish(); }
     if (!isTraefik(info)) { add("container", "Traefik container", "error", "The selected container is not recognized as Traefik. Nginx Proxy Manager is not a compatible routing provider."); return finish(); }
     add("container", "Traefik container", info.State?.Running ? "ok" : "error", info.State?.Running ? "The selected Traefik container is running." : "Start the selected Traefik container.");
-    const network = info.NetworkSettings?.Networks?.[networkName()];
-    add("network", "Application network", network ? "ok" : "error", network ? `Connected to ${networkName()}.` : `Connect the proxy to ${networkName()} and keep that network in its Compose configuration.`);
+    const network = info.NetworkSettings?.Networks?.[settings.network];
+    add("network", "Application network", network ? "ok" : "error", network ? `Connected to ${settings.network}.` : `Choose a network already used by the proxy. Selected network: ${settings.network}.`);
     const options = inspectOptions(info);
     const entrypoint = options[`entrypoints.${settings.entrypoint.toLowerCase()}.address`];
     add("entrypoint", "Entrypoint", entrypoint ? "ok" : "warning", entrypoint ? `${settings.entrypoint} listens on ${entrypoint}.` : "Entrypoint could not be confirmed from container flags or environment. Check the proxy's static configuration file.");
@@ -276,24 +302,12 @@ function createProxySetup({ refreshRoutes }) {
         }
       }
     }
-    const address = network?.IPAddress;
-    const port = Number(entrypoint?.match(/:(\d+)(?:\/tcp)?$/)?.[1]);
-    if (draft) add("route", "Portal routing", "warning", "Save the draft first, then check the applied routing.");
-    else if (info.State?.Running && net.isIP(address || "") && port > 0 && port < 65536) {
-      const failure = await probe(address, port, `portal.${config.PAAS_DOMAIN}`);
-      add("route", IS_DEV ? "Portal routing" : "Portal routing and HTTPS", failure ? "error" : "ok", failure || "Traefik returned the portal health response through the configured hostname.");
-    } else add("route", "Portal routing", "warning", "Routing could not be tested until the container, network and entrypoint are available.");
-    if (!IS_DEV && !draft) {
-      let valid = false;
-      try {
-        const { stdout } = await execFileAsync("curl", ["--disable", "--silent", "--show-error", "--fail", "--max-time", "5",
-          "--proto", "=https", "--write-out", "\n%{http_code}", `https://portal.${config.PAAS_DOMAIN}/health`], { timeout: 6000, maxBuffer: 16384 });
-        const boundary = stdout.lastIndexOf("\n");
-        valid = stdout.slice(boundary + 1) === "200" && JSON.parse(stdout.slice(0, boundary))?.data?.service === "portal";
-      } catch { /* 실제 공개 주소의 실패를 숨기거나 TLS 검증을 우회하지 않는다. */ }
-      add("public", "Public portal URL", valid ? "ok" : "warning", valid ? "The public HTTPS portal URL returned its health response from this server. Also verify access from your browser." :
-        `Could not verify https://portal.${config.PAAS_DOMAIN}/health from this server. Check DNS, certificates and firewall or hairpin routing; verify from an external browser too.`);
-    }
+    try {
+      const current = await connection(settings);
+      add("apps", "Application connections", current.mismatched.length ? "warning" : "ok", current.mismatched.length
+        ? `${current.mismatched.length} application services need redeployment to use the selected proxy network.`
+        : current.apps.length ? "Application web services use the proxy network; other services remain private." : "No applications deployed yet. Web services will join this network on deployment.");
+    } catch (error) { add("apps", "Application connections", "error", error.message); }
     return finish();
   }
 
@@ -302,29 +316,37 @@ function createProxySetup({ refreshRoutes }) {
     let settings;
     try { settings = proxyConfig.normalize(input); }
     catch (error) { throw new AppError(400, error.message); }
-    const imageSource = await managedImage(settings);
-    settings = { ...settings, image: imageSource.image };
-    let generated;
-    try { if (settings.mode === "managed" && !IS_DEV) generated = proxyCompose.generate(settings); }
-    catch (error) { throw new AppError(400, error.message); }
     const previous = proxyConfig.read();
     if (revision !== previous.revision) throw new AppError(409, "Proxy settings changed in another session. Reload this page before saving.");
     saving = true;
+    let persisted = false;
     try {
+      if (settings.mode === "external") {
+        const current = await connection(settings);
+        settings = { ...settings, container: String(current.info.Name).replace(/^\//, ""), image: current.info.Config.Image };
+      } else settings = { ...settings, image: (await managedImage(settings)).image };
+      let generated;
+      try { if (settings.mode === "managed" && !IS_DEV) generated = proxyCompose.generate(settings); }
+      catch (error) { throw new AppError(400, error.message); }
       proxyConfig.write(settings, previous.revision + 1);
+      persisted = true;
       if (generated) proxyCompose.write(generated);
       lastCheck = null;
+      dependency = null;
       await refreshRoutes();
       applyError = null;
       return status();
-    } catch {
-      // 저장은 유지하고 재시도 가능한 오류를 알린다. 외부 프록시는 수정하지 않는다.
-      applyError = "Proxy settings could not be fully applied. Reload this page and retry saving; check the routing and generated Compose directory permissions.";
-      throw new AppError(503, applyError);
+    } catch (error) {
+      if (!persisted) {
+        if (error instanceof AppError) throw error;
+        throw new AppError(503, "Could not save proxy settings. Check directory permissions and retry.");
+      }
+      applyError = "Settings saved, but application routes could not be updated. Check directory permissions and retry saving.";
+      return status();
     } finally { saving = false; }
   }
 
-  return { status, discovery, check, save, preview };
+  return { status, discovery, check, save, preview, checkDependencies, startDependencyChecks, stopDependencyChecks };
 }
 
 module.exports = { createProxySetup };

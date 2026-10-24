@@ -23,7 +23,7 @@ services:
             - '--entrypoints.websecure.http.tls.domains[0].main=apps.${PAAS_DOMAIN}'
             - '--entrypoints.websecure.http.tls.domains[0].sans=*.apps.${PAAS_DOMAIN}'
             # Let's Encrypt ACME (DNS-01 challenge via Cloudflare)
-            # 자체 Cloudflare 존 도메인 전용: 포털·루트·*.apps 와일드카드
+            # 자체 Cloudflare 존 도메인 전용: 사용자 앱의 *.apps 와일드카드
             - '--certificatesresolvers.letsencrypt.acme.dnschallenge=true'
             - '--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare'
             - '--certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53'

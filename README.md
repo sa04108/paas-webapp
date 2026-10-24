@@ -21,7 +21,7 @@ Hyunbbai PaaS is a self-hosted platform for deploying GitHub repositories as Doc
 
 Each application is one Docker Compose project containing its web service, workers, and initialization jobs. Services have separate filesystems and process namespaces; application data stays under that application's data directory. CPU and memory limits apply to the combined services. Application containers do not receive the host Docker socket. The portal owns project names, container identities, routing, networks, and ownership labels. See [Compose application configuration](docs/compose-apps.md) for the supported YAML fields and KTX example.
 
-Workers use a private application network; only the web service also joins `paas-app` for proxy routing. Web services still share this network with other web services, the portal, and proxy, so isolation between users is incomplete. The Docker daemon and host remain shared. BuildKit runs on a separate network and exposes only a Unix socket shared with the portal. See the [security review](docs/security-threats.md) for remaining work.
+Workers use a private application network; only the web service also joins the selected proxy network. The portal uses its own `PORTAL_NETWORK`. Web services still share their proxy network with other web services and the proxy, so isolation between users is incomplete. The Docker daemon and host remain shared. BuildKit runs on a separate network and exposes only a Unix socket shared with the portal. See the [security review](docs/security-threats.md) for remaining work.
 
 ### Bring Portainer-inspired logs and exec into the portal
 
@@ -52,11 +52,12 @@ The portal's runtime detector provides Node.js framework and dependency badges f
 
 ### Route applications through a reverse proxy
 
-Application containers do not publish individual host ports. The portal stack (`docker-compose.yml`) does not bind public ports; attach a Traefik proxy to the external `APP_NETWORK` and configure it to route application and portal traffic. The supplied Traefik stack is a separate Compose project (`docker-compose.proxy.yml`), so it can be started or managed independently. The admin-only Proxy setup screen explains the managed Traefik and existing Traefik profiles. Nginx Proxy Manager is not currently supported as a direct integration.
+Application containers do not publish individual host ports. The portal stack (`docker-compose.yml`) does not bind public ports; configure portal ingress separately on the server, then select an existing Traefik network for application web services in Proxy Setup. The supplied Traefik stack is a separate Compose project (`docker-compose.proxy.yml`), so it can be started or managed independently. The admin-only Proxy setup screen explains the managed Traefik and existing Traefik profiles. Nginx Proxy Manager is not currently supported as a direct integration.
 
 ```text
 GitHub repository -> clone -> Compose validation -> Railpack / Dockerfile / image pull -> app services
-Browser -> reverse proxy -> portal or application
+Browser -> server-managed reverse proxy -> portal
+Browser -> application Traefik -> application web service
 Portal -> Docker API / Compose -> lifecycle, logs, and exec
 ```
 
@@ -156,7 +157,7 @@ For the supplied Traefik stack, start with DNS-only records so requests reach th
 
 The production portal is served at `portal.example.com`. The root domain has no portal router or redirect to the portal; its DNS record is only needed if another record uses it as a CNAME target.
 
-If using the supplied Traefik stack, allow inbound TCP ports **80** and **443** through the host firewall and any router/NAT. Port 80 is needed for custom-domain HTTP-01 challenges and HTTP-to-HTTPS redirects. The portal listens on `PORTAL_PORT` (default **3000**) inside Docker. The base portal Compose file publishes no host ports; the proxy reaches the portal over `APP_NETWORK`.
+If using the supplied Traefik stack, allow inbound TCP ports **80** and **443** through the host firewall and any router/NAT. Port 80 is needed for custom-domain HTTP-01 challenges and HTTP-to-HTTPS redirects. The portal listens on `PORTAL_PORT` (default **3000**) inside Docker. The base portal Compose file publishes no host ports; the server operator configures the portal upstream separately; application web services use the selected proxy network.
 
 If you use custom domains, their generated CNAME targets have the form `<app>-<random>.example.com`. Make those target names resolve to this server by adding individual DNS records or an additional `*.example.com` wildcard record. The `*.apps.example.com` record alone does not cover these targets.
 
@@ -183,7 +184,7 @@ The first start builds the portal image, installs dependencies with `npm ci`, an
 docker compose --env-file .env -f docker-compose.proxy.yml up -d
 ```
 
-Do not combine `docker-compose.proxy.yml` with the base file: it has its own `paas-edge` project lifecycle. After DNS and certificate issuance are ready, verify the public portal:
+Do not combine `docker-compose.proxy.yml` with the base file: it has its own `paas-edge` project lifecycle. Configure the portal reverse proxy and HTTPS independently on the server, then verify its public address:
 
 ```bash
 curl --fail https://portal.example.com/health
@@ -191,9 +192,9 @@ curl --fail https://portal.example.com/health
 
 Replace `portal.example.com` with your configured portal hostname. `PORTAL_PORT` changes the portal's internal listener and proxy target; it is not a published host port. Certificate issuance can take additional time; inspect the relevant proxy logs if HTTPS is not yet available. The selected proxy profile and connection settings are stored in `portal-data/proxy-settings.json`.
 
-To configure ingress, sign in as the bootstrap administrator, change the default password, then open **Admin Dashboard → Proxy Setup**. The setup page is available again at `/admin/proxy`; its connection check is read-only. Saved portal and custom-domain routes update immediately through the dynamic file provider, while changes to application entrypoints or certificate resolvers require redeploying those applications. Details and SSH access steps are in [proxy setup](docs/proxy-setup.md).
+To configure ingress, sign in as the bootstrap administrator, change the default password, then open **Admin Dashboard → Proxy Setup**. The setup page is available again at `/admin/proxy`; its connection check is read-only. Saved custom application domains update through the dynamic file provider. The portal route is managed by the server operator. Changes to an application network, entrypoint or certificate resolver require redeployment; the generated app Compose retains the web-service network attachment after recreation. Details and SSH access steps are in [proxy setup](docs/proxy-setup.md).
 
-When upgrading an older deployment, recreate the portal to remove its previous proxy labels or port binding. If the old Compose definition includes a `traefik` service, stop and remove only that PaaS proxy before starting the new `paas-edge` project; preserve `portal-data/letsencrypt/acme.json`. Do not run `docker compose down` against a shared external network or stop/remove an unrelated proxy. Follow the [migration instructions](docs/proxy-setup.md#migrating-an-existing-deployment).
+When upgrading an older deployment, recreate the portal to remove its previous proxy labels or port binding. If the old Compose definition includes a `traefik` service, stop and remove only that PaaS proxy before starting the new `paas-edge` project; preserve `portal-data/letsencrypt/acme.json`. Do not run `docker compose down` against a shared external network or stop/remove an unrelated proxy. Follow the [migration instructions](docs/proxy-setup.md#upgrade-from-portal-managed-ingress).
 
 ### 5. Sign in and deploy the first application
 
@@ -266,7 +267,7 @@ The host checkout stores the following runtime files:
 | `portal-data/portal.sqlite3` | Users, sessions, jobs, GitHub installation links, and custom-domain metadata |
 | `portal-data/proxy-settings.json` | Selected proxy profile and connection settings |
 | `portal-data/letsencrypt/acme.json` | ACME account and certificates |
-| `portal-data/traefik-dynamic/` | Generated portal and custom-domain routing configuration |
+| `portal-data/traefik-dynamic/` | Generated custom application-domain routing configuration |
 | `apps/<user>/<app>/app/` | Cloned repository source |
 | `apps/<user>/<app>/data/` | Application files mounted at `/data` |
 | `apps/<user>/<app>/logs/` | Lifecycle script logs |

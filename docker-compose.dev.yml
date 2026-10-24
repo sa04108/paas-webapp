@@ -5,7 +5,9 @@ services:
       - "127.0.0.1:${PORTAL_PORT:-3000}:${PORTAL_PORT:-3000}"
     environment:
       - RUN_MODE=development
-      - APP_HEALTH_DEV_ORIGIN=http://traefik:80
+      - APP_HEALTH_DEV_ORIGIN=http://host.docker.internal:18080
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # dev 모드: ACME/HTTPS 없이 HTTP 전용으로 오버라이드
   # (localhost는 Let's Encrypt 인증서 발급 불가)
@@ -29,3 +31,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./portal-data/traefik-dynamic:/traefik-dynamic:ro
+
+networks:
+  paas-app:
+    external: true
+    name: ${APP_NETWORK:-paas-app}

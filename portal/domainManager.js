@@ -58,17 +58,10 @@ async function writeTraefikConfig(statements) {
   if (saved.loadError) throw new Error(saved.loadError);
   const settings = saved.settings;
   const prefix = proxyConfig.namespace(config.PAAS_DOMAIN);
-  const portalKey = `${prefix}-portal`;
   const tls = (resolver) => IS_DEV ? {} : { tls: resolver ? { certResolver: resolver } : {} };
-  const routers = {
-    [portalKey]: {
-      rule: `Host(\`portal.${config.PAAS_DOMAIN}\`)`, entryPoints: [settings.entrypoint],
-      service: portalKey, ...tls(settings.certificateResolver),
-    },
-  };
-  const services = {
-    [portalKey]: { loadBalancer: { servers: [{ url: `http://${process.env.PORTAL_CONTAINER_NAME || "paas-portal"}:${config.PORTAL_PORT}` }] } },
-  };
+  // 포털의 공개 주소와 인증서는 서버 운영자가 관리한다. 앱 도메인만 생성한다.
+  const routers = {};
+  const services = {};
   const middlewares = {};
   for (const row of activeDomains) {
     const containerName = appContainerName(row.userid, row.appname, "", true);

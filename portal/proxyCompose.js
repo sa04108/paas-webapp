@@ -22,6 +22,8 @@ function generate(input) {
   const service = template.services.traefik;
   service.image = settings.image;
   service.container_name = settings.container;
+  template.networks["paas-app"].name = literal(settings.network);
+  service.command = service.command.map((arg) => arg.startsWith("--providers.docker.network=") ? `--providers.docker.network=${settings.network}` : arg);
   const root = path.resolve(process.env.PAAS_ROOT || path.join(__dirname, ".."));
   const dynamicDirectory = path.join(path.dirname(proxyConfig.settingsPath()), "traefik-dynamic");
   const relative = path.relative(root, dynamicDirectory);

@@ -13,6 +13,7 @@ type Settings = {
   mode: ProxyMode;
   image: string;
   container: string;
+  network: string;
   entrypoint: string;
   certificateResolver: string;
   customCertificateResolver: string;
@@ -46,6 +47,7 @@ type ProxyData = {
     devMode: boolean;
   };
   lastCheck: Check | null;
+  dependency: { running: boolean | null; status: "ready" | "attention"; detail: string; checkedAt: string } | null;
   loadError?: string;
   guides: Guide[];
 };
@@ -180,6 +182,19 @@ export function ProxySettings() {
     };
   }, [data?.revision, settings]);
 
+  // 편집 중인 설정은 유지하고 실행 상태만 갱신한다.
+  useEffect(() => {
+    if (!data?.configured) return;
+    const controller = new AbortController();
+    const timer = window.setInterval(() => {
+      void api<ProxyData>("/admin/proxy", { signal: controller.signal })
+        .then((latest) => {
+          if (!controller.signal.aborted) setData((current) => current ? { ...current, dependency: latest.dependency } : current);
+        }).catch(() => { /* 다음 조회에서 다시 확인한다. */ });
+    }, 15000);
+    return () => { window.clearInterval(timer); controller.abort(); };
+  }, [data?.configured]);
+
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
       if (!dirtyRef.current) return;
@@ -219,6 +234,14 @@ export function ProxySettings() {
     );
     setError("");
     setMessage("");
+  }
+
+  function selectContainer(value: string) {
+    update("container", value);
+    const candidate = discovery?.containers.find((item) => item.name === value || item.id === value);
+    if (!candidate || settings?.mode !== "external") return;
+    const networks = candidate.networks.filter((name) => !["bridge", "host", "none", "paas-buildkit-net"].includes(name)) || [];
+    setSettings((current) => current ? { ...current, network: networks.includes(current.network) ? current.network : networks.length === 1 ? networks[0] : "" } : current);
   }
 
   function restoreDefaults() {
@@ -312,10 +335,11 @@ export function ProxySettings() {
       dirtyRef.current = false;
       setData(result);
       setSettings(copySettings(result.settings));
+      if (result.loadError) return;
       setMessage(
         settings.mode === "managed" && !data.environment.devMode
           ? "Configuration saved and the dedicated Traefik Compose file generated. Follow the connection guide to start or update the proxy. Redeploy existing apps to update their proxy routes."
-          : "Configuration saved. Portal and custom-domain routes update now; redeploy existing apps to update their proxy routes.",
+          : "Configuration saved. New deployments connect web services to the selected proxy network. Redeploy existing apps to apply changes; workers and databases stay on their private networks.",
       );
     } catch (e) {
       if (!controller.signal.aborted && mounted.current)
@@ -387,7 +411,7 @@ export function ProxySettings() {
           <p className="eyebrow">ADMINISTRATION</p>
           <h2>Proxy setup</h2>
           <p className="view-subtitle">
-            Connect the portal to the reverse proxy that routes applications.
+            Connect application web services to a reverse proxy. The server manages the portal’s own address and HTTPS separately.
           </p>
         </div>
         <div className="proxy-header-actions">
@@ -461,13 +485,20 @@ export function ProxySettings() {
 
             <div className="proxy-form-grid">
               <div className="proxy-field proxy-field-wide">
+                <label htmlFor="proxy-network">Application connection network</label>
+                <input id="proxy-network" type="text" list="proxy-network-options" value={settings.network} onChange={(event) => update("network", event.target.value)} disabled={controlsDisabled} autoComplete="off" />
+                <datalist id="proxy-network-options">{(selectedContainer?.networks || discoveredNetworks).map((name) => <option key={name} value={name} />)}</datalist>
+                <small className="proxy-help">Choose a network already used by the proxy. Only application web services join it; the portal, workers and databases remain separate.</small>
+              </div>
+
+              <div className="proxy-field proxy-field-wide">
                 <label htmlFor="proxy-container">Traefik container</label>
                 {settings.mode === "external" && discovery && !manualContainer ? (
                   <select
                     id="proxy-container"
                     value={settings.container}
                     disabled={controlsDisabled}
-                    onChange={(event) => update("container", event.target.value)}
+                    onChange={(event) => selectContainer(event.target.value)}
                   >
                     <option value="">Choose a discovered container</option>
                     {discovery.containers.map((container) => (
@@ -488,7 +519,7 @@ export function ProxySettings() {
                     type="text"
                     value={settings.container}
                     disabled={controlsDisabled}
-                    onChange={(event) => update("container", event.target.value)}
+                    onChange={(event) => selectContainer(event.target.value)}
                     placeholder="traefik"
                     autoComplete="off"
                   />
@@ -524,6 +555,7 @@ export function ProxySettings() {
                 <h4>인증서 발급</h4>
                 <p className="proxy-help">사용할 CA를 선택하세요. 선택한 CA와 검증 방식이 새 Traefik 구성에 반영됩니다.</p>
                 <div className="proxy-form-grid">
+
                   <div className="proxy-field">
                     <label htmlFor="proxy-ca">Certificate authority</label>
                     <select id="proxy-ca" value={settings.certificateAuthority} disabled={controlsDisabled} onChange={(event) => changeAuthority(event.target.value as CertificateAuthority)}>
@@ -571,21 +603,22 @@ export function ProxySettings() {
                 ? "새 Traefik 구성에 정의할 이름입니다. 이름은 설정을 식별하며, CA와 검증 방식은 인증서 발급 설정으로 결정됩니다."
                 : "기존 Traefik 설정에 정의된 이름을 입력하세요. 이 이름으로 해당 설정을 참조하므로 기존 이름과 일치해야 합니다."}</p>
               <div className="proxy-form-grid">
+
               <div className="proxy-field">
                 <label htmlFor="proxy-entrypoint">Routing entrypoint</label>
                 <input id="proxy-entrypoint" type="text" list="proxy-entrypoint-options" value={settings.entrypoint} disabled={controlsDisabled} onChange={(event) => update("entrypoint", event.target.value)} placeholder={data.environment.devMode ? "web" : "websecure"} />
                 <datalist id="proxy-entrypoint-options">{selectedContainer?.entrypoints.map((value) => <option key={value} value={value} />)}</datalist>
                 <small className="proxy-help">{settings.mode === "managed" && !data.environment.devMode
                   ? <>HTTPS 443번 포트의 이름입니다. <code>web</code>은 HTTP-01용 80번 포트에 사용합니다.</>
-                  : <>Used by application and portal routes. Production commonly uses <code>websecure</code>; development uses HTTP <code>web</code>.</>}</small>
+                  : <>Used by application routes. Production commonly uses <code>websecure</code>; development uses HTTP <code>web</code>.</>}</small>
               </div>
               <div className="proxy-field">
-                <label htmlFor="proxy-resolver">Platform and portal certificate resolver</label>
+                <label htmlFor="proxy-resolver">Application certificate resolver</label>
                 <input id="proxy-resolver" type="text" list="proxy-resolver-options" value={settings.certificateResolver} disabled={controlsDisabled} onChange={(event) => update("certificateResolver", event.target.value)} placeholder="letsencrypt" />
                 <datalist id="proxy-resolver-options">{selectedContainer?.resolvers.map((value) => <option key={value} value={value} />)}</datalist>
                 <small className="proxy-help">{settings.mode === "managed" && !data.environment.devMode
-                  ? "포털과 플랫폼 앱의 DNS-01 인증서 발급 설정 이름입니다."
-                  : "Used for the portal and platform app hostnames, including the wildcard app certificate. Leave blank only when another certificate source is configured or in development."}</small>
+                  ? "사용자 앱의 DNS-01 인증서 발급 설정 이름입니다."
+                  : "Used for application hostnames, including the wildcard app certificate. Leave blank only when another certificate source is configured or in development."}</small>
               </div>
               <div className="proxy-field proxy-field-wide">
                 <label htmlFor="proxy-custom-resolver">Custom-domain certificate resolver</label>
@@ -603,13 +636,13 @@ export function ProxySettings() {
                 <h4>Platform environment</h4>
                 <dl>
                   <div><dt>Base domain</dt><dd>{data.environment.domain}</dd></div>
-                  <div><dt>Shared network</dt><dd>{data.environment.network}</dd></div>
+                  <div><dt>Saved application network</dt><dd>{data.environment.network}</dd></div>
                   <div><dt>Portal container</dt><dd>{data.environment.portalContainer}</dd></div>
                   <div><dt>Portal internal port</dt><dd>{data.environment.portalPort}</dd></div>
                   <div><dt>Dynamic config directory</dt><dd>{data.environment.dynamicDirectory}</dd></div>
                 </dl>
-                <p className="proxy-help">The portal host is <code>portal.{data.environment.domain}</code>; the base domain above is not redirected to the portal.</p>
-                <p className="proxy-help">These values come from the current environment. Change them there, then recreate the portal container.</p>
+                <p className="proxy-help">The server operator configures the portal’s address, reverse proxy and HTTPS. This page manages application routing only.</p>
+                <p className="proxy-help">The base domain and portal listener come from the server environment. The application network is selected above.</p>
                 {discovery && discoveredNetworks.length > 0 && !discoveredNetworks.includes(data.environment.network) ? (
                   <p className="proxy-alert info" role="status">The required network was not found during discovery. Create or configure it before connecting this proxy.</p>
                 ) : null}
@@ -625,9 +658,18 @@ export function ProxySettings() {
               </button>
             </div>
             {dirty || !data.configured ? (
-              <p className="proxy-alert info" role="note">A check with draft settings checks the selected container and configuration, but skips route checks. Save these settings to apply and validate routing.</p>
+              <p className="proxy-alert info" role="note">Save these settings to use them for application deployments. A draft check does not change the running proxy or applications.</p>
             ) : null}
           </section>
+
+          {data.dependency ? (
+            <section className="panel detail-panel" aria-labelledby="proxy-status-heading">
+              <h3 id="proxy-status-heading">Proxy status · {data.settings.container}</h3>
+              <p>{data.dependency.running === true ? "Running" : data.dependency.running === false ? "Stopped" : "Status unavailable"} · {data.dependency.status === "ready" ? "Available" : "Needs attention"}</p>
+              <p role="status">{data.dependency.detail}</p>
+              <p className="proxy-help">Checked {new Date(data.dependency.checkedAt).toLocaleString()}</p>
+            </section>
+          ) : null}
 
           {data.lastCheck ? (
             <section className="panel detail-panel proxy-check-panel" aria-labelledby="proxy-check-heading">

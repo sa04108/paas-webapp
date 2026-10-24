@@ -24,7 +24,7 @@ function defaults() {
   const dev = process.env.RUN_MODE === "development";
   return {
     mode: "managed", container: "paas-proxy", entrypoint: dev ? "web" : "websecure",
-    image: process.env.TRAEFIK_IMAGE || "traefik:latest",
+    image: process.env.TRAEFIK_IMAGE || "traefik:latest", network: process.env.APP_NETWORK || "paas-app",
     certificateResolver: dev ? "" : "letsencrypt",
     customCertificateResolver: dev ? "" : "letsencrypt-http",
     ...certificateDefaults(),
@@ -35,6 +35,9 @@ function normalize(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Proxy settings are required.");
   if (!["managed", "external"].includes(input.mode)) throw new Error("Choose a proxy connection mode.");
   const result = { mode: input.mode };
+  result.network = input.network === undefined ? process.env.APP_NETWORK || "paas-app" : input.network;
+  if (typeof result.network !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(result.network)) throw new Error("Choose a valid application proxy network.");
+  if ([process.env.PORTAL_NETWORK || "paas-portal", "paas-buildkit-net", "host", "none", "bridge"].includes(result.network)) throw new Error("Choose a dedicated proxy network separate from the portal and build networks.");
   // 기존 프로필은 이전 템플릿의 이미지 버전을 유지한다.
   result.image = input.image === undefined ? "traefik:v3.6" : input.image;
   if (typeof result.image !== "string" || result.image.length > 255 || !/^[A-Za-z0-9][A-Za-z0-9._:/-]*(?:@sha256:[a-f0-9]{64})?$/.test(result.image)) {
