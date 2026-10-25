@@ -37,6 +37,7 @@ These instructions apply repository-wide.
 ## Git Workflow
 
 - Explicit user instructions about branches, commits, or pushes override these workflow defaults. The root agent manages branch/worktree setup, staging, commits, and pushes; subagents perform these operations only when explicitly delegated.
+- The user explicitly authorizes completing implementation requests in this repository by merging verified changes into `devel` and pushing to `origin` (`https://github.com/sa04108/paas-webapp.git`), without a separate merge/push confirmation.
 - Before editing, inspect `git status --short --branch`, `git worktree list`, and recent commits. Preserve pre-existing changes, including staged changes; never overwrite them or include them in your commits.
 - Before the first edit, create a descriptive task branch separate from `main` and `devel`. Do not work directly on either integration branch. Use a separate branch and worktree for concurrent editing tasks or when the existing checkout must be preserved.
 - Base new independent tasks on freshly fetched remote `devel`; if unavailable, use local `devel` and report the limitation. Related subagent work must use the root's agreed task snapshot, including required parent changes.
