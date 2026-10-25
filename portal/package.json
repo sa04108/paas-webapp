@@ -15,7 +15,7 @@
     "dev:client": "vite build --watch"
   },
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": "^24.22.1"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",
