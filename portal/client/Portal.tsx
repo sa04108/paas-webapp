@@ -521,8 +521,13 @@ function AppDetail({
     <section id="view-app-detail" className="view-section">
       <nav className="app-detail-gnb" aria-label="App navigation">
         <div className="app-detail-gnb-left">
-          <Link id="app-detail-back-btn" className="ghost-btn" to="/dashboard">
-            ← Dashboard
+          <Link
+            id="app-detail-back-btn"
+            className="ghost-btn app-detail-back-btn"
+            to="/dashboard"
+          >
+            <Icon name="arrow-left" />
+            Dashboard
           </Link>
           <span id="app-detail-appname" className="app-detail-appname">
             {userid} / {appname}

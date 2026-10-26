@@ -12,6 +12,8 @@ export function Icon({
     | "moon"
     | "menu"
     | "copy"
+    | "arrow-left"
+    | "external-link"
     | "logs";
 }) {
   const paths = {
@@ -23,6 +25,8 @@ export function Icon({
     moon: "M20.99 12.97A9 9 0 0 1 11.03 3.01a9 9 0 1 0 9.96 9.96Z",
     menu: "M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z",
     copy: "M16 1H4v16h2V3h10zm4 4H8v18h12zm-2 16h-8V7h8z",
+    "arrow-left": "M20 11H7.83l5.58-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z",
+    "external-link": "M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42L17.59 5H14zM5 3h6v2H5v14h14v-6h2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z",
     logs: "M5 3h14v18H5zm2 4v2h10V7zm0 4v2h10v-2zm0 4v2h7v-2z",
   };
   return (
