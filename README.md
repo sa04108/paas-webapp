@@ -65,7 +65,7 @@ Portal -> Docker API / Compose -> lifecycle, logs, and exec
 
 | Layer | Technologies |
 | --- | --- |
-| Portal backend | Node.js 22 in the Compose image, Express 4, JavaScript |
+| Portal backend | Node.js 24.22.1 LTS in the Compose image, Express 4, JavaScript |
 | Dashboard | HTML, CSS, vanilla JavaScript, xterm.js |
 | Persistence and authentication | SQLite via `better-sqlite3`, bcrypt password hashes, session cookies |
 | Container management | Docker Engine, Docker Compose, `dockerode`, Bash scripts |
@@ -90,7 +90,7 @@ By default, each application is limited to `256m` of memory and `0.5` CPU, with 
 
 The host needs Git, Docker Engine, and Docker Compose 2.17.0 or later with build support because the portal image uses [`dockerfile_inline`](https://docs.docker.com/reference/compose-file/build/#dockerfile_inline). Use the `docker compose` command. The bundled setup expects a rootful Docker daemon at `/var/run/docker.sock` and supports a privileged BuildKit container. Your shell user must be able to run Docker commands.
 
-Node.js and Railpack do not need to be installed on the host for the Compose workflow: the portal image installs its own tools. For direct portal development, use Node.js 22.12 or later.
+Node.js and Railpack do not need to be installed on the host for the Compose workflow: the portal image installs its own tools. For direct portal development, use Node.js 24.22.1 or a newer 24.x release.
 
 ## Initial bootstrap
 
@@ -296,6 +296,17 @@ docker compose --env-file .env -f docker-compose.yml down
 
 Stop the supplied proxy separately with `docker compose --env-file .env -f docker-compose.proxy.yml down`. Do not remove the application network; it may still be used by running applications or another proxy.
 
+The portal image pins Node.js 24.22.1, which includes the [October 2026 security fixes](https://nodejs.org/en/blog/release/v24.22.1). When upgrading an existing portal to this runtime, rebuild its image and recreate the portal container using the same Compose files and options as the running deployment. For the base production stack with BuildKit already running:
+
+```bash
+# Node 런타임을 갱신한 이미지로 포털만 교체하고 실제 버전을 확인한다.
+docker compose --env-file .env -f docker-compose.yml build --pull portal
+docker compose --env-file .env -f docker-compose.yml up -d --no-deps --force-recreate portal
+docker compose --env-file .env -f docker-compose.yml exec portal node --version
+```
+
+Expect `v24.22.1`. Ordinary source updates can still use `docker compose down && docker compose up -d`: the source mount and startup dependency installation/frontend build remain in place. That restart workflow does not update Node itself. Tenant application images have their own runtimes and are not upgraded by rebuilding the portal.
+
 User applications have separate Compose projects and keep running when the platform stack is stopped; manage them through the portal before shutdown if needed. The portal has access to the host Docker socket and BuildKit is privileged, so the platform's administrators control the Docker host.
 
 To run the existing portal test suite with dependencies installed:
@@ -322,7 +333,7 @@ The portal uses React, TypeScript and Vite. Express owns authentication, APIs an
 
 The portal has an original neutral light/dark theme with system fonts and the existing Hyunbbai branding. Browser dependency license notices are generated during the build and available through the footer's **Open source licenses** link.
 
-Use Node.js 22.12+ (the Compose image uses Node 22):
+Use Node.js 24.22.1 or a newer 24.x release (the Compose image pins 24.22.1):
 
 ```bash
 cd portal
