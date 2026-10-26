@@ -23,10 +23,21 @@ type Repo = {
   defaultBranch: string;
   private: boolean;
 };
+type CreateDraft = {
+  appname: string;
+  source: "url" | "github";
+  repoUrl: string;
+  selectedRepo: string;
+  branch: string;
+  env: string;
+  build: BuildConfig;
+  runtime: RuntimeConfig;
+};
 type GithubInstallation = { id: string; account: string; type: string };
 type GithubStatus = {
   configured: boolean;
   connected: boolean;
+  draftAvailable?: boolean;
   pending?: {
     kind: "install" | "select";
     installations: GithubInstallation[];
@@ -46,7 +57,7 @@ export function CreateApp({
   const navigate = useNavigate();
   const scope = useRequestScope();
   const [appname, setAppname] = useState("");
-  const [source, setSource] = useState("url");
+  const [source, setSource] = useState<"url" | "github">("url");
   const [repoUrl, setRepoUrl] = useState("");
   const [selectedRepo, setSelectedRepo] = useState("");
   const [branch, setBranch] = useState("main");
@@ -60,6 +71,7 @@ export function CreateApp({
   const [repos, setRepos] = useState<Repo[]>([]);
   const [selectedInstallation, setSelectedInstallation] = useState("");
   const [connectingInstallation, setConnectingInstallation] = useState(false);
+  const [startingGithubConnect, setStartingGithubConnect] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [githubError, setGithubError] = useState("");
@@ -82,8 +94,24 @@ export function CreateApp({
     });
     if (!status.connected) {
       setRepos([]);
-      setSelectedRepo("");
+      if (!status.pending && !status.draftAvailable) setSelectedRepo("");
     }
+  }, []);
+  const applyRepositories = useCallback((next: Repo[]) => {
+    setRepos(next);
+    setSelectedRepo((current) =>
+      current && !next.some((repo) => repo.cloneUrl === current) ? "" : current,
+    );
+  }, []);
+  const applyDraft = useCallback((draft: CreateDraft) => {
+    setAppname(draft.appname);
+    setSource(draft.source);
+    setRepoUrl(draft.repoUrl);
+    setSelectedRepo(draft.selectedRepo);
+    setBranch(draft.branch);
+    setEnv(draft.env);
+    setBuild(draft.build);
+    setRuntime(draft.runtime);
   }, []);
   const refreshGithub = useCallback(async () => {
     if (disconnecting.current || connectionMutation.current) return;
@@ -101,6 +129,14 @@ export function CreateApp({
         setSource(status.configured ? "github" : "url");
         initializedGithub.current = true;
       }
+      if (status.draftAvailable) {
+        const result = await api<{ draft: CreateDraft | null }>(
+          "/github/restore-draft",
+          { ...json("POST", {}), signal: controller.signal },
+        );
+        if (controller.signal.aborted) return;
+        if (result.draft) applyDraft(result.draft);
+      }
       if (status.pending) {
         status = await api<GithubStatus>(
           "/github/complete-connection",
@@ -114,7 +150,7 @@ export function CreateApp({
         const data = await api<{ repos: Repo[] }>("/github/repos", {
           signal: controller.signal,
         });
-        if (!controller.signal.aborted) setRepos(data.repos);
+        if (!controller.signal.aborted) applyRepositories(data.repos);
       }
     } catch (e) {
       if (!controller.signal.aborted) setGithubError(errorMessage(e));
@@ -122,9 +158,9 @@ export function CreateApp({
       if (githubRequest.current === controller) githubRequest.current = null;
       if (!controller.signal.aborted) setGithubLoading(false);
     }
-  }, [applyGithubStatus]);
+  }, [applyDraft, applyGithubStatus, applyRepositories]);
   useEffect(() => {
-    // 새 탭에서 인증을 마치고 돌아오면 입력값을 유지한 채 연결 상태만 갱신한다.
+    // GitHub 인증 후 포털로 돌아오면 입력값을 복구하고 연결 상태를 갱신한다.
     const resume = () => {
       if (!document.hidden) void refreshGithub();
     };
@@ -138,6 +174,20 @@ export function CreateApp({
       document.removeEventListener("visibilitychange", resume);
     };
   }, [refreshGithub]);
+  useEffect(() => {
+    // 뒤로 가기로 메모리 캐시의 폼에 복귀해도 인증 시작 잠금이 남지 않게 한다.
+    const resumeHistory = (event: PageTransitionEvent) => {
+      if (!event.persisted || !startingGithubConnect) return;
+      githubRequest.current?.abort();
+      githubRequest.current = null;
+      connectionMutation.current = false;
+      setStartingGithubConnect(false);
+      setGithubLoading(false);
+      void refreshGithub();
+    };
+    window.addEventListener("pageshow", resumeHistory);
+    return () => window.removeEventListener("pageshow", resumeHistory);
+  }, [refreshGithub, startingGithubConnect]);
   const repository = source === "github" ? selectedRepo : repoUrl;
   const loadFiles = useCallback(
     async (signal: AbortSignal) => {
@@ -206,6 +256,44 @@ export function CreateApp({
       if (!signal.aborted) setGithubLoading(false);
     }
   }
+  async function startGithubConnect() {
+    if (disconnecting.current || connectionMutation.current) return;
+    connectionMutation.current = true;
+    githubRequest.current?.abort();
+    githubRequest.current = null;
+    const controller = new AbortController();
+    githubRequest.current = controller;
+    setStartingGithubConnect(true);
+    setGithubLoading(true);
+    setGithubError("");
+    const draft: CreateDraft = {
+      appname,
+      source,
+      repoUrl,
+      selectedRepo,
+      branch,
+      env,
+      build,
+      runtime,
+    };
+    try {
+      const result = await api<{ url: string }>("/github/connect", {
+        ...json("POST", { draft }),
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+      window.location.assign(result.url);
+      // 이동이 시작되면 요청 잠금을 해제하지 않아 재조회나 폼 변경을 막는다.
+    } catch (e) {
+      if (!controller.signal.aborted) {
+        setGithubError(errorMessage(e));
+        if (githubRequest.current === controller) githubRequest.current = null;
+        connectionMutation.current = false;
+        setStartingGithubConnect(false);
+        setGithubLoading(false);
+      }
+    }
+  }
   async function connectInstallation() {
     const signal = scope.current.signal;
     if (
@@ -235,7 +323,7 @@ export function CreateApp({
           signal: controller.signal,
         });
         if (!signal.aborted && !controller.signal.aborted)
-          setRepos(data.repos);
+          applyRepositories(data.repos);
       }
     } catch (e) {
       if (!signal.aborted && !controller.signal.aborted)
@@ -257,7 +345,7 @@ export function CreateApp({
       </header>
       <article className="panel create-panel">
         <form id="create-form" onSubmit={submit} noValidate>
-          <fieldset className="form-fields" disabled={busy}>
+          <fieldset className="form-fields" disabled={busy || startingGithubConnect}>
             <label htmlFor="appname-input">App Name</label>
             <input
               type="text"
@@ -336,18 +424,15 @@ export function CreateApp({
                       <Icon name="external-link" />
                     </a>
                   ) : !github.pending ? (
-                    <a
+                    <button
                       id="github-connect-btn"
+                      type="button"
                       className="ghost-btn github-connect-btn"
-                      href="/api/github/connect"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Connect GitHub (opens in a new tab)"
-                      aria-label="Connect GitHub (opens in a new tab)"
+                      disabled={startingGithubConnect || githubLoading}
+                      onClick={() => void startGithubConnect()}
                     >
-                      Connect GitHub
-                      <Icon name="external-link" />
-                    </a>
+                      {startingGithubConnect ? "Connecting…" : "Connect GitHub"}
+                    </button>
                   ) : null}
                 </div>
                 {github.pending?.kind === "install" && (
@@ -409,14 +494,17 @@ export function CreateApp({
                 )}
                 {github.pending && (
                   <p>
-                    <a
+                    <button
+                      id="github-restart-connection-btn"
                       className="ghost-btn"
-                      href="/api/github/connect"
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      type="button"
+                      disabled={startingGithubConnect || githubLoading}
+                      onClick={() => void startGithubConnect()}
                     >
-                      Restart GitHub connection
-                    </a>
+                      {startingGithubConnect
+                        ? "Connecting…"
+                        : "Restart GitHub connection"}
+                    </button>
                   </p>
                 )}
                 <label htmlFor="repo-select">Repository</label>

@@ -4,6 +4,8 @@
 // 역할:
 //   - GET  /github/status     : 현재 사용자의 연결 상태
 //   - GET  /github/connect    : GitHub 사용자 인증 시작
+//   - POST /github/connect    : 폼 임시 저장 후 현재 탭 인증 시작
+//   - POST /github/restore-draft : 인증 후 폼 일회성 복원
 //   - GET  /github/callback   : OAuth 콜백 검증 후 기존 설치 조회
 //   - GET  /github/install    : 설치가 없는 사용자를 설치 화면으로 안내
 //   - POST /github/complete-connection : 설치 재조회 또는 계정 선택 완료
@@ -30,6 +32,11 @@ function connectionToken(req) {
 
 function cookieOptions(req) {
   return { httpOnly: true, secure: req.secure, sameSite: "lax", path: "/api/github" };
+}
+
+function requirePortalOrigin(req) {
+  const expected = new URL(`${req.protocol}://${req.get("host")}`).origin;
+  if (req.get("Origin") !== expected) throw new AppError(403, "GitHub connection must be completed from this portal.");
 }
 
 /**
@@ -62,6 +69,31 @@ function createGithubRouter(githubService) {
     }
   });
 
+  router.post("/connect", (req, res, next) => {
+    try {
+      requirePortalOrigin(req);
+      const { url, token } = githubService.beginConnection(req.auth.user.id, req.body?.draft);
+      res.cookie(CONNECTION_COOKIE, token, { ...cookieOptions(req), maxAge: 10 * 60_000 });
+      return sendOk(res, { url });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post("/restore-draft", (req, res, next) => {
+    try {
+      requirePortalOrigin(req);
+      const token = connectionToken(req);
+      const draft = githubService.consumeConnectionDraft(req.auth.user.id, token);
+      const status = githubService.getConnectionStatus(req.auth.user.id, token);
+      if (!status.pending && !status.draftAvailable) res.clearCookie(CONNECTION_COOKIE, cookieOptions(req));
+      res.set("Cache-Control", "no-store");
+      return sendOk(res, { draft });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
   // 일반 OAuth 콜백에는 installation_id가 없어도 설치 목록에서 연결 대상을 찾는다.
   router.get("/callback", async (req, res, next) => {
     try {
@@ -79,12 +111,16 @@ function createGithubRouter(githubService) {
         userId: req.auth.user.id, token, code, state, installationId,
       });
       if (!result.pending) {
-        res.clearCookie(CONNECTION_COOKIE, cookieOptions(req));
+        if (result.draftAvailable) {
+          res.cookie(CONNECTION_COOKIE, token, { ...cookieOptions(req), maxAge: 10 * 60_000 });
+        } else {
+          res.clearCookie(CONNECTION_COOKIE, cookieOptions(req));
+        }
         return res.redirect("/create?github=connected");
       }
       res.cookie(CONNECTION_COOKIE, token, { ...cookieOptions(req), maxAge: 10 * 60_000 });
       if (result.pending.kind === "install") {
-        return res.redirect(githubService.buildInstallUrl(req.auth.user.id, token));
+        return res.redirect("/create?github=install");
       }
       return res.redirect("/create?github=select");
     } catch (error) {
@@ -103,15 +139,13 @@ function createGithubRouter(githubService) {
   router.post("/complete-connection", async (req, res, next) => {
     try {
       // 쿠키를 이용한 완료 요청은 현재 포털에서만 허용한다.
-      const origin = req.get("Origin");
-      const expected = new URL(`${req.protocol}://${req.get("host")}`).origin;
-      if (origin !== expected) throw new AppError(403, "GitHub connection must be completed from this portal.");
+      requirePortalOrigin(req);
       const result = await githubService.completeConnection({
         userId: req.auth.user.id,
         token: connectionToken(req),
         installationId: String(req.body?.installationId || "").trim(),
       });
-      if (!result.pending) res.clearCookie(CONNECTION_COOKIE, cookieOptions(req));
+      if (!result.pending && !result.draftAvailable) res.clearCookie(CONNECTION_COOKIE, cookieOptions(req));
       return sendOk(res, result);
     } catch (error) {
       return next(error);
