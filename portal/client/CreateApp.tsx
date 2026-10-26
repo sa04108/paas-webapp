@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, errorMessage, json } from "./api";
 import {
@@ -8,7 +8,7 @@ import {
   runtimePayload,
 } from "./configuration";
 import { useRequestScope } from "./hooks";
-import { ErrorText } from "./ui";
+import { ErrorText, Icon } from "./ui";
 import type {
   BuildConfig,
   RuntimeConfig,
@@ -50,29 +50,53 @@ export function CreateApp({
   const [error, setError] = useState("");
   const [githubError, setGithubError] = useState("");
   const [githubLoading, setGithubLoading] = useState(true);
+  const githubRequest = useRef<AbortController | null>(null);
+  const disconnecting = useRef(false);
   useEffect(() => {
-    const controller = new AbortController();
-    (async () => {
+    let initialized = false;
+    const refreshGithub = async () => {
+      if (disconnecting.current) return;
+      githubRequest.current?.abort();
+      const controller = new AbortController();
+      githubRequest.current = controller;
       try {
         const status = await api<typeof github>("/github/status", {
           signal: controller.signal,
         });
         if (controller.signal.aborted) return;
         setGithub(status);
-        setSource(status.configured ? "github" : "url");
+        setGithubError("");
+        if (!initialized) {
+          setSource(status.configured ? "github" : "url");
+          initialized = true;
+        }
         if (status.connected) {
           const data = await api<{ repos: Repo[] }>("/github/repos", {
             signal: controller.signal,
           });
           if (!controller.signal.aborted) setRepos(data.repos);
+        } else {
+          setRepos([]);
+          setSelectedRepo("");
         }
       } catch (e) {
         if (!controller.signal.aborted) setGithubError(errorMessage(e));
       } finally {
         if (!controller.signal.aborted) setGithubLoading(false);
       }
-    })();
-    return () => controller.abort();
+    };
+    // 새 탭에서 인증을 마치고 돌아오면 입력값을 유지한 채 연결 상태만 갱신한다.
+    const resume = () => {
+      if (!document.hidden) void refreshGithub();
+    };
+    void refreshGithub();
+    window.addEventListener("focus", resume);
+    document.addEventListener("visibilitychange", resume);
+    return () => {
+      githubRequest.current?.abort();
+      window.removeEventListener("focus", resume);
+      document.removeEventListener("visibilitychange", resume);
+    };
   }, []);
   const repository = source === "github" ? selectedRepo : repoUrl;
   const loadFiles = useCallback(
@@ -124,14 +148,21 @@ export function CreateApp({
   }
   async function disconnect() {
     const signal = scope.current.signal;
+    if (disconnecting.current) return;
+    disconnecting.current = true;
+    githubRequest.current?.abort();
     try {
       await api("/github/disconnect", { ...json("POST"), signal });
       if (signal.aborted) return;
       setGithub((v) => ({ ...v, connected: false }));
       setRepos([]);
       setSelectedRepo("");
+      setGithubError("");
     } catch (e) {
       if (!signal.aborted) setGithubError(errorMessage(e));
+    } finally {
+      disconnecting.current = false;
+      if (!signal.aborted) setGithubLoading(false);
     }
   }
   return (
@@ -206,10 +237,15 @@ export function CreateApp({
                   ) : (
                     <a
                       id="github-connect-btn"
-                      className="ghost-btn"
+                      className="ghost-btn github-connect-btn"
                       href="/api/github/connect"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Connect GitHub (opens in a new tab)"
+                      aria-label="Connect GitHub (opens in a new tab)"
                     >
                       Connect GitHub
+                      <Icon name="external-link" />
                     </a>
                   )}
                 </div>
