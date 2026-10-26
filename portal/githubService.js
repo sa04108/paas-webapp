@@ -16,6 +16,37 @@ const { AppError } = require("./utils");
 const GITHUB_API = "https://api.github.com";
 const CONNECTION_TTL_MS = 10 * 60_000;
 const MAX_CONNECTION_FLOWS = 1000;
+const MAX_CONNECTION_DRAFT_BYTES = 256 * 1024;
+
+function normalizeConnectionDraft(input) {
+  if (input === undefined) return null;
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new AppError(400, "Invalid app form draft.");
+  }
+  const draft = {};
+  for (const field of ["appname", "source", "repoUrl", "selectedRepo", "branch", "env"]) {
+    if (typeof input[field] !== "string") throw new AppError(400, "Invalid app form draft.");
+    draft[field] = input[field];
+  }
+  if (!["url", "github"].includes(draft.source)) throw new AppError(400, "Invalid repository source.");
+  for (const [field, keys, modes] of [
+    ["build", ["mode", "dockerfile", "content", "config"], ["auto", "repository", "custom", "railpack"]],
+    ["runtime", ["mode", "source", "content", "file", "webService"], ["single", "compose"]],
+  ]) {
+    const value = input[field];
+    if (!value || !modes.includes(value.mode)) throw new AppError(400, "Invalid app configuration draft.");
+    draft[field] = {};
+    for (const key of keys) {
+      if (value[key] === undefined) continue;
+      if (typeof value[key] !== "string") throw new AppError(400, "Invalid app configuration draft.");
+      draft[field][key] = value[key];
+    }
+  }
+  if (Buffer.byteLength(JSON.stringify(draft)) > MAX_CONNECTION_DRAFT_BYTES) {
+    throw new AppError(413, "The form is too large to preserve during GitHub sign-in (256 KiB maximum).");
+  }
+  return draft;
+}
 
 function base64url(input) {
   return Buffer.from(input)
@@ -246,8 +277,10 @@ function createGithubService({ config, statements, now = () => Date.now() }) {
     return configured;
   }
 
-  function beginConnection(userId) {
+  function beginConnection(userId, inputDraft) {
     assertConfigured();
+    // 환경변수 등 폼 입력은 허용한 필드만 짧게 보관하고 브라우저 저장소나 DB에 남기지 않는다.
+    const draft = normalizeConnectionDraft(inputDraft);
     for (const [id, flow] of connectionFlows) {
       if (flow.expiresAt <= now()) clearConnection(id);
     }
@@ -263,6 +296,7 @@ function createGithubService({ config, statements, now = () => Date.now() }) {
       userToken: null,
       installations: [],
       busy: false,
+      draft,
     };
     connectionFlows.set(userId, flow);
     expireConnection(userId, flow);
@@ -284,10 +318,20 @@ function createGithubService({ config, statements, now = () => Date.now() }) {
     return {
       configured,
       connected: Boolean(getInstallationId(userId)),
-      ...(flow && flow.stage !== "authorize" ? {
+      ...(flow?.draft && flow.stage !== "authorize" ? { draftAvailable: true } : {}),
+      ...(flow && ["install", "select"].includes(flow.stage) ? {
         pending: { kind: flow.stage, installations: flow.installations },
       } : {}),
     };
+  }
+
+  function consumeConnectionDraft(userId, token) {
+    const flow = requireConnection(userId, token);
+    if (flow.stage === "authorize") throw new AppError(409, "Finish GitHub authorization before restoring the form.");
+    const draft = flow.draft;
+    flow.draft = null;
+    if (flow.stage === "complete") clearConnection(userId);
+    return draft;
   }
 
   function applyInstallations(userId, flow, installations, requestedId = "") {
@@ -301,7 +345,14 @@ function createGithubService({ config, statements, now = () => Date.now() }) {
     if (selected) {
       const timestamp = new Date(now()).toISOString();
       statements.upsertGithubInstallation.run(userId, String(selected.id), timestamp, timestamp);
-      clearConnection(userId);
+      if (flow.draft) {
+        // 현재 탭으로 돌아온 폼이 한 번 복원할 때까지만 입력값과 식별 쿠키를 유지한다.
+        flow.stage = "complete";
+        flow.userToken = null;
+        flow.installations = [];
+      } else {
+        clearConnection(userId);
+      }
       return;
     }
     flow.stage = installations.length ? "select" : "install";
@@ -382,6 +433,7 @@ function createGithubService({ config, statements, now = () => Date.now() }) {
   return {
     isConfigured,
     beginConnection,
+    consumeConnectionDraft,
     buildInstallUrl,
     completeAuthorization,
     completeConnection,
