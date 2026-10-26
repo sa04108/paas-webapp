@@ -14,6 +14,8 @@ const fs = require("node:fs");
 const { AppError } = require("./utils");
 
 const GITHUB_API = "https://api.github.com";
+const CONNECTION_TTL_MS = 10 * 60_000;
+const MAX_CONNECTION_FLOWS = 1000;
 
 function base64url(input) {
   return Buffer.from(input)
@@ -110,6 +112,46 @@ function createGithubService({ config, statements, now = () => Date.now() }) {
   const privateKey = loadPrivateKey(config);
   const stateSecret = process.env.GITHUB_STATE_SECRET || "";
   const clientSecret = process.env.GITHUB_APP_CLIENT_SECRET || "";
+  // 인증 중인 사용자 토큰은 연결 완료·취소·만료 시 제거하고 DB에는 저장하지 않는다.
+  const connectionFlows = new Map();
+
+  function clearConnection(userId) {
+    const flow = connectionFlows.get(userId);
+    if (flow) clearTimeout(flow.timer);
+    connectionFlows.delete(userId);
+  }
+
+  function expireConnection(userId, flow) {
+    clearTimeout(flow.timer);
+    flow.expiresAt = now() + CONNECTION_TTL_MS;
+    flow.timer = setTimeout(() => {
+      if (connectionFlows.get(userId) === flow) clearConnection(userId);
+    }, CONNECTION_TTL_MS);
+    flow.timer.unref();
+  }
+
+  function findConnection(userId, token) {
+    const flow = connectionFlows.get(userId);
+    if (!flow) return null;
+    if (flow.expiresAt <= now()) {
+      clearConnection(userId);
+      return null;
+    }
+    const digest = crypto.createHash("sha256").update(String(token || "")).digest();
+    return crypto.timingSafeEqual(flow.tokenHash, digest) ? flow : null;
+  }
+
+  function requireConnection(userId, token) {
+    const flow = findConnection(userId, token);
+    if (!flow) throw new AppError(409, "GitHub connection expired. Start Connect GitHub again.");
+    return flow;
+  }
+
+  function assertCurrentConnection(userId, flow) {
+    if (connectionFlows.get(userId) !== flow || flow.expiresAt <= now()) {
+      throw new AppError(409, "GitHub connection changed or expired. Start Connect GitHub again.");
+    }
+  }
 
   const configured = Boolean(
     config.GITHUB_APP_ID &&
@@ -132,6 +174,7 @@ function createGithubService({ config, statements, now = () => Date.now() }) {
     }
     const res = await fetch(`${GITHUB_API}${pathname}`, {
       method,
+      signal: AbortSignal.timeout(15_000),
       headers: {
         Accept: "application/vnd.github+json",
         "User-Agent": "paas-portal",
@@ -165,6 +208,7 @@ function createGithubService({ config, statements, now = () => Date.now() }) {
   async function exchangeCodeForUserToken(code) {
     const res = await fetch("https://github.com/login/oauth/access_token", {
       method: "POST",
+      signal: AbortSignal.timeout(15_000),
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
@@ -185,8 +229,16 @@ function createGithubService({ config, statements, now = () => Date.now() }) {
 
   // 해당 user token이 접근 가능한 App 설치 목록
   async function listUserInstallations(userToken) {
-    const json = await githubApi("/user/installations?per_page=100", { token: userToken });
-    return Array.isArray(json.installations) ? json.installations : [];
+    const installations = [];
+    for (let page = 1; page <= 100; page += 1) {
+      const json = await githubApi(`/user/installations?per_page=100&page=${page}`, { token: userToken });
+      if (!Array.isArray(json.installations)) throw new AppError(502, "Invalid GitHub installations response.");
+      installations.push(...json.installations.filter((item) =>
+        String(item.app_id) === String(config.GITHUB_APP_ID) && !item.suspended_at
+      ));
+      if (json.installations.length < 100) return installations;
+    }
+    throw new AppError(502, "Too many GitHub installations. Contact the administrator.");
   }
 
   // ── 공개 API ──
@@ -194,29 +246,111 @@ function createGithubService({ config, statements, now = () => Date.now() }) {
     return configured;
   }
 
-  function buildInstallUrl(userId) {
+  function beginConnection(userId) {
     assertConfigured();
-    // "OAuth during installation"이 켜져 있으면 설치 후 Callback URL로 code+state+installation_id가 온다.
-    const state = signState({ uid: userId }, stateSecret, now());
+    for (const [id, flow] of connectionFlows) {
+      if (flow.expiresAt <= now()) clearConnection(id);
+    }
+    if (!connectionFlows.has(userId) && connectionFlows.size >= MAX_CONNECTION_FLOWS) {
+      throw new AppError(503, "GitHub connection is busy. Try again shortly.");
+    }
+    clearConnection(userId);
+    const token = crypto.randomBytes(32).toString("base64url");
+    const flow = {
+      tokenHash: crypto.createHash("sha256").update(token).digest(),
+      nonce: crypto.randomBytes(16).toString("base64url"),
+      stage: "authorize",
+      userToken: null,
+      installations: [],
+      busy: false,
+    };
+    connectionFlows.set(userId, flow);
+    expireConnection(userId, flow);
+    const state = signState({ uid: userId, nonce: flow.nonce, purpose: "github-authorize" }, stateSecret, now());
+    const query = new URLSearchParams({ client_id: config.GITHUB_APP_CLIENT_ID, state });
+    return { token, url: `https://github.com/login/oauth/authorize?${query}` };
+  }
+
+  function buildInstallUrl(userId, token) {
+    assertConfigured();
+    const flow = requireConnection(userId, token);
+    if (flow.stage !== "install") throw new AppError(409, "Restart Connect GitHub to install on another account.");
+    const state = signState({ uid: userId, nonce: flow.nonce, purpose: "github-install" }, stateSecret, now());
     return `https://github.com/apps/${config.GITHUB_APP_SLUG}/installations/new?state=${encodeURIComponent(state)}`;
   }
 
-  // OAuth Callback: state 검증 → code 교환 → 사용자가 해당 설치 권한자인지 확인 → 매핑 저장.
-  // 반환: { userId } | null(검증 실패)
-  async function completeInstall({ code, state, installationId }) {
+  function getConnectionStatus(userId, token) {
+    const flow = findConnection(userId, token);
+    return {
+      configured,
+      connected: Boolean(getInstallationId(userId)),
+      ...(flow && flow.stage !== "authorize" ? {
+        pending: { kind: flow.stage, installations: flow.installations },
+      } : {}),
+    };
+  }
+
+  function applyInstallations(userId, flow, installations, requestedId = "") {
+    assertCurrentConnection(userId, flow);
+    const selected = requestedId
+      ? installations.find((item) => String(item.id) === requestedId)
+      : installations.length === 1 ? installations[0] : null;
+    if (requestedId && !selected) {
+      throw new AppError(403, "The selected GitHub installation is not accessible to your GitHub account.");
+    }
+    if (selected) {
+      const timestamp = new Date(now()).toISOString();
+      statements.upsertGithubInstallation.run(userId, String(selected.id), timestamp, timestamp);
+      clearConnection(userId);
+      return;
+    }
+    flow.stage = installations.length ? "select" : "install";
+    flow.installations = installations.map((item) => ({
+      id: String(item.id),
+      account: String(item.account?.login || item.id),
+      type: String(item.account?.type || "Account"),
+    }));
+  }
+
+  // DB를 쓰기 전에 state·브라우저 쿠키·포털 사용자·GitHub 설치 권한을 모두 확인한다.
+  async function completeAuthorization({ userId, token, code, state, installationId = "" }) {
     assertConfigured();
     const parsed = verifyState(state, stateSecret, now());
-    if (!parsed) return null;
+    if (!parsed) throw new AppError(400, "Invalid or expired GitHub authorization state. Start Connect GitHub again.");
+    if (parsed.uid !== userId) throw new AppError(403, "The GitHub authorization does not match the logged-in user.");
+    const flow = requireConnection(userId, token);
+    if (parsed.nonce !== flow.nonce || parsed.purpose !== `github-${flow.stage}` || flow.stage === "select") {
+      throw new AppError(400, "Invalid GitHub authorization flow. Start Connect GitHub again.");
+    }
+    if (flow.busy) throw new AppError(409, "GitHub connection is already in progress.");
+    flow.busy = true;
+    try {
+      const userToken = await exchangeCodeForUserToken(code);
+      const installations = await listUserInstallations(userToken);
+      assertCurrentConnection(userId, flow);
+      flow.userToken = userToken;
+      expireConnection(userId, flow);
+      applyInstallations(userId, flow, installations, installationId);
+      return getConnectionStatus(userId, token);
+    } finally {
+      flow.busy = false;
+    }
+  }
 
-    // code → user token → /user/installations로 소유 검증 (위변조된 installation_id 방지)
-    const userToken = await exchangeCodeForUserToken(code);
-    const installations = await listUserInstallations(userToken);
-    const owns = installations.some((i) => String(i.id) === String(installationId));
-    if (!owns) return null;
-
-    const nowIso = new Date(now()).toISOString();
-    statements.upsertGithubInstallation.run(parsed.uid, String(installationId), nowIso, nowIso);
-    return { userId: parsed.uid };
+  // 설치 후 자동 콜백이 없어도 원래 탭에서 설치를 재조회해 연결을 마칠 수 있다.
+  async function completeConnection({ userId, token, installationId = "" }) {
+    assertConfigured();
+    const flow = requireConnection(userId, token);
+    if (!flow.userToken || flow.stage === "authorize") throw new AppError(409, "Finish GitHub authorization first.");
+    if (flow.busy) throw new AppError(409, "GitHub connection is already in progress.");
+    flow.busy = true;
+    try {
+      const installations = await listUserInstallations(flow.userToken);
+      applyInstallations(userId, flow, installations, installationId);
+      return getConnectionStatus(userId, token);
+    } finally {
+      flow.busy = false;
+    }
   }
 
   function getInstallationId(userId) {
@@ -225,6 +359,7 @@ function createGithubService({ config, statements, now = () => Date.now() }) {
   }
 
   function disconnect(userId) {
+    clearConnection(userId);
     statements.deleteGithubInstallationByUserId.run(userId);
   }
 
@@ -246,8 +381,11 @@ function createGithubService({ config, statements, now = () => Date.now() }) {
 
   return {
     isConfigured,
+    beginConnection,
     buildInstallUrl,
-    completeInstall,
+    completeAuthorization,
+    completeConnection,
+    getConnectionStatus,
     getInstallationId,
     disconnect,
     listReposForUser,

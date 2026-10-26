@@ -23,6 +23,15 @@ type Repo = {
   defaultBranch: string;
   private: boolean;
 };
+type GithubInstallation = { id: string; account: string; type: string };
+type GithubStatus = {
+  configured: boolean;
+  connected: boolean;
+  pending?: {
+    kind: "install" | "select";
+    installations: GithubInstallation[];
+  };
+};
 export function CreateApp({
   user,
   config,
@@ -44,47 +53,77 @@ export function CreateApp({
   const [env, setEnv] = useState("");
   const [build, setBuild] = useState<BuildConfig>({ mode: "auto" });
   const [runtime, setRuntime] = useState<RuntimeConfig>({ mode: "single" });
-  const [github, setGithub] = useState({ configured: false, connected: false });
+  const [github, setGithub] = useState<GithubStatus>({
+    configured: false,
+    connected: false,
+  });
   const [repos, setRepos] = useState<Repo[]>([]);
+  const [selectedInstallation, setSelectedInstallation] = useState("");
+  const [connectingInstallation, setConnectingInstallation] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [githubError, setGithubError] = useState("");
   const [githubLoading, setGithubLoading] = useState(true);
   const githubRequest = useRef<AbortController | null>(null);
   const disconnecting = useRef(false);
-  useEffect(() => {
-    let initialized = false;
-    const refreshGithub = async () => {
-      if (disconnecting.current) return;
-      githubRequest.current?.abort();
-      const controller = new AbortController();
-      githubRequest.current = controller;
-      try {
-        const status = await api<typeof github>("/github/status", {
+  const connectionMutation = useRef(false);
+  const initializedGithub = useRef(false);
+  const installationChoices =
+    github.pending?.kind === "select" ? github.pending.installations : [];
+  const applyGithubStatus = useCallback((status: GithubStatus) => {
+    setGithub(status);
+    setSelectedInstallation((current) => {
+      const options =
+        status.pending?.kind === "select"
+          ? status.pending.installations
+          : [];
+      if (current && options.some((item) => item.id === current)) return current;
+      return options.length === 1 ? options[0].id : "";
+    });
+    if (!status.connected) {
+      setRepos([]);
+      setSelectedRepo("");
+    }
+  }, []);
+  const refreshGithub = useCallback(async () => {
+    if (disconnecting.current || connectionMutation.current) return;
+    if (githubRequest.current) return;
+    const controller = new AbortController();
+    githubRequest.current = controller;
+    setGithubLoading(true);
+    try {
+      let status = await api<GithubStatus>("/github/status", {
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+      applyGithubStatus(status);
+      if (!initializedGithub.current) {
+        setSource(status.configured ? "github" : "url");
+        initializedGithub.current = true;
+      }
+      if (status.pending) {
+        status = await api<GithubStatus>(
+          "/github/complete-connection",
+          { ...json("POST", {}), signal: controller.signal },
+        );
+        if (controller.signal.aborted) return;
+      }
+      applyGithubStatus(status);
+      setGithubError("");
+      if (status.connected) {
+        const data = await api<{ repos: Repo[] }>("/github/repos", {
           signal: controller.signal,
         });
-        if (controller.signal.aborted) return;
-        setGithub(status);
-        setGithubError("");
-        if (!initialized) {
-          setSource(status.configured ? "github" : "url");
-          initialized = true;
-        }
-        if (status.connected) {
-          const data = await api<{ repos: Repo[] }>("/github/repos", {
-            signal: controller.signal,
-          });
-          if (!controller.signal.aborted) setRepos(data.repos);
-        } else {
-          setRepos([]);
-          setSelectedRepo("");
-        }
-      } catch (e) {
-        if (!controller.signal.aborted) setGithubError(errorMessage(e));
-      } finally {
-        if (!controller.signal.aborted) setGithubLoading(false);
+        if (!controller.signal.aborted) setRepos(data.repos);
       }
-    };
+    } catch (e) {
+      if (!controller.signal.aborted) setGithubError(errorMessage(e));
+    } finally {
+      if (githubRequest.current === controller) githubRequest.current = null;
+      if (!controller.signal.aborted) setGithubLoading(false);
+    }
+  }, [applyGithubStatus]);
+  useEffect(() => {
     // 새 탭에서 인증을 마치고 돌아오면 입력값을 유지한 채 연결 상태만 갱신한다.
     const resume = () => {
       if (!document.hidden) void refreshGithub();
@@ -94,10 +133,11 @@ export function CreateApp({
     document.addEventListener("visibilitychange", resume);
     return () => {
       githubRequest.current?.abort();
+      githubRequest.current = null;
       window.removeEventListener("focus", resume);
       document.removeEventListener("visibilitychange", resume);
     };
-  }, []);
+  }, [refreshGithub]);
   const repository = source === "github" ? selectedRepo : repoUrl;
   const loadFiles = useCallback(
     async (signal: AbortSignal) => {
@@ -148,21 +188,65 @@ export function CreateApp({
   }
   async function disconnect() {
     const signal = scope.current.signal;
-    if (disconnecting.current) return;
+    if (disconnecting.current || connectionMutation.current) return;
     disconnecting.current = true;
+    connectionMutation.current = true;
     githubRequest.current?.abort();
+    githubRequest.current = null;
     try {
       await api("/github/disconnect", { ...json("POST"), signal });
       if (signal.aborted) return;
-      setGithub((v) => ({ ...v, connected: false }));
-      setRepos([]);
-      setSelectedRepo("");
+      applyGithubStatus({ configured: github.configured, connected: false });
       setGithubError("");
     } catch (e) {
       if (!signal.aborted) setGithubError(errorMessage(e));
     } finally {
       disconnecting.current = false;
+      connectionMutation.current = false;
       if (!signal.aborted) setGithubLoading(false);
+    }
+  }
+  async function connectInstallation() {
+    const signal = scope.current.signal;
+    if (
+      !selectedInstallation ||
+      disconnecting.current ||
+      connectionMutation.current ||
+      githubRequest.current
+    ) return;
+    connectionMutation.current = true;
+    const controller = new AbortController();
+    githubRequest.current = controller;
+    setConnectingInstallation(true);
+    setGithubLoading(true);
+    setGithubError("");
+    try {
+      const status = await api<GithubStatus>(
+        "/github/complete-connection",
+        {
+          ...json("POST", { installationId: selectedInstallation }),
+          signal: controller.signal,
+        },
+      );
+      if (signal.aborted || controller.signal.aborted) return;
+      applyGithubStatus(status);
+      if (status.connected) {
+        const data = await api<{ repos: Repo[] }>("/github/repos", {
+          signal: controller.signal,
+        });
+        if (!signal.aborted && !controller.signal.aborted)
+          setRepos(data.repos);
+      }
+    } catch (e) {
+      if (!signal.aborted && !controller.signal.aborted)
+        setGithubError(errorMessage(e));
+    } finally {
+      if (githubRequest.current === controller) githubRequest.current = null;
+      connectionMutation.current = false;
+      if (!controller.signal.aborted) {
+        setConnectingInstallation(false);
+        setGithubLoading(false);
+      }
     }
   }
   return (
@@ -195,7 +279,9 @@ export function CreateApp({
                   name="repoSource"
                   value="github"
                   checked={source === "github"}
-                  disabled={!github.configured || githubLoading}
+                  disabled={
+                    (!github.configured && !github.pending) || githubLoading
+                  }
                   onChange={() => setSource("github")}
                 />
                 <span className="repo-source-option-label">
@@ -223,7 +309,11 @@ export function CreateApp({
                       ? "Loading GitHub…"
                       : github.connected
                         ? "GitHub connected"
-                        : "GitHub not connected"}
+                        : github.pending?.kind === "install"
+                          ? "GitHub installation pending"
+                          : github.pending?.kind === "select"
+                            ? "Choose a GitHub account to connect"
+                            : "GitHub not connected"}
                   </p>
                   {github.connected ? (
                     <button
@@ -234,7 +324,18 @@ export function CreateApp({
                     >
                       Disconnect
                     </button>
-                  ) : (
+                  ) : github.pending?.kind === "install" ? (
+                    <a
+                      id="github-install-btn"
+                      className="ghost-btn github-connect-btn"
+                      href="/api/github/install"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Install GitHub App
+                      <Icon name="external-link" />
+                    </a>
+                  ) : !github.pending ? (
                     <a
                       id="github-connect-btn"
                       className="ghost-btn github-connect-btn"
@@ -247,8 +348,77 @@ export function CreateApp({
                       Connect GitHub
                       <Icon name="external-link" />
                     </a>
-                  )}
+                  ) : null}
                 </div>
+                {github.pending?.kind === "install" && (
+                  <div className="repo-source-panel github-connection-panel">
+                    <p className="field-hint">
+                      Finish installing the GitHub App in the new tab, then
+                      return here to check the connection.
+                    </p>
+                    <button
+                      id="github-check-connection-btn"
+                      type="button"
+                      className="ghost-btn"
+                      disabled={githubLoading || connectingInstallation}
+                      onClick={() => void refreshGithub()}
+                    >
+                      {githubLoading ? "Checking…" : "Check connection"}
+                    </button>
+                  </div>
+                )}
+                {github.pending?.kind === "select" && (
+                  <div className="repo-source-panel github-connection-panel">
+                    <p className="field-hint">
+                      Choose the account where the GitHub App is installed.
+                    </p>
+                    <label htmlFor="github-installation-select">
+                      GitHub account
+                    </label>
+                    <select
+                      id="github-installation-select"
+                      value={selectedInstallation}
+                      disabled={connectingInstallation || githubLoading}
+                      onChange={(event) =>
+                        setSelectedInstallation(event.target.value)
+                      }
+                    >
+                      <option value="">Select an account</option>
+                      {installationChoices.map((installation) => (
+                        <option key={installation.id} value={installation.id}>
+                          {installation.account} ({installation.type})
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      id="github-connect-installation-btn"
+                      type="button"
+                      className="ghost-btn"
+                      disabled={
+                        !selectedInstallation ||
+                        connectingInstallation ||
+                        githubLoading
+                      }
+                      onClick={() => void connectInstallation()}
+                    >
+                      {connectingInstallation
+                        ? "Connecting…"
+                        : "Connect selected account"}
+                    </button>
+                  </div>
+                )}
+                {github.pending && (
+                  <p>
+                    <a
+                      className="ghost-btn"
+                      href="/api/github/connect"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Restart GitHub connection
+                    </a>
+                  </p>
+                )}
                 <label htmlFor="repo-select">Repository</label>
                 <select
                   id="repo-select"

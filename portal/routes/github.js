@@ -3,8 +3,10 @@
 // =============================================================================
 // 역할:
 //   - GET  /github/status     : 현재 사용자의 연결 상태
-//   - GET  /github/connect    : GitHub App 설치 페이지로 리다이렉트 (state 발급)
-//   - GET  /github/callback   : 설치 후 OAuth 콜백 (code+state+installation_id 수신·검증·저장)
+//   - GET  /github/connect    : GitHub 사용자 인증 시작
+//   - GET  /github/callback   : OAuth 콜백 검증 후 기존 설치 조회
+//   - GET  /github/install    : 설치가 없는 사용자를 설치 화면으로 안내
+//   - POST /github/complete-connection : 설치 재조회 또는 계정 선택 완료
 //   - GET  /github/repos      : 설치된 repo 목록
 //   - POST /github/disconnect : 연결 해제
 //   /github/connect, /github/callback 은 브라우저 최상위 네비게이션(리다이렉트)이다.
@@ -13,6 +15,22 @@
 
 const express = require("express");
 const { AppError, sendOk } = require("../utils");
+const CONNECTION_COOKIE = "github_connection";
+
+function connectionToken(req) {
+  const cookie = String(req.headers.cookie || "").split(";")
+    .find((part) => part.trim().startsWith(`${CONNECTION_COOKIE}=`));
+  if (!cookie) return "";
+  try {
+    return decodeURIComponent(cookie.trim().slice(CONNECTION_COOKIE.length + 1));
+  } catch {
+    return "";
+  }
+}
+
+function cookieOptions(req) {
+  return { httpOnly: true, secure: req.secure, sameSite: "lax", path: "/api/github" };
+}
 
 /**
  * @param {object} githubService - createGithubService() 인스턴스
@@ -27,8 +45,7 @@ function createGithubRouter(githubService) {
       if (!githubService.isConfigured()) {
         return sendOk(res, { configured: false, connected: false });
       }
-      const installationId = githubService.getInstallationId(req.auth.user.id);
-      return sendOk(res, { configured: true, connected: Boolean(installationId) });
+      return sendOk(res, githubService.getConnectionStatus(req.auth.user.id, connectionToken(req)));
     } catch (error) {
       return next(error);
     }
@@ -37,32 +54,65 @@ function createGithubRouter(githubService) {
   // GET /github/connect → 302 to GitHub
   router.get("/connect", (req, res, next) => {
     try {
-      const url = githubService.buildInstallUrl(req.auth.user.id);
+      const { url, token } = githubService.beginConnection(req.auth.user.id);
+      res.cookie(CONNECTION_COOKIE, token, { ...cookieOptions(req), maxAge: 10 * 60_000 });
       return res.redirect(url);
     } catch (error) {
       return next(error);
     }
   });
 
-  // GET /github/callback?code=...&installation_id=...&state=...
-  // (App 설정에서 "OAuth during installation"을 켜면 설치 후 이 Callback URL로 온다)
+  // 일반 OAuth 콜백에는 installation_id가 없어도 설치 목록에서 연결 대상을 찾는다.
   router.get("/callback", async (req, res, next) => {
     try {
+      if (req.query.error) throw new AppError(400, "GitHub authorization was not completed. Try Connect GitHub again.");
       const code = String(req.query.code || "");
       const state = String(req.query.state || "");
       const installationId = String(req.query.installation_id || "").trim();
-      if (!code || !installationId) throw new AppError(400, "code or installation_id is missing.");
-
-      const result = await githubService.completeInstall({ code, state, installationId });
-      if (!result) throw new AppError(400, "Invalid installation request. (state/ownership validation failed)");
-
-      // 설치한 본인과 로그인 세션이 일치하는지 확인 (state의 uid == 현재 세션 user)
-      if (result.userId !== req.auth.user.id) {
-        throw new AppError(403, "The installation request does not match the logged-in user.");
+      const token = connectionToken(req);
+      // 설치 중 OAuth 콜백이 state를 생략하면 기존에 인증한 토큰으로 원래 화면에서 재조회한다.
+      if (!state && githubService.getConnectionStatus(req.auth.user.id, token).pending?.kind === "install") {
+        return res.redirect("/create?github=install");
       }
+      if (!code || !state) throw new AppError(400, "GitHub authorization code or state is missing. Try Connect GitHub again.");
+      const result = await githubService.completeAuthorization({
+        userId: req.auth.user.id, token, code, state, installationId,
+      });
+      if (!result.pending) {
+        res.clearCookie(CONNECTION_COOKIE, cookieOptions(req));
+        return res.redirect("/create?github=connected");
+      }
+      res.cookie(CONNECTION_COOKIE, token, { ...cookieOptions(req), maxAge: 10 * 60_000 });
+      if (result.pending.kind === "install") {
+        return res.redirect(githubService.buildInstallUrl(req.auth.user.id, token));
+      }
+      return res.redirect("/create?github=select");
+    } catch (error) {
+      return next(error);
+    }
+  });
 
-      // 대시보드로 복귀 (앱 생성 화면)
-      return res.redirect("/create?github=connected");
+  router.get("/install", (req, res, next) => {
+    try {
+      return res.redirect(githubService.buildInstallUrl(req.auth.user.id, connectionToken(req)));
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post("/complete-connection", async (req, res, next) => {
+    try {
+      // 쿠키를 이용한 완료 요청은 현재 포털에서만 허용한다.
+      const origin = req.get("Origin");
+      const expected = new URL(`${req.protocol}://${req.get("host")}`).origin;
+      if (origin !== expected) throw new AppError(403, "GitHub connection must be completed from this portal.");
+      const result = await githubService.completeConnection({
+        userId: req.auth.user.id,
+        token: connectionToken(req),
+        installationId: String(req.body?.installationId || "").trim(),
+      });
+      if (!result.pending) res.clearCookie(CONNECTION_COOKIE, cookieOptions(req));
+      return sendOk(res, result);
     } catch (error) {
       return next(error);
     }
@@ -82,6 +132,7 @@ function createGithubRouter(githubService) {
   router.post("/disconnect", (req, res, next) => {
     try {
       githubService.disconnect(req.auth.user.id);
+      res.clearCookie(CONNECTION_COOKIE, cookieOptions(req));
       return sendOk(res, { disconnected: true });
     } catch (error) {
       return next(error);
