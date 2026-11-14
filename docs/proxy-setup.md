@@ -14,7 +14,7 @@ The portal's infrastructure attachment is declared directly in `docker-compose.y
 
 Proxy Setup reads the initial application network name from `networks.paas-app.name` in `docker-compose.proxy.yml` (or `docker-compose.dev.yml` in development). These Compose files declare `paas-app`; there is no environment-variable or JavaScript fallback. After saving, the profile supplies the network name for generated app and proxy Compose files. Web services join that network and their own private app network, never the infrastructure network. Workers/databases join only their private app network.
 
-Existing apps must be redeployed when migrating from the infrastructure network or changing their app network. PaaS does not silently restart or disconnect running application containers. Shared app-network membership is not full isolation between untrusted web services; all containers still share the host.
+Existing apps must be redeployed after changing their app network, entrypoint, or certificate resolver. PaaS does not silently restart or disconnect running application containers. Shared app-network membership is not full isolation between untrusted web services; all containers still share the host.
 
 ## Portal access and server configuration
 
@@ -62,7 +62,13 @@ Checks also report web services still sharing the infrastructure network and app
 
 ## Install a dedicated application proxy
 
-If there is no existing proxy, the new-Traefik profile generates `portal-data/proxy-compose.yml`. It handles application traffic only. Create its selected external network and follow the generated command in the page. Its separate `paas-edge` project owns host ports 80/443; those ports must be available. Do not combine it with the base portal Compose or start it alongside another proxy using those ports.
+If there is no existing proxy, saving the new-Traefik profile generates `portal-data/proxy-compose.yml` from `docker-compose.proxy.yml` and the selected settings. It handles application traffic only. Create its selected external network and follow the generated command in the page. With the default data path, run from the repository root:
+
+```bash
+docker compose --env-file .env --project-directory . -f portal-data/proxy-compose.yml up -d
+```
+
+Use the generated file so the selected network, CA, and route identifiers apply. Its separate `paas-edge` project owns host ports 80/443; those ports must be available. Do not combine it with the base portal Compose or start it alongside another proxy using those ports.
 
 ## Certificate authorities and identifiers
 
@@ -74,10 +80,6 @@ The **Identifiers** group contains the routing entrypoint and the two certificat
 
 In an existing profile, the same fields reference names already defined by its operator. Renaming only the portal references does not create or rename Traefik configuration. The selected container’s image is displayed for information. Discovery displays public CA directory and challenge information where visible in container flags or environment variables. It never returns DNS tokens or EAB credentials, and configuration defined only in static files is reported as unknown. An absent visible CA URL is reported as unknown; Let’s Encrypt is the Traefik default only when no override exists elsewhere.
 
-## Upgrade from portal-managed ingress
-
-Before updating, configure the portal's public reverse proxy and HTTPS on the server. Deploying this change removes the PaaS-generated portal route from `custom-domains.yml`; without a server-managed replacement, the old portal address will stop working. The loopback admin path remains available.
-
-Recreate the portal with the updated base Compose to place it on `infra-proxy`, after verifying the external infrastructure network exists. Remove obsolete `APP_NETWORK` and `PORTAL_NETWORK` entries from `.env`; neither is read, even as a fallback. Choose the infrastructure network in Compose instead. Select the existing application proxy and network, then redeploy apps whose stored network or proxy labels differ. Existing application data and the external proxy's routing/certificate files are retained. Never use a whole-stack teardown to migrate an unrelated proxy.
+## Development
 
 Development also attaches the portal to the external infrastructure network, exposes the portal on loopback and the app proxy on host port `18080`. The portal reaches that development proxy via `host.docker.internal:18080`, using the host-gateway mapping; it does not share the proxy network. Create the external `paas-app` network before running the development override.
