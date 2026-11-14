@@ -334,6 +334,22 @@ npm ci
 npm test
 ```
 
+## Automatic deployment from main
+
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) deploys on every push to `main`, including a merged pull request. It runs on the Mini PC itself and updates the existing server checkout, then runs `docker compose stop portal` followed by `docker compose up -d --no-deps --no-build --force-recreate portal`. Only the portal container is recreated; BuildKit, user app projects, and the separate proxy continue running. This deployment has portal downtime.
+
+Configure the following once:
+
+1. Register a Linux **self-hosted runner** on the Mini PC and give it the custom label **`minipc`**. Run it as a service so it is available after reboot.
+2. Under **Settings → Secrets and variables → Actions → Secrets**, add the repository secret **`DEPLOY_PATH`** with the existing checkout's absolute path, for example `/home/hyunbae204/work/paas-webapp`. If the deployment uses an override, add **`COMPOSE_OVERRIDE`** under **Variables** with its path relative to the checkout, such as `docker-compose.admin.yml`. Otherwise leave it empty.
+3. Keep that checkout on `main` with no tracked changes or local-only commits. Put local Compose changes in an untracked override selected above. The runner's service account needs Git write access to the checkout, noninteractive `git fetch origin main` access, and permission to run Docker without interactive `sudo`.
+
+BuildKit must already be running. The workflow reuses the existing `paas-portal` Compose project name and requires its recorded working directory to match `DEPLOY_PATH`. It refuses Compose configurations containing services other than `portal` and `buildkit`. It retains `.env`, `portal-data/`, `apps/`, untracked files, and named volumes; it does not run `git clean` or `down -v`. Deployment runs are serialized without canceling an active restart. A superseded main revision is skipped, and success requires the portal's internal `/health` response after startup.
+
+This is a source update and restart workflow. It uses the existing portal image; changes to its base image or installed system tools require a separate image rebuild using the commands above. Configure the runner before merging the workflow into `main`; until then it does not deploy from `devel` or feature branches.
+
+If startup fails before `paas-portal` is recreated, the next run cannot inspect its project labels and stops before deployment. Fix the startup error and start the stack manually from the deployment directory with the same Compose project name printed in the failed run, `.env`, and override files, then rerun the workflow. Existing runtime data and volumes remain available.
+
 ## Documentation
 
 - [Compose application configuration](docs/compose-apps.md): services, builds, storage, logs, and lifecycle rules.
