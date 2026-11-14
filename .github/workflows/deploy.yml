@@ -1,0 +1,97 @@
+name: Deploy Portal
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# 실행 중인 재기동을 다음 배포가 취소하지 않도록 직렬화한다.
+concurrency:
+  group: paas-minipc-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux, minipc]
+    timeout-minutes: 20
+    env:
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      COMPOSE_OVERRIDE: ${{ vars.COMPOSE_OVERRIDE }}
+      GIT_TERMINAL_PROMPT: "0"
+    steps:
+      # 런너 작업 폴더 대신 운영 체크아웃을 사용해 마운트 경로와 데이터를 유지한다.
+      - name: Update checkout and restart portal
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$DEPLOY_PATH" || "$DEPLOY_PATH" != /* ]]; then
+            echo "::error::Set DEPLOY_PATH to the existing server checkout's absolute path."
+            exit 1
+          fi
+          cd "$DEPLOY_PATH"
+          if [[ ! -f .env || "$(git rev-parse --show-toplevel)" != "$(pwd -P)" ]]; then
+            echo "::error::The deployment path must be the existing repository root with its .env file."
+            exit 1
+          fi
+          if [[ "$(git branch --show-current)" != main || -n "$(git status --porcelain --untracked-files=no)" ]]; then
+            echo "::error::The server checkout must be on main with no tracked changes."
+            exit 1
+          fi
+
+          # 기존 프로젝트의 식별자와 경로를 확인해 같은 볼륨을 재사용한다.
+          project=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' paas-portal)
+          deployed_path=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' paas-portal)
+          if [[ -z "$project" || "$project" == '<no value>' || ! "$deployed_path" -ef "$PWD" ]]; then
+            echo "::error::paas-portal must belong to a Compose project in this deployment directory."
+            exit 1
+          fi
+
+          git fetch origin main
+          target=$(git rev-parse FETCH_HEAD)
+          if [[ "$target" != "$GITHUB_SHA" ]]; then
+            echo "A newer main revision exists; skipping this deployment."
+            exit 0
+          fi
+          git merge-base --is-ancestor HEAD "$target"
+          git merge --ff-only --no-overwrite-ignore "$target"
+
+          compose=(docker compose --project-name "$project" --env-file .env -f docker-compose.yml)
+          if [[ -n "$COMPOSE_OVERRIDE" ]]; then
+            compose+=(-f "$COMPOSE_OVERRIDE")
+          fi
+          "${compose[@]}" config --quiet
+          services=$("${compose[@]}" config --services | LC_ALL=C sort)
+          if [[ "$services" != $'buildkit\nportal' ]]; then
+            echo "::error::The deployment Compose must contain only portal and buildkit."
+            exit 1
+          fi
+
+          # 의존 서비스는 유지하고 포털 컨테이너만 재생성한다.
+          if [[ "$(docker inspect --format '{{.State.Running}}' paas-buildkit)" != true ]]; then
+            echo "::error::BuildKit must already be running before deploying the portal."
+            exit 1
+          fi
+          echo "Restarting portal in Compose project $project."
+          "${compose[@]}" stop portal
+          "${compose[@]}" up -d --no-deps --no-build --force-recreate portal
+
+          # npm 설치와 프런트엔드 빌드 후 실제 HTTP 응답을 기다린다.
+          for attempt in {1..60}; do
+            if "${compose[@]}" exec -T portal node -e '
+              const { config } = require("./config");
+              fetch(`http://127.0.0.1:${config.PORTAL_PORT}/health`, { signal: AbortSignal.timeout(3000) })
+                .then(response => process.exit(response.ok ? 0 : 1))
+                .catch(() => process.exit(1));
+            ' >/dev/null 2>&1; then
+              echo "Portal is ready at revision $target."
+              exit 0
+            fi
+            sleep 5
+          done
+          "${compose[@]}" ps
+          "${compose[@]}" logs --tail=80 portal
+          echo "::error::The portal did not become ready within the startup window."
+          exit 1
