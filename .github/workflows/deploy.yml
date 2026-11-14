@@ -41,14 +41,6 @@ jobs:
             exit 1
           fi
 
-          # 기존 프로젝트의 식별자와 경로를 확인해 같은 볼륨을 재사용한다.
-          project=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' paas-portal)
-          deployed_path=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' paas-portal)
-          if [[ -z "$project" || "$project" == '<no value>' || ! "$deployed_path" -ef "$PWD" ]]; then
-            echo "::error::paas-portal must belong to a Compose project in this deployment directory."
-            exit 1
-          fi
-
           git fetch origin main
           target=$(git rev-parse FETCH_HEAD)
           if [[ "$target" != "$GITHUB_SHA" ]]; then
@@ -58,7 +50,7 @@ jobs:
           git merge-base --is-ancestor HEAD "$target"
           git merge --ff-only --no-overwrite-ignore "$target"
 
-          compose=(docker compose --project-name "$project" --env-file .env -f docker-compose.yml)
+          compose=(docker compose --env-file .env -f docker-compose.yml)
           if [[ -n "$COMPOSE_OVERRIDE" ]]; then
             compose+=(-f "$COMPOSE_OVERRIDE")
           fi
@@ -69,14 +61,9 @@ jobs:
             exit 1
           fi
 
-          # 의존 서비스는 유지하고 포털 컨테이너만 재생성한다.
-          if [[ "$(docker inspect --format '{{.State.Running}}' paas-buildkit)" != true ]]; then
-            echo "::error::BuildKit must already be running before deploying the portal."
-            exit 1
-          fi
-          echo "Restarting portal in Compose project $project."
-          "${compose[@]}" stop portal
-          "${compose[@]}" up -d --no-deps --no-build --force-recreate portal
+          # Compose가 없는 컨테이너와 의존성을 생성하고 기존 포털은 재생성한다.
+          echo "Starting portal with Docker Compose."
+          "${compose[@]}" up -d --force-recreate portal
 
           # npm 설치와 프런트엔드 빌드 후 실제 HTTP 응답을 기다린다.
           for attempt in {1..60}; do
