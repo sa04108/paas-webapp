@@ -1,105 +1,74 @@
 # Hyunbbai Portal
 
-Express 기반 Portal API + 관리 대시보드입니다.
+Express API와 React + TypeScript 관리 화면이다. 설치·운영·백업은 [루트 README](../README.md), 앱 서비스 구성은 [Compose 앱 안내](../docs/compose-apps.md), 네트워크와 TLS는 [프록시 안내](../docs/proxy-setup.md)를 따른다.
 
-## 로컬 실행
+## 개발 실행
+
+Node.js 24.22.1 이상 24.x와 루트 `.env` 설정이 필요하다. Docker 기반 개발 환경은 [Docker 개발 안내](../README.md#local-development-with-docker)를 사용한다. 호스트에서 직접 실행하려면 다음을 수행한다.
 
 ```bash
 cd portal
-npm install
-npm start
+npm ci --include=dev
+npm run dev
 ```
 
-- 기본 주소: `http://localhost:3000`
-- 운영용 기본 Compose는 포털 포트를 공개하지 않습니다. 개발 Compose는 `PORTAL_PORT`(기본 3000)를 loopback에만 바인딩하며 HTTP용 Traefik을 18080에 실행합니다.
-- 프록시 설정은 비밀번호 변경 후 관리자 전용 `/admin/proxy`에서 합니다. 기본 관리 경로는 별도 Compose 오버라이드로 서버 루프백에만 공개하고 SSH 터널로 접속합니다. [프록시 설정 안내](../docs/proxy-setup.md)를 참고하세요.
-- 기본 관리자 계정: `admin / admin` (첫 로그인 후 비밀번호 변경 필수)
-- `.env`가 있으면 루트(`../.env`) 값을 우선 로드합니다.
-- UI 라우트: `/auth`(로그인), `/`(대시보드, 미로그인 시 `/auth`로 리다이렉트)
-- 프로덕션의 `portal.{PAAS_DOMAIN}` 라우팅과 HTTPS는 서버 운영자가 별도로 설정합니다. 루트 도메인의 랜딩 라우터와 호스트 간 리다이렉트는 없습니다.
-- 개발 서버에는 `http://localhost:3000` 또는 `http://portal.localhost:3000`으로 직접 접속합니다. 로그인 세션은 접속한 호스트에만 적용되므로 GitHub 연동은 설정한 콜백 URL과 같은 호스트에서 시작합니다.
+`npm run dev`는 최초 타입 검사와 프런트엔드 빌드 후 Express와 Vite 빌드 감시를 실행한다. React 파일 변경은 재빌드 후 브라우저를 새로고침하고, 서버 파일 변경은 Node 감시가 서버를 재시작한다. 기본 주소는 `http://localhost:3000`이다. 직접 실행해도 앱 생명주기 작업에는 Docker 소켓과 Compose·Git·Bash·curl·Railpack 및 BuildKit이 필요하다. 단순 UI 확인과 실제 배포 환경을 구분한다.
 
-프로덕션 기본 Compose에는 포털과 BuildKit만 포함되며 호스트 포트를 공개하지 않습니다. `docker-compose.proxy.yml`은 별도 `paas-edge` 프로젝트입니다. 두 Compose 파일은 별도로 실행합니다. 포털은 Compose에 선언된 `infra-proxy`에 연결합니다. 앱의 웹 서비스는 별도 `paas-app` 네트워크에 연결하고, 기존 Traefik만 두 네트워크에 연결합니다. 포털의 공개 주소와 HTTPS는 서버에서 따로 설정하세요. 프록시 프로필 선택, SSH 터널을 통한 관리자 접속, 기존 Traefik 마이그레이션은 [프록시 설정 안내](../docs/proxy-setup.md)에 있습니다.
+`npm start`는 타입 검사와 프런트엔드 빌드 후 Express를 실행한다. `portal/dist/`는 생성물이며 커밋하지 않는다. `npm run dev:client`는 프런트엔드 빌드만 감시한다. 명령과 의존성 기준은 [package.json](package.json)과 잠금 파일이다.
 
-## 컨테이너 실행
+```bash
+npm run typecheck
+npm run build
+npm test
+```
 
-- Portal을 컨테이너로 띄우는 경우 `bash`, `docker`, `curl` CLI가 이미지에 있어야 앱 생성/배포 및 도메인 준비 상태 검사가 동작합니다.
-- 이 저장소의 루트 `docker-compose.yml`은 `dockerfile_inline`으로 해당 도구를 함께 설치합니다.
-- 앱 컨테이너 제어를 위해 `/var/run/docker.sock` 마운트가 필요합니다.
+## 코드 구성
 
-## 인증/권한
+| 경로 | 역할 |
+| --- | --- |
+| [client/main.tsx](client/main.tsx), [client/Portal.tsx](client/Portal.tsx) | 인증 화면, React 라우팅, 앱·작업 상태 조회 |
+| [client/theme.css](client/theme.css) | 중립색 라이트·다크 테마, 시스템 글꼴, 공통 버튼 스타일 |
+| [server.js](server.js) | Express, API 마운트, UI 제공, WebSocket 업그레이드 |
+| [config.js](config.js) | 루트 `.env` 또는 `PAAS_ENV_FILE` 로딩과 설정 기본값 |
+| [authService.js](authService.js) | SQLite 계정·세션, bcrypt 비밀번호 해시, 관리자 권한 |
+| [appManager.js](appManager.js), [routes/apps.js](routes/apps.js) | 앱 메타데이터·Docker 상태, 앱 작업 큐와 API |
+| [jobStore.js](jobStore.js), [appReadiness.js](appReadiness.js) | 작업 기록과 재시작 복구, 서비스·도메인 준비 상태 |
+| [appLogs.js](appLogs.js), [routes/exec-ws.js](routes/exec-ws.js) | 서비스별 로그 병합·SSE, 터미널 WebSocket |
+| [githubService.js](githubService.js), [routes/github.js](routes/github.js) | GitHub OAuth, 설치 연결과 저장소 접근 |
+| [proxySetup.js](proxySetup.js), [domainManager.js](domainManager.js) | 앱 프록시 연결, 커스텀 도메인 라우팅 |
+| [../scripts/lib/compose-project.js](../scripts/lib/compose-project.js) | 앱 서비스 이미지 준비와 Compose 프로젝트 생명주기 |
 
-- 인증은 세션 쿠키를 사용합니다.
-- `/apps`, `/users`는 로그인 + admin 권한 + 비밀번호 변경 완료 상태가 필요합니다.
+`dotenv`는 이미 주입된 환경변수를 덮어쓰지 않는다. 화면과 API는 같은 Express 오리진을 사용한다. HTML은 캐시하지 않고 해시가 포함된 `/assets` 번들은 장기 캐시한다.
 
-## API
+## 인증과 API 경로
 
-### 공용
-- `GET /health`
-- `GET /config`
+JSON API는 **`/api` 아래**에 있다. `/health`만 루트의 공개 상태 확인 경로다. UI의 `/apps/:userid/:appname`과 API의 `/api/apps/:userid/:appname`을 구분한다. 응답은 성공 시 `{ ok: true, data }`, 오류 시 `{ ok: false, error }` 형식이다.
 
-### 인증
-- `POST /auth/login`
-- `GET /auth/me`
-- `POST /auth/logout`
-- `POST /auth/change-password`
+| 경로 | 동작·접근 조건 |
+| --- | --- |
+| `GET /health`, `GET /api/config` | 공개 상태·클라이언트 설정 |
+| `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/change-password` | 로그인과 현재 세션·비밀번호 관리 |
+| `/api/apps` | 로그인 사용자의 앱 생성·목록; 관리자는 `GET /api/apps?all=true`로 전체 조회 |
+| `/api/apps/:userid/:appname` | 앱 소유자 또는 관리자의 조회·삭제 |
+| `POST /api/apps/:userid/:appname/start`, `/stop`, `/deploy` | 앱 전체 서비스의 시작·중지·재배포 |
+| `GET/PUT /api/apps/:userid/:appname/env`, `/build`, `/runtime` | 앱 설정 조회·저장 |
+| `/api/apps/:userid/:appname/domains` | 앱 커스텀 도메인 관리 |
+| `GET /api/apps/:userid/:appname/logs`, `/logs/stream` | 로그 조회·SSE; `lines`와 `services`로 선택 |
+| `/api/apps/:userid/:appname/exec/ws` | 세션과 앱 소유권을 검증하는 터미널 WebSocket; `service`로 대상 선택 |
+| `/api/jobs` | 현재 사용자의 작업 목록·기록 정리; 개별 ID의 조회·로그·재시도·취소는 소유자 또는 관리자 허용 |
+| `/api/github` | 로그인 사용자의 GitHub 연결·설치 선택·저장소 조회 |
+| `/api/users` | 관리자 전용 사용자 생성·조회·삭제·승격 |
+| `/api/admin/proxy`, `GET /api/admin/portal-logs` | 관리자 전용 프록시 설정·포털 로그 |
 
-### 앱 관리
+보호된 API는 세션과 초기 비밀번호 변경 완료 여부를 검사한다. 개발 모드는 비밀번호 변경 의무를 해제한다. 앱 작업은 일반 사용자도 자기 앱에 수행할 수 있으며 사용자·프록시 관리는 관리자만 수행한다. 개별 요청 필드와 HTTP 메서드는 각 `routes/` 구현을 기준으로 한다.
 
-- `POST /apps`
-  - body: `{ appname, repoUrl, branch?, usePrivate?, build?, runtime?, env? }`
-  - `branch` 기본값: `main`
-  - `env`: 선택 입력인 `.env` 형식 문자열. 한 줄에 `KEY=VALUE` 하나씩, UTF-8 기준 최대 64 KiB (빈 줄·주석·인용부호 지원)
-  - 환경변수는 최초 컨테이너 실행부터 적용되고 재배포에도 유지됩니다. 빌드 인자로 전달하지 않으며 `PORT`, `APP_ID`, `NODE_ENV`는 플랫폼 값이 우선합니다.
-  - 입력의 `$`는 호스트 환경변수로 치환하지 않고 리터럴로 저장합니다. 작업 조회 응답에는 포함하지 않으며, 실패·중단 작업의 재시도에도 사용합니다.
-  - `build` 생략 또는 `{ mode: "auto" }`: 기존 루트 Dockerfile 자동 탐지 후, 후보가 없으면 Railpack 사용
-  - `{ mode: "repository", dockerfile: "Dockerfile.web" }`: 이름에 `Dockerfile`이 포함된 루트 파일을 명시적으로 선택
-  - `{ mode: "custom", content: "FROM ..." }`: UTF-8 기준 최대 64 KiB의 Dockerfile 본문 사용
-  - `{ mode: "railpack", config: "" }`: Dockerfile 존재 여부와 관계없이 별도 설정 주입 없이 Railpack 실행
-  - `{ mode: "railpack", config: "{\"provider\":\"python\"}" }`: 최대 64 KiB의 JSON 객체를 서버 설정 파일로 전달
-  - 빌드 설정은 소스 밖의 `.paas-meta.json`에 저장소 정보와 함께 저장되며 재배포 때도 유지
-- `POST /apps/dockerfiles`
-  - body: `{ repoUrl, branch?, usePrivate? }`
-  - 선택한 브랜치의 GitHub 루트에서 이름에 `Dockerfile`이 포함된 파일만 조회
-  - 응답: `{ files: ["Dockerfile", "Dockerfile.web"], branch: "main" }` (`data` 안에 포함)
-  - 비공개 저장소는 로그인 사용자의 GitHub App 설치 권한 사용
-- `GET /apps`
-- `GET /apps/:userid/:appname`
-- `GET/PUT /apps/:userid/:appname/runtime`: Compose 서비스 설정 조회·저장. 다음 재배포부터 적용
-- 서비스별 이미지·Dockerfile·공용 Railpack 이미지, 초기화 작업, 소유권·삭제 정책은 [Compose 앱 배포](../docs/compose-apps.md) 참고
-- `GET /apps/:userid/:appname/build`
-  - 응답: `{ build, repoUrl, branch, redeployRequired, pendingConfigChanges }`, 기존 빌드 설정이 없으면 `auto`
-- `PUT /apps/:userid/:appname/build`
-  - body: `{ build }`, 생성과 동일한 네 가지 모드 지원
-  - 현재 컨테이너를 재시작하지 않고 설정만 저장하며 다음 재배포부터 적용
-  - 앱 소유자 또는 관리자만 사용 가능하며 배포 작업과 같은 앱 단위 큐에서 저장
-- 앱 조회와 빌드·런타임 설정 조회/저장 응답의 `redeployRequired`는 마지막 성공 배포와 저장된 설정이 다른지 나타냅니다. `pendingConfigChanges`의 `build`·`runtime`으로 항목별 변경 여부를 제공하며 비교 해시는 응답에 포함하지 않습니다.
-- 설정 화면의 저장 버튼 아래와 앱 카드에 재배포 안내가 표시됩니다. 같은 값 저장·배포한 값으로 되돌리기는 불필요한 안내를 만들지 않고, 새로고침·중지/시작·환경변수 재시작 후에도 미적용 변경을 유지합니다. 포털의 생성·재배포에서 서비스 준비 및 도메인 HTTP 200 확인이 끝나야 적용 완료로 기록합니다.
-- `GET /apps/:userid/:appname/dockerfiles`
-  - 앱에 저장된 저장소·브랜치와 소유자의 설치 권한으로 루트 파일 조회
-- `POST /apps/:userid/:appname/start`
-- `POST /apps/:userid/:appname/stop`
-- `POST /apps/:userid/:appname/deploy`
-- `DELETE /apps/:userid/:appname`
-- `GET /apps/:userid/:appname/logs?lines=<n>&services=app,worker` (`1..1000`, 기본 120, 병합된 전체 로그의 줄 수)
-  - `entries`에 `{id, timestamp, service, stream, message}`, `services`에 서비스 이름 목록, `warnings`에 수집 오류를 반환합니다.
-  - `services` 생략 시 전체, 빈 값이면 선택 없음입니다. 한 서비스 조회에는 기존 `service=<name>`도 사용할 수 있습니다.
-- `GET /apps/:userid/:appname/logs/stream` (같은 쿼리, SSE)
-  - 최초 `snapshot`, 이후 `entries`, 서비스 목록 변경 시 `services`, 오류 시 `warning` 또는 종료를 알리는 `end` 이벤트를 JSON `data`로 전송합니다.
-  - 앱 로그 화면은 서비스 토글로 여러 서비스를 선택하고 기존 Auto/Refresh 버튼으로 실시간 수신을 켜거나 끕니다. 타임스탬프 표시 옵션은 줄 수 입력 왼쪽에 있으며 기본으로 꺼져 있습니다.
-- Exec HTTP 본문과 WebSocket 쿼리의 `service`로 앱 내부 서비스를 선택하며 생략하면 웹 서비스
+## 상태와 실시간 갱신
 
-### 앱 준비 상태
+- 앱 상태는 5초, Jobs는 5초(활성 작업이 있으면 1.5초) 간격으로 조회한다. 숨겨진 탭에서는 조회를 멈추고 겹치는 요청을 피한다. 전체 문서를 새로고침하지 않고 React 상태를 갱신한다.
+- 앱 로그는 컨테이너별 Docker 로그를 기록 시각으로 병합해 SSE로 전달한다. 여러 서비스 토글, 선택적 타임스탬프, Auto/Refresh 버튼을 지원한다. Jobs의 실행 중 로그도 SSE를 사용한다.
+- 빌드·런타임 저장은 다음 재배포부터 적용하며 미적용 변경을 설정 화면과 앱 카드에 표시한다. 환경변수 저장은 앱 서비스 재생성을 수행한다.
+- 생성·재배포·시작·환경변수 적용 작업은 초기화 서비스의 성공 종료, 장기 실행 서비스 준비, 할당 도메인의 HTTP 200을 확인한다. 기본 도메인 확인 제한은 120초, 간격은 2초, 요청 제한은 5초이며 빌드 시간은 제외한다. 웹이 응답해도 다른 서비스가 실패하면 `degraded`로 표시할 수 있다.
+- 개발 Compose의 readiness 요청은 `http://host.docker.internal:18080`으로 연결하면서 앱 도메인의 Host 헤더를 유지한다. 포털과 개발용 Traefik은 서로 다른 네트워크에 있다.
+- 작업 기록·완료 출력·오류는 SQLite에 저장하고 실행 중 로그 버퍼는 메모리에 둔다. 재시작 시 `running` 작업은 `interrupted`, `pending` 작업은 재실행 대상으로 처리한다. 단일 포털 프로세스 기준이며 다중 포털 간 작업 조정은 구현되어 있지 않다.
 
-- Portal의 생성·재배포·시작·환경변수 변경 후 재시작 작업은 초기화 서비스의 종료 코드 0, 장기 실행 서비스의 정상 상태, 할당 도메인의 `/`에서 HTTP **200**을 모두 확인한 뒤 완료됩니다. 프로덕션은 HTTPS 인증서를 검증하고, 개발 모드는 HTTP와 `TRAEFIK_HOST_PORT`를 사용합니다. 다른 도메인으로의 리다이렉트는 따라가지 않습니다.
-- Docker 컨테이너가 실행 중이어도 검사 전에는 `starting`, 확인 제한 시간 이후에는 `unhealthy`, HTTP 200 확인 후에는 `running`으로 표시합니다. 컨테이너의 `stopped`·`restarting` 상태가 우선합니다.
-- 기본 제한 시간은 120초(`APP_HEALTH_TIMEOUT_SECS`), 검사 간격은 2초(`APP_HEALTH_INTERVAL_MS=2000`), 요청별 제한 시간은 5초(`APP_HEALTH_REQUEST_TIMEOUT_MS=5000`)입니다. 빌드 시간은 준비 상태 제한 시간에 포함하지 않습니다.
-- 제한 시간 초과는 작업 실패로 기록되며 Jobs 로그에서 검사 결과를 볼 수 있습니다. 이후에도 앱 목록을 조회하면 `unhealthy` 앱을 재검사하므로 늦게 HTTP 200이 반환되어도 `running`으로 전환됩니다. 대시보드와 관리자 목록은 준비 중이거나 비정상인 앱의 상태를 자동 갱신합니다.
-- HTTP 준비 상태는 SQLite에 저장됩니다. Portal이 검사 중 재시작되면 성공으로 간주하지 않고 재검사하며, 새 배포는 이전 검사 결과를 초기화합니다. HTTP 검사는 배포 직후에 수행합니다. 서비스 컨테이너 상태는 앱 조회마다 갱신하고, 다중 서비스 앱은 화면이 활성 상태일 때 주기적으로 조회합니다. 워커 장애는 웹의 HTTP 200과 별개로 `degraded`로 표시합니다.
-- `docker-compose.dev.yml`은 `APP_HEALTH_DEV_ORIGIN=http://traefik:80`을 지정합니다. Portal 컨테이너 내부에서도 앱 도메인의 Host 헤더를 유지한 채 개발용 Traefik에 접속합니다.
-
-### 사용자 관리
-
-- `GET /users`
-- `POST /users`
-- `DELETE /users/:id`
+GitHub 연결의 현재 탭 인증·설치용 새 탭·초안 복원은 [GitHub App 안내](../docs/github-app-setup.md)에 설명되어 있다.
