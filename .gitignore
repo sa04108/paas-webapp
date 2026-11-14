@@ -141,3 +141,6 @@ vite.config.ts.timestamp-*
 # Local portal database
 portal-data/
 apps
+
+# 로컬 GitHub Actions 런너와 인증 정보를 제외한다.
+/actions-runner/
