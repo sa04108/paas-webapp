@@ -39,7 +39,7 @@ function run(command, args, { capture = false, cwd, timeout = 600000 } = {}) {
       child.stdout.on("data", (chunk) => { stdout += chunk; if (stdout.length > 16 * 1024 * 1024) child.kill("SIGKILL"); });
       child.stderr.on("data", (chunk) => { stderr = (stderr + chunk).slice(-8192); });
     }
-    const timer = setTimeout(() => child.kill("SIGKILL"), timeout);
+    const timer = timeout > 0 ? setTimeout(() => child.kill("SIGKILL"), timeout) : null;
     child.on("error", (error) => { clearTimeout(timer); reject(error); });
     child.on("close", (code) => {
       clearTimeout(timer);
@@ -50,6 +50,13 @@ function run(command, args, { capture = false, cwd, timeout = 600000 } = {}) {
 }
 
 const compose = (info, file, args, options = {}) => run("docker", ["compose", "--env-file", "/dev/null", "-p", info.project, "-f", file, ...args], { cwd: info.appDir, ...options });
+
+// CLI 배포와 포털의 정리가 같은 파일 잠금을 사용해 빌드 중인 후보를 보호한다.
+function withImageLock(info, command, args = [], options = {}) {
+  const lockDir = path.join(path.dirname(path.dirname(info.appDir)), ".image-locks");
+  fs.mkdirSync(lockDir, { recursive: true });
+  return run("flock", ["--exclusive", path.join(lockDir, `${info.project}.lock`), process.execPath, __filename, command, ...args], { ...options, timeout: 0 });
+}
 
 function syncCompose(info) {
   const state = readJson(info.stateFile);
@@ -68,9 +75,61 @@ function confirmDeployment(userid, appname) {
     throw new Error("Cannot confirm configuration for an inactive or different app deployment");
   }
   atomicWrite(info.metaFile, { ...metadata, deployedConfig: state.configSnapshot });
+  return state.revision;
+}
+
+// 성공 배포에서 사용하는 태그만 보존하며 앱 소유 이미지 외에는 정리하지 않는다.
+async function cleanupUnusedImagesLocked(userid, appname, revision, onLog = console.log) {
+  try {
+    const info = locations(userid, appname);
+    const state = readJson(info.stateFile);
+    const metadata = readJson(info.metaFile);
+    const confirmed = state?.phase === "active" && state.project === info.project &&
+      typeof state.revision === "string" && state.revision === revision && typeof state.instanceId === "string" && state.instanceId === metadata?.instanceId &&
+      ["build", "runtime"].every((key) => typeof state.configSnapshot?.[key] === "string" && metadata?.deployedConfig?.[key] === state.configSnapshot[key]);
+    if (!confirmed || !Array.isArray(state.services) || !state.services.length || state.services.some((service) => typeof service.image !== "string" || !service.image)) {
+      throw new Error("The confirmed app deployment is unavailable");
+    }
+    const keep = new Set(state.services.map((service) => service.image));
+    const prefix = `paas-build-${info.project.slice(5)}-`;
+    const ownedTag = /^(?:railpack|service-[a-z][a-z0-9-]{0,39}):[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+    const output = await run("docker", ["image", "ls", "--filter", `reference=${prefix}*`, "--format", "{{.Repository}}:{{.Tag}}"], { capture: true, timeout: 30000 });
+    const stale = [...new Set(output.split("\n"))].filter((tag) => tag.startsWith(prefix) && ownedTag.test(tag.slice(prefix.length)) && !keep.has(tag));
+    for (const tag of stale) {
+      const current = readJson(info.stateFile);
+      const owner = readJson(info.metaFile);
+      if (current?.phase !== "active" || current.project !== info.project || current.revision !== state.revision || current.instanceId !== state.instanceId || owner?.instanceId !== state.instanceId) {
+        throw new Error("App deployment changed during image cleanup");
+      }
+      try {
+        // 강제 삭제를 금지해 실행·중지된 컨테이너의 이미지 참조를 Docker가 보호한다.
+        await run("docker", ["image", "rm", tag], { capture: true, timeout: 30000 });
+        onLog(`[images] Removed previous app image: ${tag}`);
+      } catch (error) {
+        onLog(`[images] Could not remove unused tag ${tag}: ${error.message}`);
+      }
+    }
+  } catch (error) {
+    // 정리 실패가 이미 준비된 서비스의 배포 성공을 뒤집지 않도록 기록만 남긴다.
+    onLog(`[images] Cleanup skipped: ${error.message}`);
+  }
 }
 
 async function deploy(userid, appname, runtimePath) {
+  return withImageLock(locations(userid, appname), "deploy-locked", [userid, appname, ...(runtimePath ? [runtimePath] : [])]);
+}
+
+async function cleanupUnusedImages(userid, appname, { revision, onLog = console.log } = {}) {
+  try {
+    if (typeof revision !== "string" || !revision) throw new Error("The confirmed deployment revision is required");
+    const output = await withImageLock(locations(userid, appname), "cleanup-images-locked", [userid, appname, revision], { capture: true });
+    for (const line of output.split("\n").filter(Boolean)) onLog(line);
+  } catch (error) {
+    onLog(`[images] Cleanup skipped: ${error.message}`);
+  }
+}
+
+async function deployLocked(userid, appname, runtimePath) {
   const info = locations(userid, appname);
   const metadata = readJson(info.metaFile);
   if (!metadata) throw new Error("App repository metadata is missing");
@@ -114,7 +173,10 @@ async function deploy(userid, appname, runtimePath) {
     const state = readJson(info.stateFile);
     atomicWrite(info.stateFile, { ...state, phase: "active" });
     // 포털 작업은 도메인의 HTTP 준비 확인까지 끝낸 뒤 별도로 확정한다.
-    if (process.env.PAAS_DEFER_CONFIG_CONFIRMATION !== "1") confirmDeployment(userid, appname);
+    if (process.env.PAAS_DEFER_CONFIG_CONFIRMATION !== "1") {
+      const confirmedRevision = confirmDeployment(userid, appname);
+      await cleanupUnusedImagesLocked(userid, appname, confirmedRevision);
+    }
   } catch (error) {
     const state = readJson(info.stateFile);
     if (state?.revision === revision) atomicWrite(info.stateFile, { ...state, phase: "failed", error: error.message });
@@ -177,10 +239,15 @@ async function down(userid, appname) {
   }
 }
 
-module.exports = { locations, atomicWrite, readJson, syncCompose, confirmDeployment, compile, deploy, down, wait, serviceState, projectContainers };
+module.exports = { locations, atomicWrite, readJson, syncCompose, confirmDeployment, cleanupUnusedImages, compile, deploy, down, wait, serviceState, projectContainers };
 
 if (require.main === module) {
   const [command, userid, appname, runtimePath] = process.argv.slice(2);
-  const action = command === "deploy" ? deploy(userid, appname, runtimePath) : command === "down" ? down(userid, appname) : command === "wait" ? wait(userid, appname) : Promise.reject(new Error("Usage: compose-project.js deploy|down|wait <userid> <appname> [runtime.json]"));
+  const action = command === "deploy" ? deploy(userid, appname, runtimePath)
+    : command === "deploy-locked" ? deployLocked(userid, appname, runtimePath)
+    : command === "cleanup-images-locked" ? cleanupUnusedImagesLocked(userid, appname, runtimePath)
+    : command === "down" ? down(userid, appname)
+    : command === "wait" ? wait(userid, appname)
+    : Promise.reject(new Error("Usage: compose-project.js deploy|down|wait <userid> <appname> [runtime.json]"));
   action.catch((error) => { console.error(`[project] ${error.message}`); process.exitCode = 1; });
 }

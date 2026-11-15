@@ -47,7 +47,7 @@ const { normalizeCreateEnv } = require("../appEnvironment");
 const appReadiness = require("../appReadiness");
 const { normalizeRuntime } = require("../composeConfig");
 const { withDeploymentBaseline, deploymentStatus } = require("../../scripts/lib/deployment-config");
-const { confirmDeployment } = require("../../scripts/lib/compose-project");
+const { confirmDeployment, cleanupUnusedImages } = require("../../scripts/lib/compose-project");
 const { AppLogSession, parseLogOptions } = require("../appLogs");
 
 const router = express.Router();
@@ -199,7 +199,8 @@ async function runJob(job) {
           await fs.promises.rm(inputDir, { recursive: true, force: true });
         }
         await appReadiness.waitUntilReady(userid, appname, readinessGeneration, onLog);
-        confirmDeployment(userid, appname);
+        const confirmedRevision = confirmDeployment(userid, appname);
+        await cleanupUnusedImages(userid, appname, { revision: confirmedRevision, onLog });
         const appInfo = await buildAppInfo(userid, appname, null);
         jobStore.finishJob(id, JSON.stringify({ app: appInfo }));
         break;
@@ -218,7 +219,8 @@ async function runJob(job) {
           _onAppDeployedHook(userid, appname, port);
         }
         await appReadiness.waitUntilReady(userid, appname, readinessGeneration, onLog);
-        confirmDeployment(userid, appname);
+        const confirmedRevision = confirmDeployment(userid, appname);
+        await cleanupUnusedImages(userid, appname, { revision: confirmedRevision, onLog });
         jobStore.finishJob(id, "deployed");
         break;
       }

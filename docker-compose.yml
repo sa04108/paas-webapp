@@ -43,6 +43,8 @@ services:
         # 포털은 공유 볼륨(buildkit-sock)을 통해 이 소켓에 직접 접속한다.
         command:
             - '--addr=unix:///run/buildkit/buildkitd.sock'
+            - '--oci-worker-gc'
+            - '--oci-worker-gc-keepstorage=0,0,${BUILDKIT_CACHE_MAX_MB:-10000}'
         volumes:
             - buildkit-sock:/run/buildkit
         # 테넌트 네트워크(paas-app)에서 분리한다.

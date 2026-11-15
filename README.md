@@ -326,6 +326,42 @@ Expect `v24.22.1` for the checked-in image. For source-only updates, restarting 
 
 User applications have separate Compose projects and keep running when the platform stack is stopped; manage them through the portal before shutdown if needed. The portal has access to the host Docker socket and BuildKit is privileged, so the platform's administrators control the Docker host.
 
+### App images and build cache
+
+After an app creation or redeployment succeeds, PaaS keeps only the generated image tags referenced by that app's current service manifest. The previous successful deployment is not retained. Portal jobs perform cleanup after service readiness and the assigned domain's HTTP 200 check; direct lifecycle scripts perform it after their service readiness check. Older generated tags, including leftovers from previous failed builds, are removed at the next successful deployment. An unsuccessful deployment does not trigger this cleanup.
+
+Cleanup targets only that app's `paas-build-...` tags and never uses forced image removal or a global prune. Docker protects image content referenced by existing running or stopped containers; a redundant old tag can be removed while another tag still preserves that content. Registry images, other apps, and platform images are outside this policy. A cleanup failure is recorded in the deployment logs and does not turn a ready deployment into a failed job. Removing an image tag does not necessarily free all its reported size because layers may be shared with current images or build caches.
+
+Image preparation and cleanup share an OS file lock per app, including direct CLI deployments. Lock files live under `apps/.image-locks/`; the OS releases locks when their processes exit. Direct execution requires the Linux `flock` command, available in the supplied portal image. If the active revision changes while cleanup waits, the outdated cleanup skips deletion.
+
+The dedicated BuildKit daemon used by Railpack has an OCI-worker GC target configured in the root `.env`:
+
+```dotenv
+BUILDKIT_CACHE_MAX_MB=10000
+```
+
+Use a positive integer in MB. The default target is 10,000 MB, applied through `--oci-worker-gc-keepstorage=0,0,<maximum>`. This syntax requires BuildKit 0.17 or later. With no builds running, pull a current image and recreate the BuildKit service using the same Compose configuration as the deployment:
+
+```bash
+docker compose --env-file .env -f docker-compose.yml pull buildkit
+docker compose --env-file .env -f docker-compose.yml up -d --no-deps buildkit
+```
+
+Dockerfile builds use `docker build` and its selected Docker builder, not the dedicated Railpack BuildKit daemon. For the host's default Docker builder, an operator can merge the following GC setting into the existing `/etc/docker/daemon.json` and apply it during a Docker maintenance window. Preserve any other daemon settings; PaaS does not rewrite the host daemon configuration.
+
+```json
+{
+  "builder": {
+    "gc": {
+      "enabled": true,
+      "defaultKeepStorage": "10GB"
+    }
+  }
+}
+```
+
+Both cache settings are garbage-collection targets, not hard disk quotas. Active builds, in-use cache, and the interval between GC sweeps can leave usage above the target. Built application images have their own retention policy above and are not counted as a single shared cache budget. Custom builders need their own GC configuration.
+
 To run the existing portal test suite with dependencies installed:
 
 ```bash

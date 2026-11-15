@@ -12,7 +12,7 @@ npm ci --include=dev
 npm run dev
 ```
 
-`npm run dev`는 최초 타입 검사와 프런트엔드 빌드 후 Express와 Vite 빌드 감시를 실행한다. React 파일 변경은 재빌드 후 브라우저를 새로고침하고, 서버 파일 변경은 Node 감시가 서버를 재시작한다. 기본 주소는 `http://localhost:3000`이다. 직접 실행해도 앱 생명주기 작업에는 Docker 소켓과 Compose·Git·Bash·curl·Railpack 및 BuildKit이 필요하다. 단순 UI 확인과 실제 배포 환경을 구분한다.
+`npm run dev`는 최초 타입 검사와 프런트엔드 빌드 후 Express와 Vite 빌드 감시를 실행한다. React 파일 변경은 재빌드 후 브라우저를 새로고침하고, 서버 파일 변경은 Node 감시가 서버를 재시작한다. 기본 주소는 `http://localhost:3000`이다. 직접 실행해도 앱 생명주기 작업에는 Docker 소켓과 Compose·Git·Bash·curl·flock·Railpack 및 BuildKit이 필요하다. 단순 UI 확인과 실제 배포 환경을 구분한다.
 
 `npm start`는 타입 검사와 프런트엔드 빌드 후 Express를 실행한다. `portal/dist/`는 생성물이며 커밋하지 않는다. `npm run dev:client`는 프런트엔드 빌드만 감시한다. 명령과 의존성 기준은 [package.json](package.json)과 잠금 파일이다.
 
